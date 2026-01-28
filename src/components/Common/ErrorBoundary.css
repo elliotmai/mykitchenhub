@@ -1,0 +1,184 @@
+/* ==========================================================================
+   ErrorBoundary Component Styles
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Main Error Boundary Container
+   -------------------------------------------------------------------------- */
+.error-boundary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  padding: var(--mkh-spacing-xl);
+  animation: fadeIn var(--mkh-transition-base);
+}
+
+.error-boundary__card {
+  max-width: 480px;
+  width: 100%;
+  text-align: center;
+  border: none;
+  box-shadow: var(--mkh-shadow-lg);
+}
+
+.error-boundary__body {
+  padding: var(--mkh-spacing-2xl) var(--mkh-spacing-xl);
+}
+
+/* --------------------------------------------------------------------------
+   Icon
+   -------------------------------------------------------------------------- */
+.error-boundary__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 80px;
+  background-color: var(--mkh-danger);
+  border-radius: var(--mkh-radius-full);
+  margin-bottom: var(--mkh-spacing-lg);
+  color: var(--mkh-danger-text);
+}
+
+/* --------------------------------------------------------------------------
+   Typography
+   -------------------------------------------------------------------------- */
+.error-boundary__title {
+  font-size: var(--mkh-h3-size);
+  font-weight: var(--mkh-font-weight-semibold);
+  color: var(--mkh-text-primary);
+  margin-bottom: var(--mkh-spacing-sm);
+}
+
+.error-boundary__message {
+  font-size: var(--mkh-font-size-base);
+  color: var(--mkh-text-secondary);
+  line-height: 1.6;
+  margin-bottom: var(--mkh-spacing-lg);
+}
+
+/* --------------------------------------------------------------------------
+   Error Details (Collapsible)
+   -------------------------------------------------------------------------- */
+.error-boundary__details {
+  text-align: left;
+  margin-bottom: var(--mkh-spacing-lg);
+  background-color: var(--mkh-bg-primary);
+  border-radius: var(--mkh-radius-md);
+  padding: var(--mkh-spacing-sm);
+}
+
+.error-boundary__details summary {
+  cursor: pointer;
+  font-size: var(--mkh-font-size-small);
+  font-weight: var(--mkh-font-weight-medium);
+  color: var(--mkh-text-secondary);
+  padding: var(--mkh-spacing-sm);
+}
+
+.error-boundary__details summary:hover {
+  color: var(--mkh-text-primary);
+}
+
+.error-boundary__stack {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: var(--mkh-font-size-tiny);
+  background-color: var(--mkh-text-primary);
+  color: var(--mkh-bg-primary);
+  padding: var(--mkh-spacing-md);
+  border-radius: var(--mkh-radius-sm);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  margin-top: var(--mkh-spacing-sm);
+}
+
+/* --------------------------------------------------------------------------
+   Action Buttons
+   -------------------------------------------------------------------------- */
+.error-boundary__actions {
+  display: flex;
+  gap: var(--mkh-spacing-md);
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.error-boundary__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mkh-spacing-xs);
+  min-width: 140px;
+  justify-content: center;
+}
+
+/* --------------------------------------------------------------------------
+   Error Fallback (Compact Version)
+   -------------------------------------------------------------------------- */
+.error-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--mkh-spacing-xl);
+  text-align: center;
+  background-color: var(--mkh-bg-card);
+  border-radius: var(--mkh-radius-lg);
+  border: 1px solid var(--mkh-border);
+}
+
+.error-fallback__icon {
+  color: var(--mkh-danger-text);
+  margin-bottom: var(--mkh-spacing-md);
+}
+
+.error-fallback__title {
+  font-size: var(--mkh-font-size-lg);
+  font-weight: var(--mkh-font-weight-semibold);
+  color: var(--mkh-text-primary);
+  margin-bottom: var(--mkh-spacing-xs);
+}
+
+.error-fallback__message {
+  font-size: var(--mkh-font-size-small);
+  color: var(--mkh-text-secondary);
+  margin-bottom: var(--mkh-spacing-md);
+}
+
+.error-fallback button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mkh-spacing-xs);
+}
+
+/* --------------------------------------------------------------------------
+   Responsive Adjustments
+   -------------------------------------------------------------------------- */
+@media (max-width: 576px) {
+  .error-boundary {
+    padding: var(--mkh-spacing-md);
+  }
+
+  .error-boundary__body {
+    padding: var(--mkh-spacing-xl) var(--mkh-spacing-md);
+  }
+
+  .error-boundary__icon {
+    width: 64px;
+    height: 64px;
+  }
+
+  .error-boundary__icon svg {
+    width: 32px;
+    height: 32px;
+  }
+
+  .error-boundary__actions {
+    flex-direction: column;
+  }
+
+  .error-boundary__btn {
+    width: 100%;
+  }
+}

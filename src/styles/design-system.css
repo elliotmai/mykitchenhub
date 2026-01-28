@@ -1,0 +1,695 @@
+/* ==========================================================================
+   MyKitchenHub Design System
+   Muted Pastel Theme with Bootstrap 5.3.x
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   CSS Variables / Design Tokens
+   -------------------------------------------------------------------------- */
+:root {
+  /* Primary Colors - Muted Pastels */
+  --mkh-primary: #A8D5E2;
+  --mkh-primary-hover: #8FC5D6;
+  --mkh-primary-active: #76B5CA;
+  
+  --mkh-secondary: #B8D4B8;
+  --mkh-secondary-hover: #A3C9A3;
+  --mkh-secondary-active: #8EBE8E;
+  
+  --mkh-accent: #F5C6AA;
+  --mkh-accent-hover: #F0B594;
+  --mkh-accent-active: #EBA47E;
+  
+  /* Background Colors */
+  --mkh-bg-primary: #FAF8F3;
+  --mkh-bg-card: #FFFFFF;
+  --mkh-bg-hover: #F5F3EE;
+  
+  /* Text Colors */
+  --mkh-text-primary: #2C3E50;
+  --mkh-text-secondary: #7F8C8D;
+  --mkh-text-muted: #95A5A6;
+  --mkh-text-inverse: #FFFFFF;
+  
+  /* Border & Dividers */
+  --mkh-border: #E0DED9;
+  --mkh-border-light: #ECEAE5;
+  
+  /* State Colors */
+  --mkh-danger: #E8B4B8;
+  --mkh-danger-hover: #E09EA3;
+  --mkh-danger-text: #C0392B;
+  
+  --mkh-warning: #F5C6AA;
+  --mkh-warning-text: #E67E22;
+  
+  --mkh-success: #B8D4B8;
+  --mkh-success-text: #27AE60;
+  
+  --mkh-info: #D4C5E2;
+  --mkh-info-text: #8E44AD;
+  
+  /* Expiration Status Colors */
+  --mkh-expiring-critical: #E8B4B8;   /* 0-2 days */
+  --mkh-expiring-warning: #F5C6AA;    /* 3-5 days */
+  --mkh-expiring-safe: #B8D4B8;       /* 6+ days */
+  
+  /* Typography */
+  --mkh-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  
+  --mkh-font-size-tiny: 0.75rem;      /* 12px */
+  --mkh-font-size-small: 0.875rem;    /* 14px */
+  --mkh-font-size-base: 1rem;         /* 16px */
+  --mkh-font-size-lg: 1.125rem;       /* 18px */
+  --mkh-font-size-xl: 1.25rem;        /* 20px */
+  
+  --mkh-font-weight-normal: 400;
+  --mkh-font-weight-medium: 500;
+  --mkh-font-weight-semibold: 600;
+  --mkh-font-weight-bold: 700;
+  
+  /* Heading Sizes */
+  --mkh-h1-size: 2.5rem;              /* 40px */
+  --mkh-h2-size: 2rem;                /* 32px */
+  --mkh-h3-size: 1.5rem;              /* 24px */
+  --mkh-h4-size: 1.25rem;             /* 20px */
+  --mkh-h5-size: 1.125rem;            /* 18px */
+  --mkh-h6-size: 1rem;                /* 16px */
+  
+  /* Spacing */
+  --mkh-spacing-xs: 0.25rem;          /* 4px */
+  --mkh-spacing-sm: 0.5rem;           /* 8px */
+  --mkh-spacing-md: 1rem;             /* 16px */
+  --mkh-spacing-lg: 1.5rem;           /* 24px */
+  --mkh-spacing-xl: 2rem;             /* 32px */
+  --mkh-spacing-2xl: 3rem;            /* 48px */
+  
+  /* Border Radius */
+  --mkh-radius-sm: 0.375rem;          /* 6px */
+  --mkh-radius-md: 0.5rem;            /* 8px */
+  --mkh-radius-lg: 0.75rem;           /* 12px */
+  --mkh-radius-xl: 1rem;              /* 16px */
+  --mkh-radius-full: 9999px;
+  
+  /* Shadows */
+  --mkh-shadow-sm: 0 1px 2px rgba(44, 62, 80, 0.05);
+  --mkh-shadow-md: 0 4px 6px rgba(44, 62, 80, 0.07);
+  --mkh-shadow-lg: 0 10px 15px rgba(44, 62, 80, 0.1);
+  --mkh-shadow-xl: 0 20px 25px rgba(44, 62, 80, 0.15);
+  
+  /* Transitions */
+  --mkh-transition-fast: 150ms ease;
+  --mkh-transition-base: 200ms ease;
+  --mkh-transition-slow: 300ms ease;
+  
+  /* Z-Index Scale */
+  --mkh-z-dropdown: 1000;
+  --mkh-z-sticky: 1020;
+  --mkh-z-fixed: 1030;
+  --mkh-z-modal-backdrop: 1040;
+  --mkh-z-modal: 1050;
+  --mkh-z-popover: 1060;
+  --mkh-z-tooltip: 1070;
+  --mkh-z-toast: 1080;
+}
+
+/* --------------------------------------------------------------------------
+   Bootstrap Variable Overrides
+   -------------------------------------------------------------------------- */
+:root {
+  /* Override Bootstrap primary colors */
+  --bs-primary: var(--mkh-primary);
+  --bs-secondary: var(--mkh-secondary);
+  --bs-success: var(--mkh-success);
+  --bs-info: var(--mkh-info);
+  --bs-warning: var(--mkh-warning);
+  --bs-danger: var(--mkh-danger);
+  --bs-light: var(--mkh-bg-primary);
+  --bs-dark: var(--mkh-text-primary);
+  
+  /* Override Bootstrap body */
+  --bs-body-font-family: var(--mkh-font-family);
+  --bs-body-font-size: var(--mkh-font-size-base);
+  --bs-body-font-weight: var(--mkh-font-weight-normal);
+  --bs-body-color: var(--mkh-text-primary);
+  --bs-body-bg: var(--mkh-bg-primary);
+  
+  /* Override Bootstrap border */
+  --bs-border-color: var(--mkh-border);
+  --bs-border-radius: var(--mkh-radius-md);
+  --bs-border-radius-sm: var(--mkh-radius-sm);
+  --bs-border-radius-lg: var(--mkh-radius-lg);
+}
+
+/* --------------------------------------------------------------------------
+   Base Styles
+   -------------------------------------------------------------------------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--mkh-font-family);
+  font-size: var(--mkh-font-size-base);
+  font-weight: var(--mkh-font-weight-normal);
+  line-height: 1.6;
+  color: var(--mkh-text-primary);
+  background-color: var(--mkh-bg-primary);
+  margin: 0;
+  padding: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Typography
+   -------------------------------------------------------------------------- */
+h1, h2, h3, h4, h5, h6,
+.h1, .h2, .h3, .h4, .h5, .h6 {
+  font-family: var(--mkh-font-family);
+  font-weight: var(--mkh-font-weight-bold);
+  line-height: 1.3;
+  color: var(--mkh-text-primary);
+  margin-bottom: var(--mkh-spacing-md);
+}
+
+h1, .h1 {
+  font-size: var(--mkh-h1-size);
+  font-weight: var(--mkh-font-weight-bold);
+}
+
+h2, .h2 {
+  font-size: var(--mkh-h2-size);
+  font-weight: var(--mkh-font-weight-semibold);
+}
+
+h3, .h3 {
+  font-size: var(--mkh-h3-size);
+  font-weight: var(--mkh-font-weight-semibold);
+}
+
+h4, .h4 {
+  font-size: var(--mkh-h4-size);
+  font-weight: var(--mkh-font-weight-semibold);
+}
+
+h5, .h5 {
+  font-size: var(--mkh-h5-size);
+  font-weight: var(--mkh-font-weight-medium);
+}
+
+h6, .h6 {
+  font-size: var(--mkh-h6-size);
+  font-weight: var(--mkh-font-weight-medium);
+}
+
+p {
+  margin-bottom: var(--mkh-spacing-md);
+}
+
+.text-tiny {
+  font-size: var(--mkh-font-size-tiny);
+}
+
+.text-small {
+  font-size: var(--mkh-font-size-small);
+}
+
+.text-muted {
+  color: var(--mkh-text-secondary) !important;
+}
+
+/* --------------------------------------------------------------------------
+   Links
+   -------------------------------------------------------------------------- */
+a {
+  color: var(--mkh-primary-active);
+  text-decoration: none;
+  transition: color var(--mkh-transition-fast);
+}
+
+a:hover {
+  color: var(--mkh-primary-hover);
+  text-decoration: underline;
+}
+
+/* --------------------------------------------------------------------------
+   Cards
+   -------------------------------------------------------------------------- */
+.card {
+  background-color: var(--mkh-bg-card);
+  border: 1px solid var(--mkh-border);
+  border-radius: var(--mkh-radius-lg);
+  box-shadow: var(--mkh-shadow-sm);
+  transition: box-shadow var(--mkh-transition-base);
+}
+
+.card:hover {
+  box-shadow: var(--mkh-shadow-md);
+}
+
+.card-header {
+  background-color: var(--mkh-bg-card);
+  border-bottom: 1px solid var(--mkh-border-light);
+  padding: var(--mkh-spacing-md) var(--mkh-spacing-lg);
+}
+
+.card-body {
+  padding: var(--mkh-spacing-lg);
+}
+
+.card-footer {
+  background-color: var(--mkh-bg-card);
+  border-top: 1px solid var(--mkh-border-light);
+  padding: var(--mkh-spacing-md) var(--mkh-spacing-lg);
+}
+
+/* --------------------------------------------------------------------------
+   Buttons - Custom MyKitchenHub Styles
+   -------------------------------------------------------------------------- */
+.btn {
+  font-family: var(--mkh-font-family);
+  font-weight: var(--mkh-font-weight-medium);
+  border-radius: var(--mkh-radius-md);
+  padding: 0.5rem 1rem;
+  transition: all var(--mkh-transition-fast);
+  border: none;
+}
+
+.btn:focus {
+  box-shadow: 0 0 0 3px rgba(168, 213, 226, 0.4);
+}
+
+/* Primary Button */
+.btn-primary {
+  background-color: var(--mkh-primary);
+  color: var(--mkh-text-primary);
+}
+
+.btn-primary:hover {
+  background-color: var(--mkh-primary-hover);
+  color: var(--mkh-text-primary);
+}
+
+.btn-primary:active {
+  background-color: var(--mkh-primary-active);
+}
+
+/* Secondary Button */
+.btn-secondary {
+  background-color: var(--mkh-secondary);
+  color: var(--mkh-text-primary);
+}
+
+.btn-secondary:hover {
+  background-color: var(--mkh-secondary-hover);
+  color: var(--mkh-text-primary);
+}
+
+/* Success Button */
+.btn-success {
+  background-color: var(--mkh-success);
+  color: var(--mkh-text-primary);
+}
+
+.btn-success:hover {
+  background-color: var(--mkh-secondary-hover);
+}
+
+/* Danger Button */
+.btn-danger {
+  background-color: var(--mkh-danger);
+  color: var(--mkh-text-primary);
+}
+
+.btn-danger:hover {
+  background-color: var(--mkh-danger-hover);
+}
+
+/* Warning Button */
+.btn-warning {
+  background-color: var(--mkh-warning);
+  color: var(--mkh-text-primary);
+}
+
+.btn-warning:hover {
+  background-color: var(--mkh-accent-hover);
+}
+
+/* Info Button */
+.btn-info {
+  background-color: var(--mkh-info);
+  color: var(--mkh-text-primary);
+}
+
+/* Outline Buttons */
+.btn-outline-primary {
+  border: 2px solid var(--mkh-primary);
+  color: var(--mkh-text-primary);
+  background-color: transparent;
+}
+
+.btn-outline-primary:hover {
+  background-color: var(--mkh-primary);
+  border-color: var(--mkh-primary);
+  color: var(--mkh-text-primary);
+}
+
+/* --------------------------------------------------------------------------
+   Form Controls
+   -------------------------------------------------------------------------- */
+.form-control,
+.form-select {
+  font-family: var(--mkh-font-family);
+  border: 1px solid var(--mkh-border);
+  border-radius: var(--mkh-radius-md);
+  padding: 0.625rem 0.875rem;
+  background-color: var(--mkh-bg-card);
+  color: var(--mkh-text-primary);
+  transition: border-color var(--mkh-transition-fast), box-shadow var(--mkh-transition-fast);
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--mkh-primary);
+  box-shadow: 0 0 0 3px rgba(168, 213, 226, 0.3);
+  outline: none;
+}
+
+.form-control::placeholder {
+  color: var(--mkh-text-muted);
+}
+
+.form-label {
+  font-weight: var(--mkh-font-weight-medium);
+  color: var(--mkh-text-primary);
+  margin-bottom: var(--mkh-spacing-xs);
+}
+
+/* --------------------------------------------------------------------------
+   Badges
+   -------------------------------------------------------------------------- */
+.badge {
+  font-weight: var(--mkh-font-weight-medium);
+  padding: 0.35em 0.65em;
+  border-radius: var(--mkh-radius-full);
+}
+
+.badge.bg-primary {
+  background-color: var(--mkh-primary) !important;
+  color: var(--mkh-text-primary);
+}
+
+.badge.bg-secondary {
+  background-color: var(--mkh-secondary) !important;
+  color: var(--mkh-text-primary);
+}
+
+.badge.bg-danger {
+  background-color: var(--mkh-danger) !important;
+  color: var(--mkh-text-primary);
+}
+
+.badge.bg-warning {
+  background-color: var(--mkh-warning) !important;
+  color: var(--mkh-text-primary);
+}
+
+.badge.bg-success {
+  background-color: var(--mkh-success) !important;
+  color: var(--mkh-text-primary);
+}
+
+.badge.bg-info {
+  background-color: var(--mkh-info) !important;
+  color: var(--mkh-text-primary);
+}
+
+/* --------------------------------------------------------------------------
+   Alerts
+   -------------------------------------------------------------------------- */
+.alert {
+  border: none;
+  border-radius: var(--mkh-radius-lg);
+  padding: var(--mkh-spacing-md) var(--mkh-spacing-lg);
+}
+
+.alert-primary {
+  background-color: var(--mkh-primary);
+  color: var(--mkh-text-primary);
+}
+
+.alert-success {
+  background-color: var(--mkh-success);
+  color: var(--mkh-text-primary);
+}
+
+.alert-danger {
+  background-color: var(--mkh-danger);
+  color: var(--mkh-text-primary);
+}
+
+.alert-warning {
+  background-color: var(--mkh-warning);
+  color: var(--mkh-text-primary);
+}
+
+.alert-info {
+  background-color: var(--mkh-info);
+  color: var(--mkh-text-primary);
+}
+
+/* --------------------------------------------------------------------------
+   Modals
+   -------------------------------------------------------------------------- */
+.modal-content {
+  border: none;
+  border-radius: var(--mkh-radius-xl);
+  box-shadow: var(--mkh-shadow-xl);
+}
+
+.modal-header {
+  border-bottom: 1px solid var(--mkh-border-light);
+  padding: var(--mkh-spacing-lg);
+}
+
+.modal-title {
+  font-weight: var(--mkh-font-weight-semibold);
+}
+
+.modal-body {
+  padding: var(--mkh-spacing-lg);
+}
+
+.modal-footer {
+  border-top: 1px solid var(--mkh-border-light);
+  padding: var(--mkh-spacing-md) var(--mkh-spacing-lg);
+}
+
+.modal-backdrop.show {
+  opacity: 0.5;
+}
+
+/* --------------------------------------------------------------------------
+   Navigation / Navbar
+   -------------------------------------------------------------------------- */
+.navbar {
+  background-color: var(--mkh-bg-card);
+  border-bottom: 1px solid var(--mkh-border);
+  box-shadow: var(--mkh-shadow-sm);
+}
+
+.navbar-brand {
+  font-weight: var(--mkh-font-weight-bold);
+  color: var(--mkh-text-primary);
+}
+
+.nav-link {
+  color: var(--mkh-text-secondary);
+  font-weight: var(--mkh-font-weight-medium);
+  transition: color var(--mkh-transition-fast);
+}
+
+.nav-link:hover,
+.nav-link.active {
+  color: var(--mkh-text-primary);
+}
+
+/* --------------------------------------------------------------------------
+   Tabs
+   -------------------------------------------------------------------------- */
+.nav-tabs {
+  border-bottom: 2px solid var(--mkh-border-light);
+}
+
+.nav-tabs .nav-link {
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  color: var(--mkh-text-secondary);
+  padding: var(--mkh-spacing-sm) var(--mkh-spacing-md);
+}
+
+.nav-tabs .nav-link:hover {
+  border-color: var(--mkh-border);
+  color: var(--mkh-text-primary);
+}
+
+.nav-tabs .nav-link.active {
+  border-color: var(--mkh-primary);
+  color: var(--mkh-text-primary);
+  background-color: transparent;
+}
+
+/* --------------------------------------------------------------------------
+   Expiration Status Utilities
+   -------------------------------------------------------------------------- */
+.expiration-critical {
+  background-color: var(--mkh-expiring-critical) !important;
+  border-left: 4px solid var(--mkh-danger-text);
+}
+
+.expiration-warning {
+  background-color: var(--mkh-expiring-warning) !important;
+  border-left: 4px solid var(--mkh-warning-text);
+}
+
+.expiration-safe {
+  background-color: var(--mkh-expiring-safe) !important;
+  border-left: 4px solid var(--mkh-success-text);
+}
+
+/* --------------------------------------------------------------------------
+   Utility Classes
+   -------------------------------------------------------------------------- */
+.bg-cream {
+  background-color: var(--mkh-bg-primary);
+}
+
+.bg-card {
+  background-color: var(--mkh-bg-card);
+}
+
+.text-primary-dark {
+  color: var(--mkh-text-primary);
+}
+
+.text-secondary-muted {
+  color: var(--mkh-text-secondary);
+}
+
+.border-light {
+  border-color: var(--mkh-border) !important;
+}
+
+.shadow-soft {
+  box-shadow: var(--mkh-shadow-md);
+}
+
+.rounded-lg {
+  border-radius: var(--mkh-radius-lg);
+}
+
+.rounded-xl {
+  border-radius: var(--mkh-radius-xl);
+}
+
+/* --------------------------------------------------------------------------
+   Animations
+   -------------------------------------------------------------------------- */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideInUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn var(--mkh-transition-base);
+}
+
+.animate-slide-up {
+  animation: slideInUp var(--mkh-transition-slow);
+}
+
+.animate-slide-right {
+  animation: slideInRight var(--mkh-transition-slow);
+}
+
+/* --------------------------------------------------------------------------
+   Responsive Adjustments
+   -------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+  :root {
+    --mkh-h1-size: 2rem;
+    --mkh-h2-size: 1.75rem;
+    --mkh-h3-size: 1.375rem;
+    --mkh-h4-size: 1.125rem;
+  }
+  
+  .card-body {
+    padding: var(--mkh-spacing-md);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Print Styles
+   -------------------------------------------------------------------------- */
+@media print {
+  body {
+    background-color: white;
+  }
+  
+  .card {
+    box-shadow: none;
+    border: 1px solid #ddd;
+  }
+}

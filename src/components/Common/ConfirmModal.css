@@ -1,0 +1,181 @@
+/* ==========================================================================
+   ConfirmModal Component Styles
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Modal Overrides
+   -------------------------------------------------------------------------- */
+.confirm-modal .modal-content {
+  border: none;
+  border-radius: var(--mkh-radius-xl);
+  box-shadow: var(--mkh-shadow-xl);
+  overflow: hidden;
+}
+
+/* --------------------------------------------------------------------------
+   Header
+   -------------------------------------------------------------------------- */
+.confirm-modal__header {
+  border-bottom: 1px solid var(--mkh-border-light);
+  padding: var(--mkh-spacing-lg) var(--mkh-spacing-xl);
+}
+
+.confirm-modal__header .btn-close {
+  opacity: 0.5;
+}
+
+.confirm-modal__header .btn-close:hover {
+  opacity: 1;
+}
+
+.confirm-modal__title {
+  display: flex;
+  align-items: center;
+  gap: var(--mkh-spacing-sm);
+  font-size: var(--mkh-h4-size);
+  font-weight: var(--mkh-font-weight-semibold);
+  color: var(--mkh-text-primary);
+  margin: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Icon Variants
+   -------------------------------------------------------------------------- */
+.confirm-modal__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--mkh-radius-full);
+  flex-shrink: 0;
+}
+
+.confirm-modal__icon--danger {
+  background-color: var(--mkh-danger);
+  color: var(--mkh-danger-text);
+}
+
+.confirm-modal__icon--warning {
+  background-color: var(--mkh-warning);
+  color: var(--mkh-warning-text);
+}
+
+.confirm-modal__icon--info {
+  background-color: var(--mkh-info);
+  color: var(--mkh-info-text);
+}
+
+.confirm-modal__icon--success {
+  background-color: var(--mkh-success);
+  color: var(--mkh-success-text);
+}
+
+.confirm-modal__icon--question {
+  background-color: var(--mkh-primary);
+  color: var(--mkh-primary-active);
+}
+
+/* --------------------------------------------------------------------------
+   Body
+   -------------------------------------------------------------------------- */
+.confirm-modal__body {
+  padding: var(--mkh-spacing-xl);
+}
+
+.confirm-modal__message {
+  font-size: var(--mkh-font-size-base);
+  color: var(--mkh-text-secondary);
+  line-height: 1.6;
+  margin-bottom: 0;
+}
+
+.confirm-modal__message strong {
+  color: var(--mkh-text-primary);
+  font-weight: var(--mkh-font-weight-semibold);
+}
+
+/* --------------------------------------------------------------------------
+   Footer
+   -------------------------------------------------------------------------- */
+.confirm-modal__footer {
+  border-top: 1px solid var(--mkh-border-light);
+  padding: var(--mkh-spacing-md) var(--mkh-spacing-xl);
+  gap: var(--mkh-spacing-sm);
+}
+
+.confirm-modal__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--mkh-spacing-xs);
+  min-width: 100px;
+  font-weight: var(--mkh-font-weight-medium);
+}
+
+.confirm-modal__btn--cancel {
+  border-color: var(--mkh-border);
+  color: var(--mkh-text-secondary);
+}
+
+.confirm-modal__btn--cancel:hover {
+  background-color: var(--mkh-bg-hover);
+  border-color: var(--mkh-border);
+  color: var(--mkh-text-primary);
+}
+
+/* Danger confirm button */
+.confirm-modal__btn--confirm.btn-danger {
+  background-color: var(--mkh-danger);
+  border-color: var(--mkh-danger);
+  color: var(--mkh-danger-text);
+}
+
+.confirm-modal__btn--confirm.btn-danger:hover {
+  background-color: var(--mkh-danger-hover);
+  border-color: var(--mkh-danger-hover);
+}
+
+/* Warning confirm button */
+.confirm-modal__btn--confirm.btn-warning {
+  background-color: var(--mkh-warning);
+  border-color: var(--mkh-warning);
+  color: var(--mkh-warning-text);
+}
+
+.confirm-modal__btn--confirm.btn-warning:hover {
+  background-color: var(--mkh-accent-hover);
+  border-color: var(--mkh-accent-hover);
+}
+
+/* --------------------------------------------------------------------------
+   Responsive
+   -------------------------------------------------------------------------- */
+@media (max-width: 576px) {
+  .confirm-modal__header {
+    padding: var(--mkh-spacing-md);
+  }
+
+  .confirm-modal__body {
+    padding: var(--mkh-spacing-md);
+  }
+
+  .confirm-modal__footer {
+    padding: var(--mkh-spacing-md);
+    flex-direction: column;
+  }
+
+  .confirm-modal__btn {
+    width: 100%;
+  }
+
+  .confirm-modal__icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .confirm-modal__icon svg {
+    width: 20px;
+    height: 20px;
+  }
+}

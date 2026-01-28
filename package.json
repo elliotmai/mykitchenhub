@@ -1,17 +1,29 @@
 {
   "name": "mykitchenhub",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
-  "description": "Recipe & Inventory Management PWA for reducing food waste",
+  "description": "Recipe & Inventory Management Progressive Web Application",
   "dependencies": {
+    "axios": "^1.6.0",
+    "bootstrap": "^5.3.2",
+    "date-fns": "^2.30.0",
+    "firebase": "^10.7.0",
+    "lucide-react": "^0.294.0",
+    "papaparse": "^5.4.1",
     "react": "^18.2.0",
+    "react-bootstrap": "^2.9.0",
     "react-dom": "^18.2.0",
+    "react-hook-form": "^7.49.0",
+    "react-router-dom": "^6.20.0",
     "react-scripts": "5.0.1",
-    "firebase": "^10.7.0"
+    "workbox-webpack-plugin": "^7.0.0"
   },
   "devDependencies": {
-    "eslint": "^8.56.0",
-    "prettier": "^3.1.1"
+    "@types/papaparse": "^5.3.14",
+    "eslint": "^8.55.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-config-react-app": "^7.0.1",
+    "prettier": "^3.1.0"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -23,8 +35,7 @@
   },
   "eslintConfig": {
     "extends": [
-      "react-app",
-      "react-app/jest"
+      "react-app"
     ]
   },
   "browserslist": {

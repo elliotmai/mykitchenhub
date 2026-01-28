@@ -1,0 +1,205 @@
+/* ==========================================================================
+   Toast Notification Component Styles
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Container
+   -------------------------------------------------------------------------- */
+.toast-container {
+  z-index: var(--mkh-z-toast);
+  padding: var(--mkh-spacing-md);
+}
+
+/* --------------------------------------------------------------------------
+   Toast Base Styles
+   -------------------------------------------------------------------------- */
+.toast-notification {
+  background-color: var(--mkh-bg-card);
+  border: none;
+  border-radius: var(--mkh-radius-lg);
+  box-shadow: var(--mkh-shadow-lg);
+  overflow: hidden;
+  min-width: 300px;
+  max-width: 400px;
+  animation: slideInRight var(--mkh-transition-slow);
+}
+
+.toast-notification__header {
+  display: flex;
+  align-items: center;
+  gap: var(--mkh-spacing-sm);
+  padding: var(--mkh-spacing-sm) var(--mkh-spacing-md);
+  background-color: transparent;
+  border-bottom: none;
+}
+
+.toast-notification__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--mkh-radius-full);
+  flex-shrink: 0;
+}
+
+.toast-notification__title {
+  font-size: var(--mkh-font-size-small);
+  font-weight: var(--mkh-font-weight-semibold);
+  color: var(--mkh-text-primary);
+}
+
+.toast-notification__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: var(--mkh-spacing-xs);
+  border-radius: var(--mkh-radius-sm);
+  color: var(--mkh-text-muted);
+  cursor: pointer;
+  transition: all var(--mkh-transition-fast);
+}
+
+.toast-notification__close:hover {
+  background-color: var(--mkh-bg-hover);
+  color: var(--mkh-text-primary);
+}
+
+.toast-notification__body {
+  padding: 0 var(--mkh-spacing-md) var(--mkh-spacing-md);
+  padding-left: calc(var(--mkh-spacing-md) + 28px + var(--mkh-spacing-sm));
+  font-size: var(--mkh-font-size-small);
+  color: var(--mkh-text-secondary);
+  line-height: 1.5;
+}
+
+/* --------------------------------------------------------------------------
+   Variant: Success
+   -------------------------------------------------------------------------- */
+.toast--success {
+  border-left: 4px solid var(--mkh-success-text);
+}
+
+.toast--success .toast-notification__icon {
+  background-color: var(--mkh-success);
+  color: var(--mkh-success-text);
+}
+
+/* --------------------------------------------------------------------------
+   Variant: Error
+   -------------------------------------------------------------------------- */
+.toast--error {
+  border-left: 4px solid var(--mkh-danger-text);
+}
+
+.toast--error .toast-notification__icon {
+  background-color: var(--mkh-danger);
+  color: var(--mkh-danger-text);
+}
+
+/* --------------------------------------------------------------------------
+   Variant: Warning
+   -------------------------------------------------------------------------- */
+.toast--warning {
+  border-left: 4px solid var(--mkh-warning-text);
+}
+
+.toast--warning .toast-notification__icon {
+  background-color: var(--mkh-warning);
+  color: var(--mkh-warning-text);
+}
+
+/* --------------------------------------------------------------------------
+   Variant: Info
+   -------------------------------------------------------------------------- */
+.toast--info {
+  border-left: 4px solid var(--mkh-info-text);
+}
+
+.toast--info .toast-notification__icon {
+  background-color: var(--mkh-info);
+  color: var(--mkh-info-text);
+}
+
+/* --------------------------------------------------------------------------
+   Animation: Slide Out (on close)
+   -------------------------------------------------------------------------- */
+.toast-notification.hide {
+  animation: slideOutRight var(--mkh-transition-base) forwards;
+}
+
+@keyframes slideOutRight {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Stacking
+   -------------------------------------------------------------------------- */
+.toast-container .toast:not(:last-child) {
+  margin-bottom: var(--mkh-spacing-sm);
+}
+
+/* --------------------------------------------------------------------------
+   Responsive
+   -------------------------------------------------------------------------- */
+@media (max-width: 576px) {
+  .toast-container {
+    padding: var(--mkh-spacing-sm);
+    left: var(--mkh-spacing-sm) !important;
+    right: var(--mkh-spacing-sm) !important;
+    width: auto !important;
+  }
+
+  .toast-notification {
+    min-width: auto;
+    max-width: none;
+    width: 100%;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Progress Bar (optional - for timed toasts)
+   -------------------------------------------------------------------------- */
+.toast-notification__progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background-color: currentColor;
+  opacity: 0.3;
+  animation: toast-progress linear forwards;
+}
+
+.toast--success .toast-notification__progress {
+  background-color: var(--mkh-success-text);
+}
+
+.toast--error .toast-notification__progress {
+  background-color: var(--mkh-danger-text);
+}
+
+.toast--warning .toast-notification__progress {
+  background-color: var(--mkh-warning-text);
+}
+
+.toast--info .toast-notification__progress {
+  background-color: var(--mkh-info-text);
+}
+
+@keyframes toast-progress {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}

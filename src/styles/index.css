@@ -1,0 +1,134 @@
+/* ==========================================================================
+   MyKitchenHub - Main Styles Entry Point
+   
+   This file imports all necessary styles in the correct order.
+   Import this file in your index.js or App.jsx:
+   
+   import './styles/index.css';
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Third-Party Libraries
+   -------------------------------------------------------------------------- */
+/* Bootstrap CSS - Include via npm: npm install bootstrap */
+/* @import 'bootstrap/dist/css/bootstrap.min.css'; */
+
+/* Note: Bootstrap should be imported in index.js BEFORE this file:
+   import 'bootstrap/dist/css/bootstrap.min.css';
+   import './styles/index.css';
+*/
+
+/* --------------------------------------------------------------------------
+   2. Design System (Base Styles & Bootstrap Overrides)
+   -------------------------------------------------------------------------- */
+@import './design-system.css';
+
+/* --------------------------------------------------------------------------
+   3. Google Fonts - Inter
+   -------------------------------------------------------------------------- */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* --------------------------------------------------------------------------
+   4. Component-Specific Styles
+   Note: These are imported individually in each component file.
+   Listed here for reference:
+   
+   - LoadingSpinner.css
+   - ErrorBoundary.css
+   - ConfirmModal.css
+   - Toast.css
+   -------------------------------------------------------------------------- */
+
+/* --------------------------------------------------------------------------
+   5. Global Utility Overrides
+   -------------------------------------------------------------------------- */
+
+/* Ensure smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Better focus styles for accessibility */
+*:focus-visible {
+  outline: 2px solid var(--mkh-primary);
+  outline-offset: 2px;
+}
+
+/* Remove default focus outline (we use focus-visible instead) */
+*:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Selection colors */
+::selection {
+  background-color: var(--mkh-primary);
+  color: var(--mkh-text-primary);
+}
+
+/* Scrollbar styling (webkit browsers) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--mkh-bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--mkh-border);
+  border-radius: var(--mkh-radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--mkh-text-muted);
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--mkh-border) var(--mkh-bg-primary);
+}
+
+/* --------------------------------------------------------------------------
+   6. App Layout Helpers
+   -------------------------------------------------------------------------- */
+.app-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-main {
+  flex: 1;
+  padding: var(--mkh-spacing-lg);
+}
+
+.app-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* --------------------------------------------------------------------------
+   7. Page Transitions
+   -------------------------------------------------------------------------- */
+.page-enter {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.page-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity var(--mkh-transition-base), transform var(--mkh-transition-base);
+}
+
+.page-exit {
+  opacity: 1;
+}
+
+.page-exit-active {
+  opacity: 0;
+  transition: opacity var(--mkh-transition-fast);
+}
