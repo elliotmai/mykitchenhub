@@ -1,0 +1,65 @@
+/* ==========================================================================
+   App Layout Styles
+   MyKitchenHub Main Layout Structure
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Layout Container
+   -------------------------------------------------------------------------- */
+.app-layout {
+  min-height: 100vh;
+  background-color: var(--mkh-bg-primary);
+}
+
+/* --------------------------------------------------------------------------
+   Main Content Area
+   -------------------------------------------------------------------------- */
+.app-layout__main {
+  min-height: 100vh;
+  padding-top: 64px; /* Height of navbar */
+  display: flex;
+  flex-direction: column;
+  transition: margin-left var(--mkh-transition-base);
+}
+
+/* Desktop: Account for sidebar width */
+@media (min-width: 992px) {
+  .app-layout__main {
+    margin-left: 240px; /* Width of sidebar */
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Content Container
+   -------------------------------------------------------------------------- */
+.app-layout__content {
+  flex: 1;
+  padding: var(--mkh-spacing-lg);
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+@media (max-width: 576px) {
+  .app-layout__content {
+    padding: var(--mkh-spacing-md);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Page Transitions (optional enhancement)
+   -------------------------------------------------------------------------- */
+.app-layout__content > * {
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

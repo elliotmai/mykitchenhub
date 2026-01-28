@@ -1,0 +1,38 @@
+/* ==========================================================================
+   Footer Styles
+   MyKitchenHub Page Footer
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Footer Base
+   -------------------------------------------------------------------------- */
+.app-footer {
+  padding: var(--mkh-spacing-lg) var(--mkh-spacing-md);
+  border-top: 1px solid var(--mkh-border-light);
+  background-color: var(--mkh-bg-primary);
+}
+
+.app-footer__content {
+  text-align: center;
+}
+
+.app-footer__text {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--mkh-spacing-xs);
+  font-size: var(--mkh-font-size-small);
+  color: var(--mkh-text-secondary);
+  margin-bottom: var(--mkh-spacing-xs);
+}
+
+.app-footer__heart {
+  color: var(--mkh-danger-text);
+  fill: var(--mkh-danger-text);
+}
+
+.app-footer__copyright {
+  font-size: var(--mkh-font-size-tiny);
+  color: var(--mkh-text-muted);
+  margin: 0;
+}

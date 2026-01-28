@@ -1,0 +1,286 @@
+/* ==========================================================================
+   Login Page Styles
+   MyKitchenHub Authentication Pages
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Page Layout
+   -------------------------------------------------------------------------- */
+.login-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, var(--mkh-bg-primary) 0%, #EDE8E0 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--mkh-spacing-lg);
+}
+
+/* --------------------------------------------------------------------------
+   Branding
+   -------------------------------------------------------------------------- */
+.login-branding {
+  margin-bottom: var(--mkh-spacing-xl);
+}
+
+.login-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(135deg, var(--mkh-primary) 0%, var(--mkh-secondary) 100%);
+  border-radius: var(--mkh-radius-xl);
+  color: var(--mkh-text-primary);
+  margin-bottom: var(--mkh-spacing-md);
+  box-shadow: var(--mkh-shadow-lg);
+}
+
+.login-app-name {
+  font-size: 2rem;
+  font-weight: var(--mkh-font-weight-bold);
+  color: var(--mkh-text-primary);
+  margin-bottom: var(--mkh-spacing-xs);
+}
+
+.login-tagline {
+  font-size: var(--mkh-font-size-base);
+  color: var(--mkh-text-secondary);
+  margin: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Card
+   -------------------------------------------------------------------------- */
+.login-card {
+  border: none;
+  border-radius: var(--mkh-radius-xl);
+  box-shadow: var(--mkh-shadow-xl);
+  overflow: hidden;
+}
+
+.login-card__body {
+  padding: var(--mkh-spacing-xl);
+}
+
+@media (max-width: 576px) {
+  .login-card__body {
+    padding: var(--mkh-spacing-lg);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Back Button
+   -------------------------------------------------------------------------- */
+.login-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mkh-spacing-xs);
+  background: none;
+  border: none;
+  color: var(--mkh-text-secondary);
+  font-size: var(--mkh-font-size-small);
+  font-weight: var(--mkh-font-weight-medium);
+  padding: 0;
+  margin-bottom: var(--mkh-spacing-lg);
+  cursor: pointer;
+  transition: color var(--mkh-transition-fast);
+}
+
+.login-back-btn:hover {
+  color: var(--mkh-text-primary);
+}
+
+/* --------------------------------------------------------------------------
+   Header
+   -------------------------------------------------------------------------- */
+.login-header {
+  text-align: center;
+  margin-bottom: var(--mkh-spacing-xl);
+}
+
+.login-title {
+  font-size: var(--mkh-h3-size);
+  font-weight: var(--mkh-font-weight-bold);
+  color: var(--mkh-text-primary);
+  margin-bottom: var(--mkh-spacing-xs);
+}
+
+.login-subtitle {
+  font-size: var(--mkh-font-size-base);
+  color: var(--mkh-text-secondary);
+  margin: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Alert
+   -------------------------------------------------------------------------- */
+.login-alert {
+  border-radius: var(--mkh-radius-md);
+  margin-bottom: var(--mkh-spacing-lg);
+  padding: var(--mkh-spacing-md);
+  font-size: var(--mkh-font-size-small);
+}
+
+/* --------------------------------------------------------------------------
+   Form
+   -------------------------------------------------------------------------- */
+.login-form-group {
+  margin-bottom: var(--mkh-spacing-lg);
+}
+
+.login-label {
+  display: block;
+  font-size: var(--mkh-font-size-small);
+  font-weight: var(--mkh-font-weight-medium);
+  color: var(--mkh-text-primary);
+  margin-bottom: var(--mkh-spacing-xs);
+}
+
+.login-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.login-input-icon {
+  position: absolute;
+  left: var(--mkh-spacing-md);
+  color: var(--mkh-text-muted);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.login-input {
+  padding-left: calc(var(--mkh-spacing-md) + 18px + var(--mkh-spacing-sm));
+  height: 48px;
+  border: 2px solid var(--mkh-border);
+  border-radius: var(--mkh-radius-md);
+  font-size: var(--mkh-font-size-base);
+  transition: border-color var(--mkh-transition-fast), box-shadow var(--mkh-transition-fast);
+}
+
+.login-input:focus {
+  border-color: var(--mkh-primary);
+  box-shadow: 0 0 0 3px rgba(168, 213, 226, 0.3);
+}
+
+.login-input::placeholder {
+  color: var(--mkh-text-muted);
+}
+
+.login-input--password {
+  padding-right: calc(var(--mkh-spacing-md) + 24px + var(--mkh-spacing-sm));
+}
+
+/* --------------------------------------------------------------------------
+   Password Toggle
+   -------------------------------------------------------------------------- */
+.login-password-toggle {
+  position: absolute;
+  right: var(--mkh-spacing-md);
+  background: none;
+  border: none;
+  color: var(--mkh-text-muted);
+  padding: var(--mkh-spacing-xs);
+  cursor: pointer;
+  transition: color var(--mkh-transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-password-toggle:hover {
+  color: var(--mkh-text-primary);
+}
+
+/* --------------------------------------------------------------------------
+   Forgot Password
+   -------------------------------------------------------------------------- */
+.login-forgot {
+  text-align: right;
+  margin-bottom: var(--mkh-spacing-lg);
+}
+
+/* --------------------------------------------------------------------------
+   Links
+   -------------------------------------------------------------------------- */
+.login-link {
+  background: none;
+  border: none;
+  color: var(--mkh-primary-active);
+  font-weight: var(--mkh-font-weight-medium);
+  padding: 0;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color var(--mkh-transition-fast);
+}
+
+.login-link:hover {
+  color: var(--mkh-primary-hover);
+  text-decoration: underline;
+}
+
+/* --------------------------------------------------------------------------
+   Submit Button
+   -------------------------------------------------------------------------- */
+.login-submit-btn {
+  width: 100%;
+  height: 48px;
+  font-size: var(--mkh-font-size-base);
+  font-weight: var(--mkh-font-weight-semibold);
+  border-radius: var(--mkh-radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--mkh-spacing-sm);
+}
+
+/* --------------------------------------------------------------------------
+   Mode Switch
+   -------------------------------------------------------------------------- */
+.login-switch {
+  text-align: center;
+  margin-top: var(--mkh-spacing-xl);
+  padding-top: var(--mkh-spacing-lg);
+  border-top: 1px solid var(--mkh-border-light);
+}
+
+.login-switch p {
+  margin: 0;
+  color: var(--mkh-text-secondary);
+  font-size: var(--mkh-font-size-small);
+}
+
+/* --------------------------------------------------------------------------
+   Footer
+   -------------------------------------------------------------------------- */
+.login-footer {
+  font-size: var(--mkh-font-size-tiny);
+  color: var(--mkh-text-muted);
+  margin: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Animations
+   -------------------------------------------------------------------------- */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.login-card {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* --------------------------------------------------------------------------
+   Dark Mode Support (if needed in future)
+   -------------------------------------------------------------------------- */
+@media (prefers-color-scheme: dark) {
+  /* Can add dark mode styles here if needed */
+}

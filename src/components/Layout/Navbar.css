@@ -1,0 +1,261 @@
+/* ==========================================================================
+   Navbar Styles
+   MyKitchenHub Top Navigation
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Base Navbar
+   -------------------------------------------------------------------------- */
+.app-navbar {
+  background-color: var(--mkh-bg-card);
+  border-bottom: 1px solid var(--mkh-border);
+  box-shadow: var(--mkh-shadow-sm);
+  height: 64px;
+  z-index: var(--mkh-z-fixed);
+}
+
+.app-navbar__container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 100%;
+  padding: 0 var(--mkh-spacing-md);
+}
+
+/* --------------------------------------------------------------------------
+   Mobile Toggle
+   -------------------------------------------------------------------------- */
+.app-navbar__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: none;
+  border: none;
+  border-radius: var(--mkh-radius-md);
+  color: var(--mkh-text-primary);
+  cursor: pointer;
+  transition: background-color var(--mkh-transition-fast);
+}
+
+.app-navbar__toggle:hover {
+  background-color: var(--mkh-bg-hover);
+}
+
+/* --------------------------------------------------------------------------
+   Brand / Logo
+   -------------------------------------------------------------------------- */
+.app-navbar__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--mkh-spacing-sm);
+  text-decoration: none;
+  margin-right: auto;
+  margin-left: var(--mkh-spacing-sm);
+}
+
+@media (min-width: 992px) {
+  .app-navbar__brand {
+    margin-left: 0;
+  }
+}
+
+.app-navbar__logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, var(--mkh-primary) 0%, var(--mkh-secondary) 100%);
+  border-radius: var(--mkh-radius-md);
+  color: var(--mkh-text-primary);
+}
+
+.app-navbar__name {
+  font-size: var(--mkh-font-size-lg);
+  font-weight: var(--mkh-font-weight-bold);
+  color: var(--mkh-text-primary);
+}
+
+/* --------------------------------------------------------------------------
+   Right Side Items
+   -------------------------------------------------------------------------- */
+.app-navbar__right {
+  display: flex;
+  align-items: center;
+  gap: var(--mkh-spacing-sm);
+}
+
+/* --------------------------------------------------------------------------
+   Icon Button (Notifications)
+   -------------------------------------------------------------------------- */
+.app-navbar__icon-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: none;
+  border: none;
+  border-radius: var(--mkh-radius-md);
+  color: var(--mkh-text-secondary);
+  cursor: pointer;
+  transition: all var(--mkh-transition-fast);
+}
+
+.app-navbar__icon-btn:hover {
+  background-color: var(--mkh-bg-hover);
+  color: var(--mkh-text-primary);
+}
+
+.app-navbar__badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 18px;
+  height: 18px;
+  font-size: 10px;
+  font-weight: var(--mkh-font-weight-bold);
+  line-height: 18px;
+  padding: 0 4px;
+}
+
+/* --------------------------------------------------------------------------
+   User Button
+   -------------------------------------------------------------------------- */
+.app-navbar__user-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--mkh-spacing-sm);
+  padding: var(--mkh-spacing-xs) var(--mkh-spacing-sm);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--mkh-radius-md);
+  cursor: pointer;
+  transition: all var(--mkh-transition-fast);
+}
+
+.app-navbar__user-btn:hover,
+.app-navbar__user-btn:focus {
+  background-color: var(--mkh-bg-hover);
+  border-color: var(--mkh-border);
+}
+
+/* Remove default dropdown caret */
+.app-navbar__user-btn::after {
+  display: none;
+}
+
+.app-navbar__avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, var(--mkh-primary) 0%, var(--mkh-info) 100%);
+  border-radius: var(--mkh-radius-full);
+  color: var(--mkh-text-primary);
+  font-size: var(--mkh-font-size-small);
+  font-weight: var(--mkh-font-weight-semibold);
+}
+
+.app-navbar__user-name {
+  font-size: var(--mkh-font-size-small);
+  font-weight: var(--mkh-font-weight-medium);
+  color: var(--mkh-text-primary);
+}
+
+/* --------------------------------------------------------------------------
+   Dropdown Menu
+   -------------------------------------------------------------------------- */
+.app-navbar__dropdown {
+  min-width: 240px;
+  padding: var(--mkh-spacing-sm);
+  border: 1px solid var(--mkh-border);
+  border-radius: var(--mkh-radius-lg);
+  box-shadow: var(--mkh-shadow-lg);
+  margin-top: var(--mkh-spacing-xs);
+}
+
+.app-navbar__dropdown-header {
+  display: flex;
+  align-items: center;
+  gap: var(--mkh-spacing-md);
+  padding: var(--mkh-spacing-sm);
+  margin-bottom: var(--mkh-spacing-xs);
+}
+
+.app-navbar__dropdown-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, var(--mkh-primary) 0%, var(--mkh-info) 100%);
+  border-radius: var(--mkh-radius-full);
+  color: var(--mkh-text-primary);
+  font-size: var(--mkh-font-size-base);
+  font-weight: var(--mkh-font-weight-semibold);
+  flex-shrink: 0;
+}
+
+.app-navbar__dropdown-info {
+  min-width: 0;
+}
+
+.app-navbar__dropdown-name {
+  font-size: var(--mkh-font-size-base);
+  font-weight: var(--mkh-font-weight-semibold);
+  color: var(--mkh-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-navbar__dropdown-email {
+  font-size: var(--mkh-font-size-small);
+  color: var(--mkh-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --------------------------------------------------------------------------
+   Dropdown Items
+   -------------------------------------------------------------------------- */
+.app-navbar__dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: var(--mkh-spacing-sm);
+  padding: var(--mkh-spacing-sm) var(--mkh-spacing-md);
+  border-radius: var(--mkh-radius-md);
+  font-size: var(--mkh-font-size-small);
+  color: var(--mkh-text-primary);
+  transition: background-color var(--mkh-transition-fast);
+}
+
+.app-navbar__dropdown-item:hover,
+.app-navbar__dropdown-item:focus {
+  background-color: var(--mkh-bg-hover);
+  color: var(--mkh-text-primary);
+}
+
+.app-navbar__dropdown-item--danger {
+  color: var(--mkh-danger-text);
+}
+
+.app-navbar__dropdown-item--danger:hover,
+.app-navbar__dropdown-item--danger:focus {
+  background-color: var(--mkh-danger);
+  color: var(--mkh-danger-text);
+}
+
+/* --------------------------------------------------------------------------
+   Dropdown Divider
+   -------------------------------------------------------------------------- */
+.app-navbar__dropdown .dropdown-divider {
+  margin: var(--mkh-spacing-xs) 0;
+  border-color: var(--mkh-border-light);
+}

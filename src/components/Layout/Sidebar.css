@@ -1,0 +1,256 @@
+/* ==========================================================================
+   Sidebar Styles
+   MyKitchenHub Navigation Sidebar
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Sidebar Base
+   -------------------------------------------------------------------------- */
+.app-sidebar {
+  position: fixed;
+  top: 64px; /* Height of navbar */
+  left: 0;
+  bottom: 0;
+  width: 240px;
+  background-color: var(--mkh-bg-card);
+  border-right: 1px solid var(--mkh-border);
+  display: flex;
+  flex-direction: column;
+  z-index: var(--mkh-z-fixed);
+  transition: transform var(--mkh-transition-base);
+}
+
+/* Mobile: Hidden by default, slides in when open */
+@media (max-width: 991.98px) {
+  .app-sidebar {
+    top: 0;
+    transform: translateX(-100%);
+    box-shadow: var(--mkh-shadow-xl);
+  }
+
+  .app-sidebar--open {
+    transform: translateX(0);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Mobile Backdrop
+   -------------------------------------------------------------------------- */
+.sidebar-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: calc(var(--mkh-z-fixed) - 1);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--mkh-transition-base), visibility var(--mkh-transition-base);
+}
+
+.sidebar-backdrop--visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+@media (min-width: 992px) {
+  .sidebar-backdrop {
+    display: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Mobile Header
+   -------------------------------------------------------------------------- */
+.app-sidebar__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--mkh-spacing-md);
+  border-bottom: 1px solid var(--mkh-border);
+  height: 64px;
+}
+
+.app-sidebar__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--mkh-spacing-sm);
+}
+
+.app-sidebar__logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, var(--mkh-primary) 0%, var(--mkh-secondary) 100%);
+  border-radius: var(--mkh-radius-md);
+  color: var(--mkh-text-primary);
+}
+
+.app-sidebar__name {
+  font-size: var(--mkh-font-size-lg);
+  font-weight: var(--mkh-font-weight-bold);
+  color: var(--mkh-text-primary);
+}
+
+.app-sidebar__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: none;
+  border: none;
+  border-radius: var(--mkh-radius-md);
+  color: var(--mkh-text-secondary);
+  cursor: pointer;
+  transition: all var(--mkh-transition-fast);
+}
+
+.app-sidebar__close:hover {
+  background-color: var(--mkh-bg-hover);
+  color: var(--mkh-text-primary);
+}
+
+/* --------------------------------------------------------------------------
+   Navigation
+   -------------------------------------------------------------------------- */
+.app-sidebar__nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: var(--mkh-spacing-md);
+  overflow-y: auto;
+}
+
+.app-sidebar__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.app-sidebar__list--bottom {
+  margin-top: auto;
+  padding-top: var(--mkh-spacing-md);
+  border-top: 1px solid var(--mkh-border-light);
+}
+
+.app-sidebar__item {
+  margin-bottom: var(--mkh-spacing-xs);
+}
+
+/* --------------------------------------------------------------------------
+   Navigation Link
+   -------------------------------------------------------------------------- */
+.app-sidebar__link {
+  display: flex;
+  align-items: center;
+  gap: var(--mkh-spacing-md);
+  padding: var(--mkh-spacing-sm) var(--mkh-spacing-md);
+  border-radius: var(--mkh-radius-md);
+  text-decoration: none;
+  color: var(--mkh-text-secondary);
+  font-size: var(--mkh-font-size-base);
+  font-weight: var(--mkh-font-weight-medium);
+  transition: all var(--mkh-transition-fast);
+}
+
+.app-sidebar__link:hover {
+  background-color: var(--mkh-bg-hover);
+  color: var(--mkh-text-primary);
+}
+
+.app-sidebar__link--active {
+  background-color: var(--mkh-primary);
+  color: var(--mkh-text-primary);
+}
+
+.app-sidebar__link--active:hover {
+  background-color: var(--mkh-primary-hover);
+}
+
+/* --------------------------------------------------------------------------
+   Link Icon
+   -------------------------------------------------------------------------- */
+.app-sidebar__icon {
+  flex-shrink: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Link Label
+   -------------------------------------------------------------------------- */
+.app-sidebar__label {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --------------------------------------------------------------------------
+   Badge
+   -------------------------------------------------------------------------- */
+.app-sidebar__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background-color: var(--mkh-danger);
+  color: var(--mkh-danger-text);
+  border-radius: var(--mkh-radius-full);
+  font-size: var(--mkh-font-size-tiny);
+  font-weight: var(--mkh-font-weight-bold);
+}
+
+.app-sidebar__link--active .app-sidebar__badge {
+  background-color: var(--mkh-bg-card);
+}
+
+/* --------------------------------------------------------------------------
+   Alert Banner
+   -------------------------------------------------------------------------- */
+.app-sidebar__alert {
+  display: flex;
+  align-items: center;
+  gap: var(--mkh-spacing-sm);
+  padding: var(--mkh-spacing-md);
+  margin: var(--mkh-spacing-md);
+  margin-top: 0;
+  background-color: var(--mkh-warning);
+  border-radius: var(--mkh-radius-md);
+  color: var(--mkh-warning-text);
+  font-size: var(--mkh-font-size-small);
+  font-weight: var(--mkh-font-weight-medium);
+}
+
+/* --------------------------------------------------------------------------
+   Desktop Adjustments
+   -------------------------------------------------------------------------- */
+@media (min-width: 992px) {
+  .app-sidebar__header {
+    display: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Collapsed State (Future Enhancement)
+   -------------------------------------------------------------------------- */
+/* 
+.app-sidebar--collapsed {
+  width: 72px;
+}
+
+.app-sidebar--collapsed .app-sidebar__label,
+.app-sidebar--collapsed .app-sidebar__badge,
+.app-sidebar--collapsed .app-sidebar__alert span {
+  display: none;
+}
+
+.app-sidebar--collapsed .app-sidebar__link {
+  justify-content: center;
+  padding: var(--mkh-spacing-md);
+}
+*/
