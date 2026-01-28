@@ -1,112 +1,56 @@
-/* pwa-safe-area.css */
-/* Add this to your main CSS file or import separately */
+/* ==========================================================================
+   PWA Safe Area Styles
+   MyKitchenHub - Handles notches, status bars, and home indicators
+   
+   IMPORTANT: This file ONLY applies styles in standalone PWA mode.
+   The approach is simple: add padding to body, which pushes the entire
+   app down. This keeps the navbar layout intact.
+   ========================================================================== */
 
-/* ============================================
-   PWA Safe Area Insets
-   Handles notches, status bars, and home indicators
-   ============================================ */
-
-/* Ensure viewport-fit=cover is respected */
-:root {
-  /* Fallback values if env() is not supported */
-  --safe-area-inset-top: 0px;
-  --safe-area-inset-right: 0px;
-  --safe-area-inset-bottom: 5px;
-  --safe-area-inset-left: 0px;
-}
-
-/* Use environment variables when available */
-@supports (padding-top: env(safe-area-inset-top)) {
-  :root {
-    --safe-area-inset-top: env(safe-area-inset-top);
-    --safe-area-inset-right: env(safe-area-inset-right);
-    --safe-area-inset-bottom: env(safe-area-inset-bottom);
-    --safe-area-inset-left: env(safe-area-inset-left);
-  }
-}
-
-/* Apply safe area to body */
-body {
-  padding-top: var(--safe-area-inset-top);
-  padding-left: var(--safe-area-inset-left);
-  padding-right: var(--safe-area-inset-right);
-}
-
-/* ============================================
-   Navbar Safe Area Fix
-   ============================================ */
-
-/* If your navbar is fixed/sticky at top */
-/* .app-navbar,
-.navbar-fixed-top,
-nav.fixed-top {
-  padding-top: var(--safe-area-inset-top);
-} */
-
-/* Alternative: Add margin to the navbar container */
-.app-layout__navbar {
-  padding-top: var(--safe-area-inset-top);
-}
-
-/* For standalone PWA mode specifically */
+/* --------------------------------------------------------------------------
+   PWA Standalone Mode Only
+   -------------------------------------------------------------------------- */
 @media all and (display-mode: standalone) {
-  .app-navbar,
-  .app-layout__navbar {
-    padding-top: env(safe-area-inset-top, 20px);
+
+  /* Push entire app down with body padding */
+  body {
+    /* Top safe area - for status bar / notch */
+    padding-top: env(safe-area-inset-top, 0px);
+    /* Side safe areas - for curved screens */
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+    /* Background color matches navbar so status bar area looks consistent */
+    background-color: var(--mkh-bg-card, #ffffff);
   }
-  
-  /* Ensure the background extends behind the status bar */
-  .app-navbar::before {
-    content: '';
-    position: absolute;
-    top: calc(-1 * env(safe-area-inset-top, 0px));
-    left: 0;
-    right: 0;
-    height: env(safe-area-inset-top, 0px);
-    background: inherit;
-    z-index: -1;
+
+  /* Root container needs its own background */
+  #root {
+    background-color: var(--mkh-bg-primary, #f8f9fa);
+    min-height: 100vh;
+  }
+
+  /* Bottom safe area for home indicator */
+  .app-layout {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Offline indicator should account for bottom safe area */
+  .offline-indicator-wrapper {
+    bottom: env(safe-area-inset-bottom, 0px);
   }
 }
 
-/* ============================================
-   Bottom Navigation / Tab Bar Safe Area
-   ============================================ */
+/* --------------------------------------------------------------------------
+   Modal Safe Areas (standalone mode)
+   -------------------------------------------------------------------------- */
+@media all and (display-mode: standalone) {
+  .modal-fullscreen {
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
 
-/* If you have bottom navigation */
-.bottom-nav,
-.tab-bar,
-.app-layout__bottom-nav {
-  padding-bottom: var(--safe-area-inset-bottom);
-}
-
-/* ============================================
-   Fixed/Sticky Elements
-   ============================================ */
-
-/* Any fixed positioned element at top */
-.fixed-top {
-  top: var(--safe-area-inset-top);
-}
-
-/* Any fixed positioned element at bottom */
-.fixed-bottom {
-  bottom: var(--safe-area-inset-bottom);
-}
-
-/* ============================================
-   Full-screen modals
-   ============================================ */
-
-.modal-fullscreen {
-  padding-top: var(--safe-area-inset-top);
-  padding-bottom: var(--safe-area-inset-bottom);
-}
-
-/* ============================================
-   Offline indicator positioning
-   ============================================ */
-
-/* Adjust offline indicator to account for bottom safe area */
-.offline-indicator {
-  bottom: var(--safe-area-inset-bottom);
+  /* Bootstrap modal backdrop adjustment */
+  .modal {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
 }
