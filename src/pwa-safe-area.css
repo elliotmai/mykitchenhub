@@ -11,7 +11,7 @@
   /* Fallback values if env() is not supported */
   --safe-area-inset-top: 0px;
   --safe-area-inset-right: 0px;
-  --safe-area-inset-bottom: 0px;
+  --safe-area-inset-bottom: 5px;
   --safe-area-inset-left: 0px;
 }
 
@@ -37,11 +37,11 @@ body {
    ============================================ */
 
 /* If your navbar is fixed/sticky at top */
-.app-navbar,
+/* .app-navbar,
 .navbar-fixed-top,
 nav.fixed-top {
   padding-top: var(--safe-area-inset-top);
-}
+} */
 
 /* Alternative: Add margin to the navbar container */
 .app-layout__navbar {
