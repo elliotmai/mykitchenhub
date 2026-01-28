@@ -2,55 +2,108 @@
    PWA Safe Area Styles
    MyKitchenHub - Handles notches, status bars, and home indicators
    
-   IMPORTANT: This file ONLY applies styles in standalone PWA mode.
-   The approach is simple: add padding to body, which pushes the entire
-   app down. This keeps the navbar layout intact.
+   This file handles safe areas for installed PWA mode where the app
+   runs fullscreen without browser chrome.
    ========================================================================== */
 
 /* --------------------------------------------------------------------------
-   PWA Standalone Mode Only
+   PWA Standalone Mode - Fixed Navbar Handling
+   
+   The navbar uses Bootstrap's fixed="top" which sets position: fixed; top: 0
+   Body padding doesn't affect fixed elements, so we need to:
+   1. Move the navbar down by the safe area amount
+   2. Extend the navbar background up behind the status bar
+   3. Adjust main content and sidebar positioning
    -------------------------------------------------------------------------- */
 @media all and (display-mode: standalone) {
 
-  /* Push entire app down with body padding */
+  /* --- Body background for status bar area --- */
   body {
-    /* Top safe area - for status bar / notch */
-    padding-top: env(safe-area-inset-top, 0px);
-    /* Side safe areas - for curved screens */
-    padding-left: env(safe-area-inset-left, 0px);
-    padding-right: env(safe-area-inset-right, 0px);
-    /* Background color matches navbar so status bar area looks consistent */
+    /* Background color shows behind status bar */
     background-color: var(--mkh-bg-card, #ffffff);
   }
 
-  /* Root container needs its own background */
-  #root {
-    background-color: var(--mkh-bg-primary, #f8f9fa);
-    min-height: 100vh;
+  /* --- Fixed Navbar: Move down and extend background up --- */
+  .app-navbar,
+  .navbar.fixed-top,
+  .fixed-top {
+    /* Move navbar down by safe area amount */
+    top: env(safe-area-inset-top, 0px) !important;
   }
 
-  /* Bottom safe area for home indicator */
+  /* Extend navbar background behind status bar */
+  .app-navbar::before {
+    content: '';
+    position: absolute;
+    top: calc(-1 * env(safe-area-inset-top, 0px));
+    left: 0;
+    right: 0;
+    height: env(safe-area-inset-top, 0px);
+    background-color: var(--mkh-bg-card, #ffffff);
+    /* Match the navbar border */
+    border-bottom: none;
+  }
+
+  /* --- Main Content: Account for shifted navbar --- */
+  .app-layout__main {
+    /* Original padding (64px) + safe area */
+    padding-top: calc(64px + env(safe-area-inset-top, 0px)) !important;
+  }
+
+  /* --- Sidebar: Account for shifted navbar --- */
+  .app-sidebar {
+    /* Desktop sidebar starts below navbar */
+    top: calc(64px + env(safe-area-inset-top, 0px)) !important;
+  }
+
+  /* Mobile sidebar covers full height including safe area */
+  @media (max-width: 991.98px) {
+    .app-sidebar {
+      top: 0 !important;
+      padding-top: env(safe-area-inset-top, 0px);
+    }
+
+    /* Mobile sidebar header needs extra top padding */
+    .app-sidebar__header {
+      padding-top: calc(var(--mkh-spacing-md, 16px) + env(safe-area-inset-top, 0px));
+      /* Adjust height to account for safe area */
+      height: calc(64px + env(safe-area-inset-top, 0px));
+    }
+  }
+
+  /* --- Bottom Safe Area (for home indicator) --- */
   .app-layout {
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
-  /* Offline indicator should account for bottom safe area */
-  .offline-indicator-wrapper {
-    bottom: env(safe-area-inset-bottom, 0px);
+  /* --- Side Safe Areas (for curved screens) --- */
+  .app-layout__content {
+    padding-left: max(var(--mkh-spacing-lg, 24px), env(safe-area-inset-left, 0px));
+    padding-right: max(var(--mkh-spacing-lg, 24px), env(safe-area-inset-right, 0px));
   }
 }
 
 /* --------------------------------------------------------------------------
-   Modal Safe Areas (standalone mode)
+   Modal Safe Areas
    -------------------------------------------------------------------------- */
 @media all and (display-mode: standalone) {
+  .modal {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
   .modal-fullscreen {
     padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
+}
 
-  /* Bootstrap modal backdrop adjustment */
-  .modal {
-    padding-top: env(safe-area-inset-top, 0px);
+/* --------------------------------------------------------------------------
+   Offline Indicator (fixed at bottom)
+   -------------------------------------------------------------------------- */
+@media all and (display-mode: standalone) {
+
+  .offline-indicator,
+  [class*="offline"]>div:last-child {
+    bottom: env(safe-area-inset-bottom, 0px) !important;
   }
 }
