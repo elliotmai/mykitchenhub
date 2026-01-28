@@ -1,36 +1,54 @@
 import React from 'react';
-import { Toast, ToastContainer, Button } from 'react-bootstrap';
-import { RefreshCw } from 'lucide-react';
+import { Button } from 'react-bootstrap';
+import { RefreshCw, X } from 'lucide-react';
+import './UpdateNotification.css';
 
+/**
+ * UpdateNotification Component
+ * 
+ * Shows a notification when a new version of the app is available.
+ * Properly centered on all screen sizes including mobile.
+ */
 const UpdateNotification = ({ show, onUpdate, onDismiss }) => {
+    if (!show) return null;
+
     return (
-        <ToastContainer position="bottom-center" className="p-3">
-            <Toast show={show} onClose={onDismiss} bg="primary">
-                <Toast.Header closeButton={false}>
-                    <RefreshCw size={18} className="me-2" />
-                    <strong className="me-auto">Update Available</strong>
-                </Toast.Header>
-                <Toast.Body className="text-white">
-                    <p className="mb-2">A new version of MyKitchenHub is available!</p>
-                    <div className="d-flex gap-2">
-                        <Button
-                            variant="light"
-                            size="sm"
-                            onClick={onUpdate}
-                        >
-                            Update Now
-                        </Button>
-                        <Button
-                            variant="outline-light"
-                            size="sm"
-                            onClick={onDismiss}
-                        >
-                            Later
-                        </Button>
-                    </div>
-                </Toast.Body>
-            </Toast>
-        </ToastContainer>
+        <div className="update-notification-overlay">
+            <div className="update-notification">
+                <div className="update-notification__header">
+                    <RefreshCw size={20} className="update-notification__icon" />
+                    <span className="update-notification__title">Update Available</span>
+                    <button
+                        className="update-notification__close"
+                        onClick={onDismiss}
+                        aria-label="Dismiss"
+                    >
+                        <X size={18} />
+                    </button>
+                </div>
+                <div className="update-notification__body">
+                    <p>A new version of MyKitchenHub is available!</p>
+                </div>
+                <div className="update-notification__actions">
+                    <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={onUpdate}
+                        className="update-notification__btn"
+                    >
+                        Update Now
+                    </Button>
+                    <Button
+                        variant="outline-secondary"
+                        size="sm"
+                        onClick={onDismiss}
+                        className="update-notification__btn"
+                    >
+                        Later
+                    </Button>
+                </div>
+            </div>
+        </div>
     );
 };
 

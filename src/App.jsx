@@ -96,26 +96,27 @@ const AppRoutes = () => {
 const App = () => {
   // PWA update state
   const [showUpdateNotification, setShowUpdateNotification] = useState(false);
-  const [waitingWorker, setWaitingWorker] = useState(null);
+  const [workbox, setWorkbox] = useState(null);
 
-  // Handle service worker update
+  // Handle service worker update - tell the waiting SW to take over
   const handleUpdate = () => {
-    if (waitingWorker) {
-      // Tell the waiting service worker to skip waiting
-      waitingWorker.messageSkipWaiting();
+    if (workbox) {
+      // Send message to service worker to skip waiting
+      workbox.messageSkipWaiting();
       setShowUpdateNotification(false);
-      // Reload will happen automatically when the new SW takes control
+      // The page will reload automatically when the new SW takes control
+      // (handled by the 'controlling' event in serviceWorkerRegistration.js)
     }
   };
 
   // Register service worker on mount
   useEffect(() => {
     serviceWorkerRegistration.register({
-      onUpdate: (registration) => {
-        // New content is available
-        setWaitingWorker(registration);
-        setShowUpdateNotification(true);
+      onUpdate: (wb) => {
+        // New content is available - store the workbox instance
         console.log('New content is available; please refresh.');
+        setWorkbox(wb);
+        setShowUpdateNotification(true);
       },
       onSuccess: () => {
         // Content is cached for offline use
@@ -130,7 +131,7 @@ const App = () => {
         <AuthProvider>
           <ToastProvider position="top-end">
             <AppRoutes />
-            
+
             {/* PWA Components */}
             <InstallPrompt />
             <OfflineIndicator />
