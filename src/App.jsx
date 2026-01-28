@@ -2,7 +2,7 @@
 // Main application component with routing and authentication
 // MyKitchenHub - Recipe & Inventory Management PWA
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 // Styles
@@ -18,6 +18,14 @@ import { AppLayout } from './components/Layout';
 
 // Auth Components
 import { ProtectedRoute, PublicOnlyRoute } from './components/Auth';
+
+// PWA Components
+import InstallPrompt from './components/InstallPrompt';
+import UpdateNotification from './components/UpdateNotification';
+import OfflineIndicator from './components/OfflineIndicator';
+
+// Service Worker Registration
+import * as serviceWorkerRegistration from './serviceWorkerRegistration';
 
 // Pages
 import {
@@ -83,14 +91,54 @@ const AppRoutes = () => {
  * - AuthProvider: Authentication state
  * - ToastProvider: Toast notifications
  * - ErrorBoundary: Error handling
+ * - PWA Components: Install prompt, offline indicator, update notification
  */
 const App = () => {
+  // PWA update state
+  const [showUpdateNotification, setShowUpdateNotification] = useState(false);
+  const [waitingWorker, setWaitingWorker] = useState(null);
+
+  // Handle service worker update
+  const handleUpdate = () => {
+    if (waitingWorker) {
+      // Tell the waiting service worker to skip waiting
+      waitingWorker.messageSkipWaiting();
+      setShowUpdateNotification(false);
+      // Reload will happen automatically when the new SW takes control
+    }
+  };
+
+  // Register service worker on mount
+  useEffect(() => {
+    serviceWorkerRegistration.register({
+      onUpdate: (registration) => {
+        // New content is available
+        setWaitingWorker(registration);
+        setShowUpdateNotification(true);
+        console.log('New content is available; please refresh.');
+      },
+      onSuccess: () => {
+        // Content is cached for offline use
+        console.log('Content is cached for offline use.');
+      },
+    });
+  }, []);
+
   return (
     <ErrorBoundary showDetails={process.env.NODE_ENV === 'development'}>
       <BrowserRouter>
         <AuthProvider>
           <ToastProvider position="top-end">
             <AppRoutes />
+            
+            {/* PWA Components */}
+            <InstallPrompt />
+            <OfflineIndicator />
+            <UpdateNotification
+              show={showUpdateNotification}
+              onUpdate={handleUpdate}
+              onDismiss={() => setShowUpdateNotification(false)}
+            />
           </ToastProvider>
         </AuthProvider>
       </BrowserRouter>

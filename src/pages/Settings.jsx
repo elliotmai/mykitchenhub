@@ -3,6 +3,7 @@
 
 import React, { useState } from 'react';
 import { Card, Form, Button, Row, Col, Alert, Spinner } from 'react-bootstrap';
+// eslint-disable-next-line
 import { User, Mail, Lock, Bell, Save } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
