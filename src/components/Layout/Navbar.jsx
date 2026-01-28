@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import './Navbar.css';
+import '../../pwa-safe-area.css';
 
 /**
  * Navbar Component
