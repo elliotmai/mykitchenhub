@@ -4,11 +4,11 @@
 import React from 'react';
 // eslint-disable-next-line
 import { Container, Row, Col, Card, Button } from 'react-bootstrap';
-import { 
-  Package, 
-  BookOpen, 
-  Calendar, 
-  AlertTriangle, 
+import {
+  Package,
+  BookOpen,
+  Calendar,
+  AlertTriangle,
   Plus,
   TrendingUp,
   Clock
@@ -30,8 +30,8 @@ const Dashboard = () => {
 
   const getGreeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 18) return 'Good afternoon';
+    if (hour < 11) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
     return 'Good evening';
   };
 
