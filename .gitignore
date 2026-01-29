@@ -1,5 +1,6 @@
 # Dependencies
 /node_modules
+/firestore/node_modules/
 /.pnp
 .pnp.js
 
@@ -33,6 +34,7 @@ yarn-error.log*
 firebase-debug.log
 firestore-debug.log
 ui-debug.log
+serviceAccountKey.json
 
 # Misc
 *.log

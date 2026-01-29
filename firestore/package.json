@@ -1,0 +1,16 @@
+{
+  "name": "mykitchenhub-firestore-setup",
+  "version": "1.0.0",
+  "description": "Firestore schema initialization and testing scripts for MyKitchenHub",
+  "scripts": {
+    "init": "node initializeSchema.js",
+    "test": "node testCRUD.js",
+    "deploy-rules": "firebase deploy --only firestore:rules"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.0.0"
+  },
+  "devDependencies": {
+    "firebase-tools": "^13.0.0"
+  }
+}
