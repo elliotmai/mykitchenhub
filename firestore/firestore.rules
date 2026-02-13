@@ -17,16 +17,6 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
     
-    // Check if the request is creating a new document
-    function isCreating() {
-      return request.resource.data != null && resource == null;
-    }
-    
-    // Check if the request is updating an existing document
-    function isUpdating() {
-      return request.resource.data != null && resource != null;
-    }
-    
     // Validate required fields exist
     function hasRequiredFields(fields) {
       return request.resource.data.keys().hasAll(fields);

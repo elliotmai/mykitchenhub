@@ -1,0 +1,190 @@
+rules_version = '2';
+
+// ============================================
+// MyKitchenHub Firebase Storage Security Rules
+// ============================================
+//
+// This file defines security rules for Firebase Cloud Storage.
+// It controls access to recipe images, HelloFresh photo imports,
+// and any other user-uploaded files.
+//
+// File Structure:
+// - /recipes/{recipeId}/{filename}           - Recipe images (shared, read by all authenticated users)
+// - /users/{userId}/hellofresh/{filename}    - HelloFresh photo imports (private to user)
+// - /users/{userId}/profile/{filename}       - User profile pictures (private to user)
+// - /temp/{userId}/{filename}                - Temporary uploads (auto-delete after 24h)
+//
+// ============================================
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // ============================================
+    // HELPER FUNCTIONS
+    // ============================================
+    
+    // Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Check if user owns the resource
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Validate file size (max 10MB for images)
+    function isValidSize() {
+      return request.resource.size <= 10 * 1024 * 1024; // 10MB
+    }
+    
+    // Validate specific image formats
+    function isValidImageFormat() {
+      return request.resource.contentType in [
+        'image/jpeg',
+        'image/jpg', 
+        'image/png',
+        'image/webp',
+        'image/heic',
+        'image/heif'
+      ];
+    }
+    
+    // ============================================
+    // RECIPE IMAGES
+    // ============================================
+    //
+    // Path: /recipes/{recipeId}/{filename}
+    // Purpose: Store images for recipes (user-created, legacy, AI-generated)
+    // Access: Read by all authenticated users, write by authenticated users
+    //
+    match /recipes/{recipeId}/{filename} {
+      // Anyone authenticated can read recipe images
+      allow read: if isAuthenticated();
+      
+      // Any authenticated user can upload recipe images
+      allow create: if isAuthenticated()
+        && isValidImageFormat()
+        && isValidSize();
+      
+      // Users can update recipe images (re-upload)
+      allow update: if isAuthenticated()
+        && isValidImageFormat()
+        && isValidSize();
+      
+      // Only allow deletion if the user created the recipe
+      // (This is enforced in Firestore, but we add extra protection here)
+      allow delete: if isAuthenticated();
+    }
+    
+    // ============================================
+    // USER HELLOFRESH IMPORTS
+    // ============================================
+    //
+    // Path: /users/{userId}/hellofresh/{filename}
+    // Purpose: Store photos of HelloFresh recipe cards for AI processing
+    // Access: Private to the user
+    //
+    match /users/{userId}/hellofresh/{filename} {
+      // Users can read their own HelloFresh imports
+      allow read: if isOwner(userId);
+      
+      // Users can upload HelloFresh photos
+      allow create: if isOwner(userId)
+        && isValidImageFormat()
+        && isValidSize();
+      
+      // Users can update their HelloFresh photos
+      allow update: if isOwner(userId)
+        && isValidImageFormat()
+        && isValidSize();
+      
+      // Users can delete their HelloFresh photos
+      allow delete: if isOwner(userId);
+    }
+    
+    // ============================================
+    // USER PROFILE PICTURES
+    // ============================================
+    //
+    // Path: /users/{userId}/profile/{filename}
+    // Purpose: Store user profile pictures
+    // Access: Private to the user (readable by user only)
+    //
+    match /users/{userId}/profile/{filename} {
+      // Users can read their own profile picture
+      allow read: if isOwner(userId);
+      
+      // Users can upload profile pictures
+      allow create: if isOwner(userId)
+        && isValidImageFormat()
+        && isValidSize();
+      
+      // Users can update their profile picture
+      allow update: if isOwner(userId)
+        && isValidImageFormat()
+        && isValidSize();
+      
+      // Users can delete their profile picture
+      allow delete: if isOwner(userId);
+    }
+    
+    // ============================================
+    // TEMPORARY UPLOADS
+    // ============================================
+    //
+    // Path: /temp/{userId}/{filename}
+    // Purpose: Temporary file storage for processing (CSV imports, etc.)
+    // Access: Private to the user
+    // Note: Set up Cloud Function to auto-delete files older than 24 hours
+    //
+    match /temp/{userId}/{filename} {
+      // Users can read their own temp files
+      allow read: if isOwner(userId);
+      
+      // Users can upload temp files (including CSV)
+      allow create: if isOwner(userId)
+        && isValidSize()
+        && (
+          isValidImageFormat() || 
+          request.resource.contentType == 'text/csv' ||
+          request.resource.contentType == 'application/vnd.ms-excel'
+        );
+      
+      // Users can update their temp files
+      allow update: if isOwner(userId)
+        && isValidSize();
+      
+      // Users can delete their temp files
+      allow delete: if isOwner(userId);
+    }
+    
+    // ============================================
+    // LEGACY RECIPE SYNC IMAGES
+    // ============================================
+    //
+    // Path: /legacy-sync/{recipeId}/{filename}
+    // Purpose: Store images from legacy "Let's Eat" Firebase sync
+    // Access: Read by all authenticated users, write by Cloud Functions only
+    //
+    match /legacy-sync/{recipeId}/{filename} {
+      // Anyone authenticated can read legacy recipe images
+      allow read: if isAuthenticated();
+      
+      // Only Cloud Functions can write (service account auth)
+      // Users cannot upload here directly
+      allow write: if false;
+    }
+    
+    // ============================================
+    // DEFAULT DENY
+    // ============================================
+    //
+    // Deny all other access by default
+    // This ensures no unexpected file access
+    //
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

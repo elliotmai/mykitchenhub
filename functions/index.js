@@ -1,36 +1,641 @@
 /**
- * Import function triggers from their respective submodules:
- *
- * const {onCall} = require("firebase-functions/v2/https");
- * const {onDocumentWritten} = require("firebase-functions/v2/firestore");
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
+ * MyKitchenHub - Firebase Cloud Functions
+ * Step 2.2 Implementation
  */
 
-const {setGlobalOptions} = require("firebase-functions");
-const {onRequest} = require("firebase-functions/https");
-const logger = require("firebase-functions/logger");
+// Load environment variables from .env file
+require('dotenv').config();
 
-// functions/index.js
-const anthropicKey = process.env.ANTHROPIC_API_KEY;
-const spoonacularKey = process.env.SPOONACULAR_API_KEY;
+const functions = require('firebase-functions');
+const admin = require('firebase-admin');
+const axios = require('axios');
 
-// For cost control, you can set the maximum number of containers that can be
-// running at the same time. This helps mitigate the impact of unexpected
-// traffic spikes by instead downgrading performance. This limit is a
-// per-function limit. You can override the limit for each function using the
-// `maxInstances` option in the function's options, e.g.
-// `onRequest({ maxInstances: 5 }, (req, res) => { ... })`.
-// NOTE: setGlobalOptions does not apply to functions using the v1 API. V1
-// functions should each use functions.runWith({ maxInstances: 10 }) instead.
-// In the v1 API, each function can only serve one request per container, so
-// this will be the maximum concurrent request count.
-setGlobalOptions({ maxInstances: 10 });
+// Initialize Firebase Admin
+admin.initializeApp();
 
-// Create and deploy your first functions
-// https://firebase.google.com/docs/functions/get-started
+// Firestore reference
+const db = admin.firestore();
 
-// exports.helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
+// ============================================================================
+// FUNCTION 1: Sync Legacy Recipes from "Let's Eat" App
+// ============================================================================
+
+/**
+ * HTTP function to import recipes from the legacy "Let's Eat" app
+ * 
+ * "Let's Eat" Schema:
+ *   users/{userId}/recipes/{recipeId}
+ *   Fields: name (string), ingredients (array), tags (array)
+ * 
+ * Expected request body:
+ * {
+ *   userId: "user-firebase-uid"  // The userId from "Let's Eat" (could be different from MyKitchenHub userId)
+ * }
+ */
+exports.syncLegacyRecipes = functions.https.onRequest(async (req, res) => {
+  try {
+    console.log('Starting legacy recipe sync...');
+    
+    const { userId } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({
+        error: 'Missing required field: userId'
+      });
+    }
+
+    // Initialize legacy Firebase connection
+    let legacyApp, legacyDb;
+    try {
+      // Load service account from environment (only load when function is called)
+      const serviceAccountPath = process.env.LEGACY_FIREBASE_SERVICE_ACCOUNT_PATH;
+      
+      if (!serviceAccountPath) {
+        throw new Error('LEGACY_FIREBASE_SERVICE_ACCOUNT_PATH not configured in .env');
+      }
+
+      // Dynamically require the service account file
+      const serviceAccount = require(serviceAccountPath);
+      
+      // Initialize separate Firebase instance for legacy project
+      legacyApp = admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+      }, `legacy-${Date.now()}`); // Unique name for each invocation
+      
+      legacyDb = legacyApp.firestore();
+      console.log('Connected to "Let\'s Eat" Firestore');
+      
+    } catch (error) {
+      console.error('Failed to initialize legacy Firebase:', error);
+      return res.status(500).json({
+        error: 'Failed to connect to legacy database',
+        message: error.message,
+        hint: 'Make sure LEGACY_FIREBASE_SERVICE_ACCOUNT_PATH is set in .env and the file exists'
+      });
+    }
+
+    // Get current Firebase (MyKitchenHub)
+    const db = admin.firestore();
+
+    // Check if already synced
+    const syncDoc = await db
+      .collection('users')
+      .doc(userId)
+      .collection('syncMetadata')
+      .doc('legacyRecipes')
+      .get();
+
+    if (syncDoc.exists && syncDoc.data().completed) {
+      // Clean up legacy app instance
+      await legacyApp.delete();
+      
+      return res.json({
+        status: 'already_synced',
+        message: 'Recipes already synced from Let\'s Eat',
+        syncDate: syncDoc.data().completedAt.toDate().toISOString(),
+        recipesCount: syncDoc.data().recipesCount || 0
+      });
+    }
+
+    // Fetch recipes from Let's Eat
+    // Schema: users/{userId}/recipes/{recipeId}
+    console.log(`Fetching recipes for user: ${userId}`);
+    
+    const legacyRecipesSnapshot = await legacyDb
+      .collection('users')
+      .doc(userId)
+      .collection('recipes')
+      .get();
+
+    if (legacyRecipesSnapshot.empty) {
+      // Clean up legacy app instance
+      await legacyApp.delete();
+      
+      return res.json({
+        status: 'success',
+        message: 'No recipes found in Let\'s Eat for this user',
+        recipesImported: 0,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    console.log(`Found ${legacyRecipesSnapshot.size} recipes in Let's Eat`);
+
+    // Transform and import recipes
+    const batch = db.batch();
+    let importedCount = 0;
+    let skippedCount = 0;
+
+    for (const doc of legacyRecipesSnapshot.docs) {
+      const legacyRecipe = doc.data();
+      
+      try {
+        // Transform "Let's Eat" schema to MyKitchenHub schema
+        const newRecipe = transformLegacyRecipe(legacyRecipe, doc.id);
+        
+        // Check if recipe already exists (by legacyId)
+        const existingRecipe = await db
+          .collection('recipes')
+          .where('legacyId', '==', doc.id)
+          .limit(1)
+          .get();
+
+        if (!existingRecipe.empty) {
+          console.log(`Skipping duplicate recipe: ${newRecipe.name}`);
+          skippedCount++;
+          continue;
+        }
+
+        // Add to batch
+        const recipeRef = db.collection('recipes').doc();
+        batch.set(recipeRef, newRecipe);
+        importedCount++;
+        
+      } catch (error) {
+        console.error(`Error transforming recipe ${doc.id}:`, error);
+        skippedCount++;
+      }
+    }
+
+    // Mark as synced
+    const syncRef = db
+      .collection('users')
+      .doc(userId)
+      .collection('syncMetadata')
+      .doc('legacyRecipes');
+    
+    batch.set(syncRef, {
+      completed: true,
+      completedAt: new Date().toISOString(),
+      recipesCount: importedCount,
+      skippedCount: skippedCount,
+      totalFound: legacyRecipesSnapshot.size
+    });
+
+    // Commit all changes
+    await batch.commit();
+    console.log(`Successfully imported ${importedCount} recipes`);
+
+    // Clean up legacy app instance
+    await legacyApp.delete();
+
+    res.json({
+      status: 'success',
+      message: 'Recipes synced successfully from Let\'s Eat',
+      recipesImported: importedCount,
+      recipesSkipped: skippedCount,
+      totalFound: legacyRecipesSnapshot.size,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('Error in syncLegacyRecipes:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Transform "Let's Eat" recipe to MyKitchenHub schema
+ * 
+ * Input schema (Let's Eat):
+ * {
+ *   name: string,
+ *   ingredients: array,  // format may vary
+ *   tags: array
+ * }
+ * 
+ * Output schema (MyKitchenHub):
+ * {
+ *   name: string,
+ *   ingredients: [{ name, quantity, unit, normalized }],
+ *   instructions: string,
+ *   source: "legacy",
+ *   legacyId: string,
+ *   tags: array,
+ *   // ... other fields
+ * }
+ */
+function transformLegacyRecipe(legacyRecipe, legacyId) {
+  // Parse ingredients array
+  // Ingredients might be strings like "1 cup milk" or objects like {name: "milk", amount: "1 cup"}
+  const parsedIngredients = parseIngredients(legacyRecipe.ingredients || []);
+
+  return {
+    name: legacyRecipe.name || 'Untitled Recipe',
+    
+    ingredients: parsedIngredients,
+    
+    instructions: legacyRecipe.instructions || 'No instructions available from legacy recipe.',
+    
+    source: 'legacy',
+    legacyId: legacyId,
+    
+    imageUrl: legacyRecipe.imageUrl || null,
+    
+    createdAt: new Date().toISOString(),
+    
+    tags: legacyRecipe.tags || [],
+    
+    prepTime: legacyRecipe.prepTime || null,
+    cookTime: legacyRecipe.cookTime || null,
+    servings: legacyRecipe.servings || 4,
+    difficulty: legacyRecipe.difficulty || 'medium',
+    
+    timesCooked: 0
+  };
+}
+
+/**
+ * Parse ingredients from various formats to standardized format
+ */
+function parseIngredients(ingredients) {
+  if (!Array.isArray(ingredients)) {
+    return [];
+  }
+
+  return ingredients.map(ingredient => {
+    // If ingredient is already an object with structured data
+    if (typeof ingredient === 'object' && ingredient.name) {
+      return {
+        name: ingredient.name,
+        quantity: parseFloat(ingredient.quantity || ingredient.amount) || 1,
+        unit: ingredient.unit || extractUnit(ingredient.amount) || 'serving',
+        normalized: ingredient.name.toLowerCase().trim()
+      };
+    }
+    
+    // If ingredient is a string like "1 cup milk"
+    if (typeof ingredient === 'string') {
+      const parsed = parseIngredientString(ingredient);
+      return {
+        name: parsed.name,
+        quantity: parsed.quantity,
+        unit: parsed.unit,
+        normalized: parsed.name.toLowerCase().trim()
+      };
+    }
+    
+    // Fallback
+    return {
+      name: String(ingredient),
+      quantity: 1,
+      unit: 'serving',
+      normalized: String(ingredient).toLowerCase().trim()
+    };
+  });
+}
+
+/**
+ * Parse ingredient string like "1 cup milk" into components
+ */
+function parseIngredientString(ingredientStr) {
+  const str = ingredientStr.trim();
+  
+  // Common units to look for
+  const units = ['cup', 'cups', 'tablespoon', 'tablespoons', 'tbsp', 'teaspoon', 'teaspoons', 'tsp',
+                 'pound', 'pounds', 'lb', 'lbs', 'ounce', 'ounces', 'oz', 'gram', 'grams', 'g',
+                 'kilogram', 'kilograms', 'kg', 'liter', 'liters', 'l', 'milliliter', 'milliliters', 'ml',
+                 'gallon', 'gallons', 'quart', 'quarts', 'pint', 'pints', 'piece', 'pieces', 'whole', 'clove', 'cloves'];
+  
+  // Try to extract quantity (number or fraction at the start)
+  const quantityMatch = str.match(/^(\d+\/\d+|\d+\.?\d*)/);
+  let quantity = 1;
+  
+  if (quantityMatch) {
+    const matched = quantityMatch[1];
+    // Handle fractions like "1/2"
+    if (matched.includes('/')) {
+      const parts = matched.split('/');
+      quantity = parseFloat(parts[0]) / parseFloat(parts[1]);
+    } else {
+      quantity = parseFloat(matched);
+    }
+  }
+  
+  // Try to find unit
+  let unit = 'serving';
+  let nameStartIndex = 0;
+  
+  for (const u of units) {
+    const regex = new RegExp(`\\b${u}\\b`, 'i');
+    const match = str.match(regex);
+    if (match) {
+      unit = u.toLowerCase();
+      nameStartIndex = match.index + match[0].length;
+      break;
+    }
+  }
+  
+  // Extract name (everything after quantity and unit)
+  let name = str.substring(nameStartIndex || (quantityMatch ? quantityMatch[0].length : 0)).trim();
+  
+  // Remove common articles
+  name = name.replace(/^(of|a|an|the)\s+/i, '').trim();
+  
+  return {
+    name: name || str,
+    quantity: quantity,
+    unit: unit
+  };
+}
+
+/**
+ * Extract unit from an amount string like "1 cup" or "2 tablespoons"
+ */
+function extractUnit(amountStr) {
+  if (!amountStr) return 'serving';
+  
+  const units = ['cup', 'tablespoon', 'tbsp', 'teaspoon', 'tsp', 'pound', 'lb', 'ounce', 'oz',
+                 'gram', 'g', 'kg', 'liter', 'l', 'ml', 'gallon', 'quart', 'pint', 'piece', 'whole'];
+  
+  const str = String(amountStr).toLowerCase();
+  for (const unit of units) {
+    if (str.includes(unit)) {
+      return unit;
+    }
+  }
+  
+  return 'serving';
+}
+
+// ============================================================================
+// FUNCTION 2: Import Inventory from CSV
+// ============================================================================
+
+/**
+ * HTTP function to import inventory items from CSV file
+ * 
+ * Expected request body:
+ * {
+ *   userId: "user-firebase-uid",
+ *   csvData: "item,quantity,unit,location\nMilk,1,gallon,Fridge\n..."
+ * }
+ */
+exports.importInventoryFromCSV = functions.https.onRequest(async (req, res) => {
+  try {
+    console.log('Starting CSV inventory import...');
+    
+    // TODO: Implement in Phase 3
+    // 1. Authenticate request
+    // 2. Parse CSV data
+    // 3. Validate item data
+    // 4. Create inventory items in Firestore
+    // 5. Return summary of imported items
+    
+    const { userId, csvData } = req.body;
+    
+    if (!userId || !csvData) {
+      return res.status(400).json({
+        error: 'Missing required fields: userId, csvData'
+      });
+    }
+
+    // Placeholder response
+    res.status(200).json({
+      status: 'success',
+      message: 'CSV import function ready (stub)',
+      itemsImported: 0,
+      itemsSkipped: 0,
+      errors: [],
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('Error in importInventoryFromCSV:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: error.message
+    });
+  }
+});
+
+// ============================================================================
+// FUNCTION 3: Import HelloFresh Recipe from Photo (OCR)
+// ============================================================================
+
+/**
+ * HTTP function to extract recipe from HelloFresh card photo
+ * Uses OCR/AI to parse recipe card image
+ * 
+ * Expected request body:
+ * {
+ *   userId: "user-firebase-uid",
+ *   imageUrl: "https://storage.googleapis.com/.../hellofresh-card.jpg"
+ * }
+ */
+exports.importHelloFreshFromPhoto = functions.https.onRequest(async (req, res) => {
+  try {
+    console.log('Starting HelloFresh photo import...');
+    
+    // TODO: Implement in Phase 5
+    // 1. Authenticate request
+    // 2. Download image from storage
+    // 3. Send to OCR/Vision API (Google Cloud Vision or Claude)
+    // 4. Parse recipe data (title, ingredients, instructions)
+    // 5. Create recipe in Firestore
+    // 6. Return recipe ID
+    
+    const { userId, imageUrl } = req.body;
+    
+    if (!userId || !imageUrl) {
+      return res.status(400).json({
+        error: 'Missing required fields: userId, imageUrl'
+      });
+    }
+
+    // Placeholder response
+    res.status(200).json({
+      status: 'success',
+      message: 'HelloFresh photo import function ready (stub)',
+      recipeId: null,
+      recipeName: null,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('Error in importHelloFreshFromPhoto:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: error.message
+    });
+  }
+});
+
+// ============================================================================
+// FUNCTION 4: Send Daily Waste Alerts (SMS)
+// ============================================================================
+
+/**
+ * Scheduled function to send daily SMS alerts for expiring items
+ * Runs every day at 9:00 AM
+ * 
+ * Uses Cloud Scheduler trigger
+ */
+exports.sendDailyWasteAlerts = functions.pubsub
+  .schedule('0 9 * * *')  // 9:00 AM every day (cron format)
+  .timeZone('America/New_York')  // TODO: Make timezone configurable per user
+  .onRun(async (context) => {
+    try {
+      console.log('Starting daily waste alerts...');
+      
+      // TODO: Implement in Phase 6
+      // 1. Query all users with SMS alerts enabled
+      // 2. For each user:
+      //    a. Get inventory items expiring in next 3 days
+      //    b. Format alert message
+      //    c. Send SMS via Textbelt/Twilio API
+      // 3. Log results
+      
+      // Placeholder implementation
+      const usersSnapshot = await db.collection('users').get();
+      const totalUsers = usersSnapshot.size;
+      
+      console.log(`Daily waste alerts processed for ${totalUsers} users (stub)`);
+      
+      return null;
+      
+    } catch (error) {
+      console.error('Error in sendDailyWasteAlerts:', error);
+      throw error;
+    }
+  });
+
+// ============================================================================
+// FUNCTION 5: Generate AI Meal Plan
+// ============================================================================
+
+/**
+ * HTTP function to generate weekly meal plan using Claude AI
+ * 
+ * Expected request body:
+ * {
+ *   userId: "user-firebase-uid",
+ *   preferences: {
+ *     dietaryRestrictions: ["vegetarian", "gluten-free"],
+ *     dislikes: ["mushrooms"],
+ *     servings: 2,
+ *     mealsPerWeek: 5
+ *   }
+ * }
+ */
+exports.generateMealPlan = functions
+  .runWith({
+    timeoutSeconds: 120,  // AI calls may take longer
+    memory: '512MB'
+  })
+  .https.onRequest(async (req, res) => {
+    try {
+      console.log('Starting AI meal plan generation...');
+      
+      // TODO: Implement in Phase 7
+      // 1. Authenticate request
+      // 2. Get user's:
+      //    - Expiring inventory items
+      //    - Available recipes
+      //    - HelloFresh schedule
+      //    - Dietary preferences
+      // 3. Build AI prompt with context
+      // 4. Call Anthropic Claude API
+      // 5. Parse AI response into structured meal plan
+      // 6. Save meal plan to Firestore
+      // 7. Return meal plan
+      
+      const { userId, preferences } = req.body;
+      
+      if (!userId) {
+        return res.status(400).json({
+          error: 'Missing required field: userId'
+        });
+      }
+
+      // Placeholder response
+      res.status(200).json({
+        status: 'success',
+        message: 'AI meal plan generation function ready (stub)',
+        mealPlan: {
+          weekOf: new Date().toISOString(),
+          meals: [],
+          shoppingList: []
+        },
+        timestamp: new Date().toISOString()
+      });
+      
+    } catch (error) {
+      console.error('Error in generateMealPlan:', error);
+      res.status(500).json({
+        error: 'Internal server error',
+        message: error.message
+      });
+    }
+  });
+
+// ============================================================================
+// HELPER FUNCTIONS (for future implementation)
+// ============================================================================
+
+/**
+ * Helper: Send SMS via Textbelt API
+ */
+async function sendSMS(phoneNumber, message) {
+  // TODO: Implement in Phase 6
+  // const response = await axios.post('https://textbelt.com/text', {
+  //   phone: phoneNumber,
+  //   message: message,
+  //   key: process.env.TEXTBELT_API_KEY
+  // });
+  // return response.data;
+  
+  console.log(`SMS stub: Would send to ${phoneNumber}: ${message}`);
+  return { success: true };
+}
+
+/**
+ * Helper: Call Claude AI API
+ */
+async function callClaudeAI(prompt) {
+  // TODO: Implement in Phase 7
+  // const response = await axios.post('https://api.anthropic.com/v1/messages', {
+  //   model: 'claude-3-5-sonnet-20241022',
+  //   max_tokens: 1024,
+  //   messages: [{ role: 'user', content: prompt }]
+  // }, {
+  //   headers: {
+  //     'x-api-key': process.env.ANTHROPIC_API_KEY,
+  //     'anthropic-version': '2023-06-01'
+  //   }
+  // });
+  // return response.data.content[0].text;
+  
+  console.log('Claude AI stub called with prompt:', prompt);
+  return 'AI response placeholder';
+}
+
+/**
+ * Helper: Calculate expiration status
+ */
+function getExpirationStatus(expirationDate) {
+  const now = new Date();
+  const expDate = new Date(expirationDate);
+  const daysUntilExpiration = Math.ceil((expDate - now) / (1000 * 60 * 60 * 24));
+  
+  if (daysUntilExpiration < 0) return 'expired';
+  if (daysUntilExpiration <= 3) return 'urgent';
+  if (daysUntilExpiration <= 7) return 'warning';
+  return 'fresh';
+}
+
+// ============================================================================
+// EXPORTS FOR TESTING
+// ============================================================================
+
+// Export helper functions for unit testing
+if (process.env.NODE_ENV === 'test') {
+  module.exports.helpers = {
+    sendSMS,
+    callClaudeAI,
+    getExpirationStatus
+  };
+}
