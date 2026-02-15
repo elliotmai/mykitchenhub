@@ -1,7 +1,5 @@
-/**
- * MyKitchenHub - Firebase Cloud Functions
- * Step 2.2 Implementation
- */
+// Firebase Cloud Functions index file
+// Main entry point for all cloud functions (1st Gen)
 
 // Load environment variables from .env file
 require('dotenv').config();
@@ -16,6 +14,178 @@ admin.initializeApp();
 // Firestore reference
 const db = admin.firestore();
 
+// Import trigger functions
+const { onUserCreate } = require('./src/triggers/onUserCreate');
+
+// Import seed data utilities
+const { 
+  seedInventory, 
+  seedRecipes, 
+  seedAll, 
+  clearAll 
+} = require('./src/utils/seedData');
+
+/**
+ * Auth Trigger: Runs when a new user is created
+ * Automatically sets up default storage locations and preferences
+ */
+exports.onUserCreated = functions.https.onRequest(async (req, res) => {
+  // Enable CORS
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+  
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+  
+  try {
+    const { userId, email, displayName } = req.body;
+    
+    if (!userId || !email) {
+      res.status(400).json({ error: 'Missing userId or email' });
+      return;
+    }
+    
+    const result = await onUserCreate({ 
+      uid: userId, 
+      email: email,
+      displayName: displayName || null
+    });
+    res.json(result);
+  } catch (error) {
+    console.error('Error in onUserCreated:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Callable Function: Seed test data for a user
+ * Only use in development/testing environments
+ */
+exports.seedTestData = functions.https.onCall(async (data, context) => {
+  // In production, add authentication check here
+  // if (!context.auth) {
+  //   throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
+  // }
+  
+  const userId = data.userId || context.auth?.uid;
+  
+  if (!userId) {
+    throw new functions.https.HttpsError('invalid-argument', 'User ID required');
+  }
+  
+  try {
+    const result = await seedAll(userId);
+    return {
+      success: true,
+      message: `Seeded ${result.inventoryItems} inventory items and ${result.recipes} recipes`,
+      data: result
+    };
+  } catch (error) {
+    console.error('Error seeding data:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * Callable Function: Clear test data for a user
+ * Only use in development/testing environments
+ */
+exports.clearTestData = functions.https.onCall(async (data, context) => {
+  const userId = data.userId || context.auth?.uid;
+  
+  if (!userId) {
+    throw new functions.https.HttpsError('invalid-argument', 'User ID required');
+  }
+  
+  try {
+    const result = await clearAll(userId);
+    return {
+      success: true,
+      message: `Cleared ${result.inventoryCleared} inventory items and ${result.recipesCleared} recipes`,
+      data: result
+    };
+  } catch (error) {
+    console.error('Error clearing data:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * HTTP Function: Seed inventory only
+ * For development/testing
+ */
+exports.seedInventoryHttp = functions.https.onRequest(async (req, res) => {
+  // Enable CORS
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+  
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+  
+  try {
+    const userId = req.body.userId || req.query.userId;
+    const itemCount = parseInt(req.body.itemCount || req.query.itemCount || '20');
+    
+    if (!userId) {
+      res.status(400).json({ error: 'userId parameter required' });
+      return;
+    }
+    
+    const count = await seedInventory(userId, itemCount);
+    res.json({ 
+      success: true, 
+      message: `Seeded ${count} inventory items`,
+      itemsCreated: count 
+    });
+  } catch (error) {
+    console.error('Error in seedInventoryHttp:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * HTTP Function: Seed recipes only
+ * For development/testing
+ */
+exports.seedRecipesHttp = functions.https.onRequest(async (req, res) => {
+  // Enable CORS
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+  
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+  
+  try {
+    const userId = req.body.userId || req.query.userId;
+    
+    if (!userId) {
+      res.status(400).json({ error: 'userId parameter required' });
+      return;
+    }
+    
+    const count = await seedRecipes(userId);
+    res.json({ 
+      success: true, 
+      message: `Seeded ${count} recipes`,
+      recipesCreated: count 
+    });
+  } catch (error) {
+    console.error('Error in seedRecipesHttp:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Placeholder functions for future phases
+// These will be implemented in later roadmap phases
 // ============================================================================
 // FUNCTION 1: Sync Legacy Recipes from "Let's Eat" App
 // ============================================================================

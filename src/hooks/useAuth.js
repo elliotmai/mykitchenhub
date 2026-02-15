@@ -23,6 +23,7 @@ import { auth, db } from '../services/firebase';
  * Provides authentication state and methods to the entire app
  */
 const AuthContext = createContext(null);
+const functionsUrl = process.env.REACT_APP_FIREBASE_FUNCTIONS_URL;
 
 /**
  * useAuth Hook
@@ -78,48 +79,118 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   /**
-   * Create user profile in Firestore
+   * Create user profile in Firestore using Cloud Function
+   * This calls the onUserCreated function which sets up:
+   * - User document with preferences
+   * - Default storage locations (Fridge, Freezer, Pantry, Counter)
+   * - Sync metadata for recipes
    */
   const createUserProfile = async (userId, email, displayName = null) => {
-    const userRef = doc(db, 'users', userId);
-    const userData = {
-      email,
-      displayName: displayName || email.split('@')[0],
-      createdAt: serverTimestamp(),
-      preferences: {
-        dietaryRestrictions: [],
-        dislikedIngredients: [],
-        defaultServings: 1,
-        phoneNumber: '',
-      },
-      helloFresh: {
-        enabled: false,
-        deliveryDay: 'monday',
-        mealsPerWeek: 3,
-        lastDeliveryDate: null,
-        nextDeliveryDate: null,
-      },
-    };
+    try {
+      // Call the Cloud Function to set up the user
+      
+      
+      if (!functionsUrl) {
+        throw new Error('REACT_APP_FIREBASE_FUNCTIONS_URL not configured');
+      }
 
-    await setDoc(userRef, userData);
-    setUserProfile(userData);
+      const response = await fetch(
+        `${functionsUrl}/onUserCreated`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId,
+            email,
+            displayName: displayName || email.split('@')[0],
+          }),
+        }
+      );
 
-    // Create default storage locations
-    const defaultLocations = [
-      { label: 'Main Fridge', type: 'fridge', icon: '🧊', color: '#A8D5E2', order: 0, isDefault: true },
-      { label: 'Main Freezer', type: 'freezer', icon: '❄️', color: '#D4C5E2', order: 1, isDefault: false },
-      { label: 'Pantry', type: 'pantry', icon: '🏠', color: '#F5C6AA', order: 2, isDefault: false },
-    ];
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to create user profile');
+      }
 
-    for (const location of defaultLocations) {
-      const locationRef = doc(db, 'users', userId, 'storageLocations', location.type);
-      await setDoc(locationRef, {
-        ...location,
+      const result = await response.json();
+      console.log('User setup complete:', result);
+
+      // Fetch the created user profile
+      const userRef = doc(db, 'users', userId);
+      const userDoc = await getDoc(userRef);
+      
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        setUserProfile(userData);
+        return userData;
+      }
+
+      throw new Error('User profile not found after creation');
+    } catch (error) {
+      console.error('Error creating user profile via Cloud Function:', error);
+      
+      // Fallback: Create basic user document if Cloud Function fails
+      console.log('Falling back to local user creation...');
+      const userRef = doc(db, 'users', userId);
+      const fallbackData = {
+        email,
+        displayName: displayName || email.split('@')[0],
         createdAt: serverTimestamp(),
-      });
-    }
+        preferences: {
+          smsAlerts: {
+            enabled: false,
+            phoneNumber: '',
+            time: '09:00'
+          },
+          notifications: {
+            expiringSoon: true,
+            mealPlanReminders: true,
+            lowInventory: false
+          },
+          dietary: {
+            restrictions: [],
+            preferences: [],
+            allergies: []
+          },
+          helloFresh: {
+            linked: false,
+            deliveryDays: [1, 3, 5]
+          }
+        },
+        stats: {
+          totalRecipes: 0,
+          totalItems: 0,
+          wasteReduction: 0
+        }
+      };
 
-    return userData;
+      await setDoc(userRef, fallbackData);
+      setUserProfile(fallbackData);
+      
+      // Create basic storage locations as fallback
+      const defaultLocations = [
+        { name: 'Main Fridge', type: 'fridge', icon: '🧊', color: '#3498db', order: 1 },
+        { name: 'Freezer', type: 'freezer', icon: '❄️', color: '#9b59b6', order: 2 },
+        { name: 'Pantry', type: 'pantry', icon: '🏺', color: '#e67e22', order: 3 },
+        { name: 'Counter', type: 'pantry', icon: '🍞', color: '#f39c12', order: 4 },
+      ];
+
+      for (const location of defaultLocations) {
+        const locationRef = doc(db, 'users', userId, 'storageLocations', `${location.type}_${location.order}`);
+        await setDoc(locationRef, {
+          ...location,
+          isDefault: true,
+          itemCount: 0,
+          createdAt: serverTimestamp(),
+        });
+      }
+      
+      console.log('Created fallback storage locations');
+      
+      return fallbackData;
+    }
   };
 
   /**
@@ -135,7 +206,8 @@ export const AuthProvider = ({ children }) => {
         await updateProfile(newUser, { displayName });
       }
 
-      // Create user profile in Firestore
+      // Create user profile in Firestore (via Cloud Function)
+      // This will automatically create storage locations and set up the user
       await createUserProfile(newUser.uid, email, displayName);
 
       return { success: true, user: newUser };

@@ -1,7 +1,17 @@
-# Node.js
+# Firebase Functions .gitignore
+
+# Dependencies
 node_modules/
-npm-debug.log
-yarn-error.log
+
+# Service account key (NEVER commit this!)
+service-account.json
+service-account*.json
+*-service-account.json
+
+# Environment files
+.env
+.env.local
+.env.*.local
 
 # Firebase
 .firebase/
@@ -9,15 +19,15 @@ firebase-debug.log
 firestore-debug.log
 ui-debug.log
 
-# Environment variables
-.env
-.env.local
-.runtimeconfig.json
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
 
-# Service Account Keys - NEVER COMMIT THESE!
-*service-account*.json
-legacy-firebase-service-account.json
-service-account.json
+# OS
+.DS_Store
+Thumbs.db
 
 # IDE
 .idea/
@@ -26,16 +36,15 @@ service-account.json
 *.swo
 *~
 
-# OS
-.DS_Store
-Thumbs.db
+# Build
+dist/
+build/
 
 # Test coverage
 coverage/
+.nyc_output/
 
-# Logs
-logs/
-*.log
-
-# Test scripts
-test-legacy-connection.js
+# Temporary files
+*.tmp
+*.temp
+.cache/
