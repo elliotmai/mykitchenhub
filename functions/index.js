@@ -742,6 +742,25 @@ exports.generateMealPlan = functions
     }
   });
 
+// ==========================================================================
+// FUNCTION 6: Storage Location Management (Create, Update, Delete with Safety Checks)
+// ==========================================================================
+
+// 1. Import the new storage location functions near the top of the file,
+//    alongside the existing require statements:
+
+const {
+  createStorageLocation,
+  updateStorageLocation,
+  deleteStorageLocation,
+} = require('./src/data/storageLocations');
+
+// 2. Export them so Firebase deploys them as callable functions:
+
+exports.createStorageLocation = createStorageLocation;
+exports.updateStorageLocation = updateStorageLocation;
+exports.deleteStorageLocation = deleteStorageLocation;
+
 // ============================================================================
 // HELPER FUNCTIONS (for future implementation)
 // ============================================================================
