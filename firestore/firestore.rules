@@ -77,10 +77,10 @@ service cloud.firestore {
         // Users can create inventory items
         allow create: if isOwner(userId)
           && hasRequiredFields(['name', 'normalized', 'quantity', 'unit', 
-                                'storageLocationId', 'locationType', 
+                                'locationId', 'locationType', 
                                 'addedAt', 'source'])
           && request.resource.data.locationType in ['fridge', 'freezer', 'pantry']
-          && request.resource.data.source in ['manual', 'hellofresh', 'csv-import']
+          && request.resource.data.source in ['manual', 'hellofresh', 'csv-import', 'seed']
           && request.resource.data.quantity > 0;
         
         // Users can update their inventory items

@@ -137,7 +137,7 @@ const useStorageLocations = () => {
         const inventoryRef = collection(db, 'users', user.uid, 'inventory');
         const inventorySnap = await getDocs(inventoryRef);
         const itemsInLocation = inventorySnap.docs.filter(
-          (d) => d.data().storageLocationId === locationId
+          (d) => d.data().locationId === locationId
         );
 
         if (itemsInLocation.length > 0) {

@@ -19,7 +19,7 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "storageLocationId",
+          "fieldPath": "locationId",
           "order": "ASCENDING"
         },
         {

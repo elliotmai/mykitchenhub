@@ -93,7 +93,7 @@ This document describes the complete Firestore database structure for MyKitchenH
   unit: "lbs",                            // Unit of measurement
   
   // Storage information
-  storageLocationId: "location-id",       // Reference to storageLocations doc
+  locationId: "location-id",       // Reference to storageLocations doc
   locationType: "freezer",                // "freezer" | "fridge" | "pantry"
   
   // Tracking information
@@ -122,7 +122,7 @@ This document describes the complete Firestore database structure for MyKitchenH
 
 **Indexes Required:**
 - Composite: `locationType` + `expiresAt` (for expiring items queries)
-- Composite: `storageLocationId` + `expiresAt` (for location-specific queries)
+- Composite: `locationId` + `expiresAt` (for location-specific queries)
 - Single: `normalized` (for ingredient matching)
 
 **Security Rules:**
@@ -350,7 +350,7 @@ db.collection('recipes')
 ```
 Collection: users/{userId}/inventory
 - locationType ASC, expiresAt ASC
-- storageLocationId ASC, expiresAt ASC
+- locationId ASC, expiresAt ASC
 - normalized ASC
 
 Collection: recipes

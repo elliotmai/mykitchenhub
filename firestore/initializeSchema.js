@@ -122,7 +122,7 @@ async function createSampleInventory(userId) {
       normalized: 'chicken breast',
       quantity: 2,
       unit: 'lbs',
-      storageLocationId: locationId,
+      locationId: locationId,
       locationType: 'freezer',
       addedAt: admin.firestore.FieldValue.serverTimestamp(),
       expiresAt: new Date(Date.now() + 270 * 24 * 60 * 60 * 1000), // 270 days
@@ -143,7 +143,7 @@ async function createSampleInventory(userId) {
       normalized: 'milk',
       quantity: 1,
       unit: 'gallon',
-      storageLocationId: locationId,
+      locationId: locationId,
       locationType: 'fridge',
       addedAt: admin.firestore.FieldValue.serverTimestamp(),
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days

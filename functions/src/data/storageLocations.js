@@ -140,7 +140,7 @@ exports.deleteStorageLocation = functions.https.onCall(async (data, context) => 
   // Safety: cannot delete a location that still has items
   const inventoryRef = db.collection('users').doc(userId).collection('inventory');
   const itemsSnap = await inventoryRef
-    .where('storageLocationId', '==', locationId)
+    .where('locationId', '==', locationId)
     .limit(1)
     .get();
 

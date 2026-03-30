@@ -166,7 +166,7 @@ async function testStorageLocationsCRUD(userId) {
 // INVENTORY SUBCOLLECTION TESTS
 // ============================================
 
-async function testInventoryCRUD(userId, storageLocationId) {
+async function testInventoryCRUD(userId, locationId) {
   console.log('\n=== Testing Inventory Subcollection ===');
 
   const inventoryRef = db.collection('users').doc(userId).collection('inventory');
@@ -180,7 +180,7 @@ async function testInventoryCRUD(userId, storageLocationId) {
       normalized: 'ground beef',
       quantity: 2,
       unit: 'lbs',
-      storageLocationId: storageLocationId || 'default-freezer',
+      locationId: locationId || 'default-freezer',
       locationType: 'freezer',
       addedAt: admin.firestore.FieldValue.serverTimestamp(),
       expiresAt: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000),
@@ -415,7 +415,7 @@ async function testAdvancedQueries(userId) {
       normalized: 'eggs',
       quantity: 12,
       unit: 'count',
-      storageLocationId: 'fridge-1',
+      locationId: 'fridge-1',
       locationType: 'fridge',
       addedAt: admin.firestore.FieldValue.serverTimestamp(),
       expiresAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // 3 days
@@ -427,7 +427,7 @@ async function testAdvancedQueries(userId) {
       normalized: 'frozen peas',
       quantity: 1,
       unit: 'bag',
-      storageLocationId: 'freezer-1',
+      locationId: 'freezer-1',
       locationType: 'freezer',
       addedAt: admin.firestore.FieldValue.serverTimestamp(),
       expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year
