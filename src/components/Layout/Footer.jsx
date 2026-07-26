@@ -25,6 +25,14 @@ const Footer = () => {
         <p className="app-footer__copyright">
           © {currentYear} MyKitchenHub • v1.0.0
         </p>
+        <a
+          className="app-footer__feedback"
+          href="https://ticketbooth.netlify.app/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Report a bug or request a feature
+        </a>
       </div>
     </footer>
   );

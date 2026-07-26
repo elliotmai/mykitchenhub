@@ -31,10 +31,13 @@ export {
 } from './ConfirmModal';
 
 // Toast Notifications
-export { 
+export {
   default as Toast,
   ToastProvider,
   useToast,
   toast,
-  setToastRef 
+  setToastRef
 } from './Toast';
+
+// What's New Popup
+export { default as WhatsNew } from './WhatsNew';

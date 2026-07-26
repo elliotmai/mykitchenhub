@@ -1,0 +1,83 @@
+/* ==========================================================================
+   What's New Popup Styles
+   MyKitchenHub accumulating changelog modal
+   ========================================================================== */
+
+.whats-new__header {
+  border-bottom: 1px solid var(--mkh-border-light);
+  padding: var(--mkh-spacing-lg);
+}
+
+.whats-new__title {
+  display: flex;
+  align-items: center;
+  gap: var(--mkh-spacing-sm);
+  font-weight: var(--mkh-font-weight-semibold);
+  color: var(--mkh-text-primary);
+}
+
+.whats-new__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--mkh-radius-full);
+  background-color: var(--mkh-info);
+  color: var(--mkh-info-text);
+}
+
+.whats-new__body {
+  padding: var(--mkh-spacing-lg);
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.whats-new__date {
+  font-size: var(--mkh-font-size-tiny);
+  color: var(--mkh-text-muted);
+  margin-bottom: var(--mkh-spacing-md);
+}
+
+.whats-new__entry {
+  margin-bottom: var(--mkh-spacing-md);
+}
+
+.whats-new__entry:last-child {
+  margin-bottom: 0;
+}
+
+.whats-new__entry-date {
+  font-size: var(--mkh-font-size-tiny);
+  font-weight: var(--mkh-font-weight-semibold);
+  color: var(--mkh-text-muted);
+  margin-bottom: var(--mkh-spacing-sm);
+}
+
+.whats-new__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--mkh-spacing-sm);
+}
+
+.whats-new__item {
+  background-color: var(--mkh-bg-hover);
+  border: 1px solid var(--mkh-border-light);
+  border-radius: var(--mkh-radius-lg);
+  padding: var(--mkh-spacing-sm) var(--mkh-spacing-md);
+  font-size: var(--mkh-font-size-small);
+  line-height: 1.5;
+  color: var(--mkh-text-primary);
+}
+
+.whats-new__footer {
+  border-top: 1px solid var(--mkh-border-light);
+  padding: var(--mkh-spacing-md) var(--mkh-spacing-lg);
+}
+
+.whats-new__btn {
+  min-width: 6rem;
+}

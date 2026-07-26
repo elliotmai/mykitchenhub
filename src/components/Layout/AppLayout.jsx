@@ -7,6 +7,7 @@ import { Outlet } from 'react-router-dom';
 import Navbar from './Navbar';
 import Sidebar from './Sidebar';
 import Footer from './Footer';
+import { WhatsNew } from '../Common';
 import './AppLayout.css';
 
 /**
@@ -49,6 +50,9 @@ const AppLayout = ({ alertCount = 0 }) => {
         </div>
         <Footer />
       </main>
+
+      {/* Accumulating "What's New" popup */}
+      <WhatsNew />
     </div>
   );
 };
