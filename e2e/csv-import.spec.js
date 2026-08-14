@@ -9,10 +9,18 @@ const HEADER = 'name,quantity,unit,location';
 
 /** Attaches a CSV to the importer's file input, without touching the disk. */
 const chooseCSV = async (page, text, name = 'kitchen.csv') => {
-  await page.getByRole('button', { name: /import csv/i }).click();
-
   const modal = page.locator('.modal.show');
-  await expect(modal).toBeVisible();
+
+  // Under a loaded machine this click occasionally lands on the button before
+  // React has wired it up: nothing opens, and the spec fails somewhere far
+  // from the cause. Retry the click itself rather than the whole test — the
+  // modal still has to open, this only stops a dropped click reading as a bug.
+  await expect(async () => {
+    if (!(await modal.isVisible())) {
+      await page.getByRole('button', { name: /import csv/i }).click();
+    }
+    await expect(modal).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 20_000 });
 
   await modal.getByLabel('Choose a CSV file').setInputFiles({
     name,
