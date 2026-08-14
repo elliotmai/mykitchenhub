@@ -173,6 +173,20 @@
   font-style: italic;
 }
 
+/* Today gets weight, not colour — the row still reads in greyscale. */
+.meal-plan-day--today .meal-plan-day__label,
+.meal-plan-day--today .meal-plan-day__meal {
+  font-weight: var(--mkh-font-weight-semibold);
+  color: var(--mkh-text-primary);
+}
+
+/* "+2 more" on a day with several meals — secondary to the meal it follows. */
+.meal-plan-day__extra {
+  font-size: var(--mkh-font-size-tiny);
+  color: var(--mkh-text-muted);
+  white-space: nowrap;
+}
+
 /* --------------------------------------------------------------------------
    Layout
    -------------------------------------------------------------------------- */
