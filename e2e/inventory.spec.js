@@ -2,6 +2,7 @@
 // and know what's about to go off. Exercised against real Firestore rules.
 
 const { test, expect } = require('./fixtures');
+const { inventoryHasItem, inventoryItem } = require('./firestore-admin');
 
 /**
  * Fills and submits the add-item modal.
@@ -33,28 +34,19 @@ const addItem = async (page, name, quantity = '1') => {
 };
 
 /**
- * Re-reads the inventory in a brand new tab, which loads its own data from
- * Firestore rather than showing the writing tab's local state.
+ * Asserts whether an item reached Firestore, read straight from the emulator.
  *
- * A second tab rather than `page.reload()`: reloading immediately after a write
- * stalls indefinitely, because the service worker serves the navigation from
- * precache while the Firestore connection from the outgoing document is still
- * settling, and the new document never reaches DOMContentLoaded.
+ * The UI renders its own writes optimistically, so an item on screen does not
+ * prove the write was accepted — one that violates a security rule looks
+ * identical until it's read back from outside the browser.
  */
-const expectFreshClientToSee = async (page, itemName, shouldBeVisible) => {
-  const fresh = await page.context().newPage();
-  try {
-    await fresh.goto('/inventory', { waitUntil: 'domcontentloaded' });
-    await expect(fresh.getByRole('heading', { name: 'Inventory' })).toBeVisible();
-
-    if (shouldBeVisible) {
-      await expect(fresh.getByText(itemName)).toBeVisible();
-    } else {
-      await expect(fresh.getByText(itemName)).not.toBeVisible();
-    }
-  } finally {
-    await fresh.close();
-  }
+const expectStoredInFirestore = async (itemName, shouldExist) => {
+  await expect
+    .poll(() => inventoryHasItem(itemName), {
+      message: `waiting for "${itemName}" to ${shouldExist ? 'appear in' : 'disappear from'} Firestore`,
+      timeout: 10_000,
+    })
+    .toBe(shouldExist);
 };
 
 test.describe('inventory', () => {
@@ -86,7 +78,9 @@ test.describe('inventory', () => {
     await expect(page.getByText('Basmati Rice')).not.toBeVisible();
   });
 
-  test('adds an item that persists for a fresh client', async ({ authedPage: page }) => {
+  test('adds an item that reaches Firestore in the documented shape', async ({
+    authedPage: page,
+  }) => {
     // Unique per run: specs share one seeded account and run in parallel.
     const itemName = `Test Butter ${Date.now()}`;
 
@@ -94,8 +88,21 @@ test.describe('inventory', () => {
 
     await expect(page.getByText(itemName)).toBeVisible();
     // A write that passes client validation but violates a security rule still
-    // renders locally, so confirm from a client that never saw the local write.
-    await expectFreshClientToSee(page, itemName, true);
+    // renders locally, so confirm it actually reached the database.
+    await expectStoredInFirestore(itemName, true);
+
+    // The fields the security rules require on create. `source` in particular
+    // was previously written as `addedBy`, which the rules reject.
+    const stored = await inventoryItem(itemName);
+    expect(stored).toMatchObject({
+      name: itemName,
+      normalized: itemName.toLowerCase(),
+      quantity: 2,
+      locationType: expect.stringMatching(/^(fridge|freezer|pantry)$/),
+      source: 'manual',
+    });
+    expect(stored.locationId).toBeTruthy();
+    expect(stored.addedAt).toBeTruthy();
   });
 
   test('deletes an item after confirmation', async ({ authedPage: page }) => {
@@ -112,6 +119,6 @@ test.describe('inventory', () => {
     await confirm.getByRole('button', { name: /^delete$/i }).click();
 
     await expect(page.getByText(itemName)).not.toBeVisible();
-    await expectFreshClientToSee(page, itemName, false);
+    await expectStoredInFirestore(itemName, false);
   });
 });
