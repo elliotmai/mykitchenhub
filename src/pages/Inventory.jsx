@@ -4,12 +4,15 @@
 // AddItemModal, and ConfirmModal into a fully functional inventory view.
 
 import React, { useState } from 'react';
-import { Alert } from 'react-bootstrap';
+import { Alert, Button } from 'react-bootstrap';
+import { Upload } from 'lucide-react';
 
 import useInventory from '../hooks/useInventory';
 import useStorageLocations from '../hooks/useStorageLocations';
+import useCSVImport from '../hooks/useCSVImport';
 import InventoryList from '../components/Inventory/InventoryList';
 import AddItemModal from '../components/Inventory/AddItemModal';
+import CSVImporter from '../components/CSVImport/CSVImporter';
 import ConfirmModal from '../components/Common/ConfirmModal';
 
 const Inventory = () => {
@@ -24,8 +27,16 @@ const Inventory = () => {
 
   const { locations, loading: locationsLoading } = useStorageLocations();
 
+  const {
+    importItems,
+    importing,
+    progress: importProgress,
+    history: importHistory,
+  } = useCSVImport();
+
   // ── Modal state ──────────────────────────────────────────────────────────
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [editItem, setEditItem] = useState(null); // item being edited
   const [deleteTarget, setDeleteTarget] = useState(null); // item pending deletion
   const [deleting, setDeleting] = useState(false);
@@ -85,6 +96,19 @@ const Inventory = () => {
         </Alert>
       )}
 
+      {/* Bulk import */}
+      <div className="d-flex justify-content-end mb-2">
+        <Button
+          variant="outline-primary"
+          size="sm"
+          className="d-flex align-items-center gap-2"
+          onClick={() => setShowImportModal(true)}
+        >
+          <Upload size={16} />
+          Import CSV
+        </Button>
+      </div>
+
       {/* Main list */}
       <InventoryList
         items={items}
@@ -102,6 +126,17 @@ const Inventory = () => {
         onSave={handleSave}
         locations={locations}
         editItem={editItem}
+      />
+
+      {/* CSV bulk import modal */}
+      <CSVImporter
+        show={showImportModal}
+        onHide={() => setShowImportModal(false)}
+        locations={locations}
+        onImport={importItems}
+        importing={importing}
+        progress={importProgress}
+        history={importHistory}
       />
 
       {/* Delete confirmation modal */}

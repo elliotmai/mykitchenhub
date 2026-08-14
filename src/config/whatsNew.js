@@ -14,6 +14,16 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.08.14.1',
+    date: 'August 2026',
+    items: [
+      '📄 Stocking the app from scratch no longer means typing every item in one at a time — hit “Import CSV” on the Inventory screen and bring in a whole spreadsheet at once.',
+      '👀 Before anything is saved, you see exactly which rows will be added and which need a fix, with the line number and the reason for each one.',
+      '🧊 Put “Main Fridge”, or just “fridge”, in the location column — either way the item lands where you keep it, with an expiry date already worked out.',
+      '🧾 Every import is logged, so you can look back and see what that spreadsheet actually added.',
+    ],
+  },
+  {
     version: '2026.08.14',
     date: 'August 2026',
     items: [

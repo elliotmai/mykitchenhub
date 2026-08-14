@@ -101,7 +101,7 @@ This document describes the complete Firestore database structure for MyKitchenH
   expiresAt: Timestamp,                   // Calculated expiration date
   shelfLifeDays: 270,                     // Shelf life based on location type
   notes: "organic, from Costco",          // User notes
-  source: "manual",                       // "manual" | "hellofresh" | "csv-import"
+  source: "manual",                       // "manual" | "hellofresh" | "csv-import" | "seed"
   
   // Purchase history
   purchaseHistory: [{
@@ -129,7 +129,50 @@ This document describes the complete Firestore database structure for MyKitchenH
 - Users can CRUD their own inventory items
 - `quantity` must be > 0 on create, >= 0 on update
 - `locationType` must be one of: "fridge", "freezer", "pantry"
-- `source` must be one of: "manual", "hellofresh", "csv-import"
+- `source` must be one of: "manual", "hellofresh", "csv-import", "seed"
+
+---
+
+### 3b. `users/{userId}/importHistory` Subcollection
+
+**Purpose:** Append-only log of bulk imports, so a user can see what a file
+actually did to their kitchen after the fact
+
+**Written by:** the in-app CSV importer (`src/hooks/useCSVImport.js`) and the
+`importInventoryFromCSV` Cloud Function — both write the same shape
+
+**Document Structure:**
+```javascript
+{
+  id: "auto-generated",                   // Firestore auto-ID
+  fileName: "kitchen.csv",                // Name of the uploaded file
+  importedAt: Timestamp,                  // When the import ran
+  itemsImported: 42,                      // Documents actually written
+  itemsSkipped: 3,                        // Rows rejected or never attempted
+  status: "completed",                    // "completed" | "partial" | "failed"
+  source: "csv-import",                   // "csv-import" | "hellofresh"
+  errorCount: 3,                          // Total problems found
+  errors: [{                              // First 20 problems, for display
+    row: 7,                               // Line number in the file (0 = whole import)
+    message: "Missing quantity."
+  }]
+}
+```
+
+**Status Values:**
+- `completed` - every valid row was written
+- `partial` - some batches landed before a failure
+- `failed` - nothing was written
+
+**Indexes Required:**
+- Single: `importedAt` DESC (the importer shows the five most recent runs)
+
+**Security Rules:**
+- Users can read, create and delete their own import records
+- Records are never updatable — a log entry describes what already happened
+- `status` must be one of: "completed", "partial", "failed"
+- `source` must be one of: "csv-import", "hellofresh"
+- `itemsImported` and `itemsSkipped` must be >= 0
 
 ---
 

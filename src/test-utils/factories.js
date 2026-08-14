@@ -108,6 +108,22 @@ export const makeItemsAcrossExpirationStates = () => [
 ];
 
 // ---------------------------------------------------------------------------
+// users/{userId}/importHistory/{importId}
+// ---------------------------------------------------------------------------
+export const makeImportRecord = (overrides = {}) => ({
+  id: nextId('import'),
+  fileName: 'kitchen.csv',
+  importedAt: daysFromNow(-1),
+  itemsImported: 42,
+  itemsSkipped: 3,
+  status: 'completed',
+  source: 'csv-import',
+  errorCount: 3,
+  errors: [{ row: 7, message: 'Missing quantity.' }],
+  ...overrides,
+});
+
+// ---------------------------------------------------------------------------
 // recipes/{recipeId}
 // ---------------------------------------------------------------------------
 export const makeRecipe = (overrides = {}) => ({
