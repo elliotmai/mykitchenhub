@@ -1,30 +1,161 @@
 // src/pages/Recipes.jsx
-// Recipe management page - placeholder for Phase 4
+// Recipe library — Phase 4.
+//
+// Two views share one route: the library grid, and the full recipe view when
+// `?recipe=<id>` is in the URL. Keeping the detail view on a search param means
+// it is deep-linkable and the browser Back button works, without adding a
+// route to the shared App.jsx.
 
-import React from 'react';
-import { Card, Button } from 'react-bootstrap';
-import { BookOpen, Plus } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Alert } from 'react-bootstrap';
+
+import useRecipes from '../hooks/useRecipes';
+import useInventory from '../hooks/useInventory';
+import RecipeList from '../components/Recipes/RecipeList';
+import AddRecipeModal from '../components/Recipes/AddRecipeModal';
+import SyncDashboard from '../components/Recipes/SyncDashboard';
+import ConfirmModal from '../components/Common/ConfirmModal';
+import RecipeDetail from './RecipeDetail';
+
+const RECIPE_PARAM = 'recipe';
 
 const Recipes = () => {
+  const {
+    recipes,
+    loading,
+    error,
+    addRecipe,
+    updateRecipe,
+    deleteRecipe,
+    markCooked,
+    getRecipeById,
+  } = useRecipes();
+
+  const { items } = useInventory();
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedId = searchParams.get(RECIPE_PARAM);
+
+  const [showRecipeModal, setShowRecipeModal] = useState(false);
+  const [editRecipe, setEditRecipe] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [showSync, setShowSync] = useState(false);
+  const [actionError, setActionError] = useState('');
+
+  // Inventory feeds both the ingredient autocomplete and the "in your kitchen"
+  // markers on the detail view.
+  const inventoryNames = useMemo(() => items.map((i) => i.normalized ?? i.name), [items]);
+  const ingredientSuggestions = useMemo(() => items.map((i) => i.name).filter(Boolean), [items]);
+
+  const selectedRecipe = selectedId ? getRecipeById(selectedId) : null;
+
+  // ── Navigation ───────────────────────────────────────────────────────────
+  const openRecipe = (recipe) => setSearchParams({ [RECIPE_PARAM]: recipe.id });
+  const closeRecipe = () => setSearchParams({});
+
+  // ── Create / edit ────────────────────────────────────────────────────────
+  const openAdd = () => {
+    setEditRecipe(null);
+    setShowRecipeModal(true);
+  };
+
+  const openEdit = (recipe) => {
+    setEditRecipe(recipe);
+    setShowRecipeModal(true);
+  };
+
+  const handleSave = async (data) => {
+    if (editRecipe) return updateRecipe(editRecipe.id, data);
+    return addRecipe(data);
+  };
+
+  // ── Cook counter ─────────────────────────────────────────────────────────
+  const handleCook = async (recipe) => {
+    setActionError('');
+    const result = await markCooked(recipe.id);
+    if (!result?.success) setActionError(result?.error || 'Could not record that cook.');
+  };
+
+  // ── Delete ───────────────────────────────────────────────────────────────
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    const result = await deleteRecipe(deleteTarget.id);
+    setDeleting(false);
+
+    if (result?.success) {
+      // Deleting from the detail view leaves nothing to look at.
+      if (selectedId === deleteTarget.id) closeRecipe();
+      setDeleteTarget(null);
+    } else {
+      setActionError(result?.error || 'Could not delete that recipe.');
+      setDeleteTarget(null);
+    }
+  };
+
   return (
     <div className="recipes-page">
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1 className="h3 mb-0">Recipes</h1>
-        <Button variant="primary" className="d-flex align-items-center gap-2">
-          <Plus size={18} />
-          Add Recipe
-        </Button>
-      </div>
+      {error && (
+        <Alert variant="danger" className="mb-3">
+          {error}
+        </Alert>
+      )}
 
-      <Card>
-        <Card.Body className="text-center py-5">
-          <BookOpen size={64} className="text-muted mb-3 opacity-50" />
-          <h4>Recipe Management Coming Soon</h4>
-          <p className="text-muted mb-0">
-            This feature will be implemented in Phase 4 of the roadmap.
-          </p>
-        </Card.Body>
-      </Card>
+      {actionError && (
+        <Alert variant="warning" dismissible onClose={() => setActionError('')} className="mb-3">
+          {actionError}
+        </Alert>
+      )}
+
+      {selectedId ? (
+        <RecipeDetail
+          recipe={selectedRecipe}
+          loading={loading}
+          inventoryNames={inventoryNames}
+          onBack={closeRecipe}
+          onCook={handleCook}
+          onEdit={openEdit}
+          onDelete={setDeleteTarget}
+        />
+      ) : (
+        <RecipeList
+          recipes={recipes}
+          loading={loading}
+          onAdd={openAdd}
+          onView={openRecipe}
+          onEdit={openEdit}
+          onDelete={setDeleteTarget}
+          onCook={handleCook}
+          onOpenSync={() => setShowSync(true)}
+        />
+      )}
+
+      <AddRecipeModal
+        show={showRecipeModal}
+        onHide={() => setShowRecipeModal(false)}
+        onSave={handleSave}
+        editRecipe={editRecipe}
+        ingredientSuggestions={ingredientSuggestions}
+      />
+
+      <SyncDashboard show={showSync} onHide={() => setShowSync(false)} />
+
+      <ConfirmModal
+        show={Boolean(deleteTarget)}
+        onHide={() => setDeleteTarget(null)}
+        onConfirm={handleConfirmDelete}
+        loading={deleting}
+        variant="danger"
+        title="Delete Recipe"
+        message={
+          deleteTarget
+            ? `Delete "${deleteTarget.name}"? This removes it for everyone and cannot be undone.`
+            : ''
+        }
+        confirmText="Delete"
+      />
     </div>
   );
 };

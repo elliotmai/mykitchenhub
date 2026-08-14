@@ -5,6 +5,7 @@ export { default as Login } from './Login';
 export { default as Dashboard } from './Dashboard';
 export { default as Inventory } from './Inventory';
 export { default as Recipes } from './Recipes';
+export { default as RecipeDetail } from './RecipeDetail';
 export { default as MealPlan } from './MealPlan';
 export { default as HelloFresh } from './HelloFresh';
 export { default as Analytics } from './Analytics';

@@ -22,6 +22,25 @@ const suppressWhatsNewPopup = (page) =>
   );
 
 /**
+ * Hides the Firebase SDK's "Running in emulator mode" banner.
+ *
+ * The banner is fixed to the bottom of the viewport and is injected by the SDK,
+ * not by the app — so it exists only under the emulators. On a phone viewport it
+ * sits over the footer of any tall modal and swallows the submit click, which
+ * Playwright reports as a mystery timeout on a visible, enabled button.
+ */
+const hideEmulatorBanner = (page) =>
+  page.addInitScript(() => {
+    const hide = () => {
+      const style = document.createElement('style');
+      style.textContent = '.firebase-emulator-warning { display: none !important; }';
+      document.head.appendChild(style);
+    };
+    if (document.head) hide();
+    else document.addEventListener('DOMContentLoaded', hide);
+  });
+
+/**
  * Signs in through the real login form and waits for the dashboard.
  *
  * Only `e2e/auth.setup.js` and the auth spec call this — every other spec
@@ -46,6 +65,7 @@ const test = base.extend({
 
   page: async ({ page, suppressWhatsNew }, use) => {
     if (suppressWhatsNew) await suppressWhatsNewPopup(page);
+    await hideEmulatorBanner(page);
     await use(page);
   },
 
@@ -65,4 +85,12 @@ const test = base.extend({
   },
 });
 
-module.exports = { test, expect, login, suppressWhatsNewPopup, WHATS_NEW_KEY, TEST_USER };
+module.exports = {
+  test,
+  expect,
+  login,
+  suppressWhatsNewPopup,
+  hideEmulatorBanner,
+  WHATS_NEW_KEY,
+  TEST_USER,
+};

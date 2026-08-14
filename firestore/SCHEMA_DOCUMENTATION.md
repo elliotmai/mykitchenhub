@@ -194,25 +194,44 @@ actually did to their kitchen after the fact
     normalized: "chicken breast"          // For inventory matching
   }],
   
-  // Instructions
-  instructions: "Step-by-step cooking...", // Full cooking instructions
+  // Instructions — an array of ordered steps, so the UI can number them and a
+  // cook can reorder one without retyping the rest. Readers should tolerate a
+  // plain string too: older legacy imports stored one blob of text.
+  instructions: ["Heat the oven to 220C.", "Roast for 15 minutes."],
   
   // Source information
   source: "legacy",                        // See source types below
   legacyId: "lets-eat-recipe-id",         // ID from legacy system (if applicable)
   sourceId: "spoonacular-12345",          // External API ID (if applicable)
-  imageUrl: "https://...",                // Recipe image URL
+  imageUrl: "https://...",                // Recipe image URL (Cloud Storage)
   
   // Metadata
   createdAt: Timestamp,
-  tags: ["dinner", "protein", "quick"],   // Searchable tags
-  prepTime: 15,                           // Minutes
-  cookTime: 20,                           // Minutes
+  createdBy: "userId",                    // Who added it (user-created only)
+  updatedAt: Timestamp,                   // Last edit
+  tags: ["dinner", "protein", "quick"],   // Searchable tags, lowercased
+  prepTime: 15,                           // Minutes, or null when unknown
+  cookTime: 20,                           // Minutes, or null when unknown
   servings: 4,                            // Number of servings
   difficulty: "easy",                     // "easy" | "medium" | "hard"
-  timesCooked: 0                          // Usage tracking
+  timesCooked: 0,                         // Usage tracking
+  lastCookedAt: Timestamp                 // Set by "I cooked this"
 }
 ```
+
+**Required on create** (enforced by `firestore.rules`): `name`, `ingredients`,
+`instructions`, `source`, `createdAt`, `tags`, `servings`, `difficulty`,
+`timesCooked`. A recipe keyed on `title`, or sourced from `manual`/`seed`, is
+rejected.
+
+**Immutable after create:** `name` and `createdAt`. An update carrying either —
+even unchanged — is rejected, so the edit form disables the name field.
+
+**Tags written by the legacy sync**, alongside the recipe's own tags:
+- `legacy` - on every imported recipe
+- `spoonacular-instructions` - instructions matched from Spoonacular
+- `ai-instructions` - instructions written by Claude
+- `needs-instructions` - neither source could supply them
 
 **Source Types:**
 - `legacy` - Migrated from "Let's Eat" app
@@ -245,12 +264,19 @@ actually did to their kitchen after the fact
   
   // Configuration
   legacyProjectId: "lets-eat-firebase",  // Legacy Firebase project ID
-  enabled: true,                         // Whether sync is active
+  enabled: true,                         // Off switch: false refuses live runs
+  costLimitUsd: 10,                      // Ceiling the function will not cross
   
   // Progress tracking
-  lastSyncTimestamp: Timestamp,          // Last sync run
+  lastSyncTimestamp: "2026-08-14T12:00:00.000Z",  // ISO string, last run
   recipesToProcess: 500,                 // Total recipes in legacy DB
-  recipesProcessed: 450,                 // Recipes synced so far
+  recipesProcessed: 450,                 // Recipes seen so far
+  recipesImported: 430,                  // Written to `recipes`
+  recipesSkipped: 20,                    // Already imported, or unusable
+  
+  // Resume cursor — the path of the last legacy document processed.
+  // null once the library has been walked end to end.
+  cursor: "users/legacy-user/recipes/abc123",
   
   // Source tracking
   instructionSources: {
@@ -259,15 +285,19 @@ actually did to their kitchen after the fact
   },
   
   // Cost tracking
-  costAccumulated: 8.50,                 // Total cost in USD
-  currentStatus: "idle"                  // "idle" | "in-progress" | "completed"
+  costAccumulated: 8.50,                 // Total spend in USD across all runs
+  currentStatus: "idle",                 // See status values below
+  lastError: null                        // Why the last run stopped, if it did
 }
 ```
 
 **Status Values:**
 - `idle` - Not currently syncing
-- `in-progress` - Sync in progress
-- `completed` - All recipes synced
+- `in-progress` - More recipes remain; run another batch to continue
+- `completed` - The legacy library has been walked end to end
+- `cost-limit-reached` - Stopped at `costLimitUsd`; raise it to continue
+- `disabled` - `enabled` is false, so a live run was refused
+- `error` - The last run failed; see `lastError`
 
 **Security Rules:**
 - All authenticated users can read

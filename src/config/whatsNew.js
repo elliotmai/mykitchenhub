@@ -14,6 +14,17 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.08.14.3',
+    date: 'August 2026',
+    items: [
+      '📖 Recipes are here. Everything you cook lives in one place — search it by name, by tag, or by an ingredient you need to use up.',
+      '➕ Add your own recipes: type the ingredients with autocomplete from your own kitchen, build the steps one at a time, and add a photo.',
+      '✅ Open a recipe and the ingredients you already have are ticked off, so you know what to buy before you start.',
+      '👨\u200d🍳 Tap “I cooked this” and the app keeps count, so you can see which meals are actually in your rotation.',
+      '✏️ Changed your mind about a recipe you added? Edit it, or delete it after a confirmation.',
+    ],
+  },
+  {
     version: '2026.08.14.2',
     date: 'August 2026',
     items: [
