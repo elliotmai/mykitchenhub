@@ -210,6 +210,89 @@ describe('CSVImporter', () => {
     expect(await screen.findByText(/Add a storage location in Settings/)).toBeInTheDocument();
   });
 
+  it('forgets a rejected file so the same one can be chosen again', async () => {
+    // The whole-file error leaves the picker on screen and tells someone to go
+    // fix their spreadsheet. A file input fires no change event when the same
+    // file is chosen twice running, so the input has to let go of the choice —
+    // otherwise coming back with the fixed file does nothing at all.
+    const { user } = setup();
+    const input = screen.getByLabelText(/choose a csv file/i);
+
+    await chooseFile(user, 'fruit,howmany\napples,3', 'january.csv');
+    expect(await screen.findByText(/needs a name, quantity, location column/i)).toBeInTheDocument();
+    expect(input).toHaveValue('');
+
+    await user.upload(input, csvFile(GOOD_CSV, 'january.csv'));
+
+    expect(await screen.findByText('2 ready to import')).toBeInTheDocument();
+  });
+
+  it('shows an error rather than hanging when the import throws', async () => {
+    const onImport = jest.fn(async () => {
+      throw new Error('network is offline');
+    });
+    const { user } = setup({ onImport });
+
+    await chooseFile(user, GOOD_CSV);
+    await user.click(await screen.findByRole('button', { name: 'Import 2 items' }));
+
+    expect(await screen.findByText('The import did not finish.')).toBeInTheDocument();
+    expect(screen.getByText('network is offline')).toBeInTheDocument();
+  });
+
+  it('treats an importer that answers with nothing as a failure', async () => {
+    const onImport = jest.fn(async () => undefined);
+    const { user } = setup({ onImport });
+
+    await chooseFile(user, GOOD_CSV);
+    await user.click(await screen.findByRole('button', { name: 'Import 2 items' }));
+
+    expect(await screen.findByText('Import did not complete.')).toBeInTheDocument();
+  });
+
+  it('summarises a long list of problems instead of printing all of them', async () => {
+    const rows = Array.from({ length: 60 }, (_, i) => `Bad ${i},,ea,Nowhere`);
+    const { user } = setup();
+
+    await chooseFile(user, ['name,quantity,unit,location', ...rows].join('\n'));
+
+    expect(await screen.findByText('60 need fixing')).toBeInTheDocument();
+    expect(screen.getByText('…and 35 more.')).toBeInTheDocument();
+    // 25 shown + the header row.
+    expect(within(screen.getAllByRole('table')[0]).getAllByRole('row')).toHaveLength(26);
+  });
+
+  it('reaches the file input and both preview tables from the keyboard', async () => {
+    const { user } = setup();
+
+    // First stop is the modal's close button, second is the file input.
+    await user.tab();
+    await user.tab();
+    expect(screen.getByLabelText(/choose a csv file/i)).toHaveFocus();
+
+    await chooseFile(user, MIXED_CSV);
+    await screen.findByText('1 ready to import');
+
+    // Each table is named by the heading above it, and its columns are headers.
+    const [ready, skipped] = screen.getAllByRole('table');
+    expect(ready).toHaveAccessibleName('Ready to import');
+    expect(skipped).toHaveAccessibleName('Rows we had to skip');
+    expect(within(ready).getAllByRole('columnheader')).toHaveLength(3);
+    expect(within(skipped).getAllByRole('columnheader')).toHaveLength(2);
+    // The counts are a live region, so they are read out after a file is picked.
+    expect(screen.getByRole('status')).toHaveTextContent('1 ready to import');
+  });
+
+  it('describes import progress for a screen reader', async () => {
+    const { user } = setup({ importing: true, progress: { processed: 500, total: 1200 } });
+
+    await chooseFile(user, GOOD_CSV);
+
+    const bar = await screen.findByRole('progressbar');
+    expect(bar).toHaveAccessibleName('Import progress');
+    expect(bar).toHaveAttribute('aria-valuetext', '500 of 1200 items saved');
+  });
+
   it('reports a file it could not read at all', async () => {
     const { user } = setup();
     const broken = csvFile(GOOD_CSV);

@@ -24,7 +24,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useAuth } from './useAuth';
-import { calcExpiresAt } from './useInventory';
+import { calcExpiresAt, SHELF_LIFE_DEFAULTS } from './useInventory';
 
 /** Firestore's hard limit on writes in a single batch. */
 export const BATCH_SIZE = 500;
@@ -51,11 +51,17 @@ export const chunk = (rows, size = BATCH_SIZE) => {
  * tagged with anything else (`addedBy`, say) is rejected on create.
  */
 export const buildInventoryDoc = (data) => {
-  const shelfLifeDays =
+  const fromFile =
     data.shelfLifeDays ??
     (data.expiresAt
       ? Math.max(1, Math.ceil((data.expiresAt - new Date()) / (1000 * 60 * 60 * 24)))
       : null);
+
+  // Never null. A manually added item always stores a number, and the edit
+  // form recalculates expiresAt from whatever shelf life the item carries — so
+  // an imported item with a null one had its expiry date quietly pushed out
+  // the first time anybody edited it.
+  const shelfLifeDays = fromFile ?? SHELF_LIFE_DEFAULTS[data.locationType] ?? 30;
 
   return {
     name: data.name,
@@ -65,7 +71,7 @@ export const buildInventoryDoc = (data) => {
     locationId: data.locationId,
     locationType: data.locationType,
     addedAt: serverTimestamp(),
-    expiresAt: data.expiresAt ?? calcExpiresAt(data.locationType, shelfLifeDays ?? undefined),
+    expiresAt: data.expiresAt ?? calcExpiresAt(data.locationType, shelfLifeDays),
     shelfLifeDays,
     notes: data.notes || '',
     source: 'csv-import',

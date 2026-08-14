@@ -69,7 +69,42 @@ describe('parseCSVText', () => {
   });
 
   it('returns nothing for empty input', () => {
-    expect(parseCSVText('   ')).toEqual({ rows: [], headers: [], parseErrors: [] });
+    // `lines` carries the line each row came from — see "numbers rows the way
+    // a spreadsheet does" below for why it exists.
+    expect(parseCSVText('   ')).toEqual({ rows: [], headers: [], lines: [], parseErrors: [] });
+  });
+
+  it('records the line each row came from, blank lines included', () => {
+    const { rows, lines } = parseCSVText(
+      csv(HEADER, 'Milk,1,gal,Main Fridge', '', '', 'Rice,2,lbs,Pantry')
+    );
+
+    expect(rows).toHaveLength(2);
+    expect(lines).toEqual([2, 5]);
+  });
+
+  it('keeps the first of two columns that mean the same thing', () => {
+    // A file exported with both "Item" and "Product" columns: they canonicalise
+    // to the same field, so the later one is dropped rather than overwriting.
+    const { rows, headers } = parseCSVText(
+      csv('item,product,quantity,location', 'Milk,Cheese,1,Pantry')
+    );
+
+    expect(headers).toEqual(['name', 'quantity', 'location']);
+    expect(rows[0].name).toBe('Milk');
+  });
+
+  it('reads a file with a UTF-8 BOM, CRLF endings and a semicolon delimiter', () => {
+    const { rows, headers } = parseCSVText('﻿name;quantity;location\r\nMilk;1;Pantry\r\n');
+
+    expect(headers).toEqual(['name', 'quantity', 'location']);
+    expect(rows[0]).toMatchObject({ name: 'Milk', quantity: '1', location: 'Pantry' });
+  });
+
+  it('fills in the columns a short row is missing rather than dropping it', () => {
+    const { rows } = parseCSVText(csv(HEADER, 'Milk,1'));
+
+    expect(rows[0]).toEqual({ name: 'Milk', quantity: '1', unit: '', location: '' });
   });
 });
 
@@ -213,6 +248,79 @@ describe('validateRow', () => {
     expect(result.valid).toBe(false);
     expect(result.errors.join(' ')).toMatch(/stray comma/);
   });
+
+  it('lets a trailing comma through — the extra value is empty', () => {
+    // Hand-edited exports routinely end every line with a comma. Rejecting a
+    // whole file over an empty extra cell helps nobody.
+    const result = validateRow({ ...row(), __parsed_extra: ['', '  '] }, 2, LOCATIONS);
+
+    expect(result.valid).toBe(true);
+  });
+
+  it('collapses whitespace inside a name instead of storing a line break', () => {
+    const result = validateRow(row({ name: 'Whole\nMilk  2%' }), 2, LOCATIONS);
+
+    expect(result.data.name).toBe('Whole Milk 2%');
+    expect(result.data.normalized).toBe('whole milk 2%');
+  });
+
+  it('keeps emoji and accents in a name', () => {
+    const result = validateRow(row({ name: '🍎 Äpfel' }), 2, LOCATIONS);
+
+    expect(result.valid).toBe(true);
+    expect(result.data.name).toBe('🍎 Äpfel');
+    expect(result.data.normalized).toBe('🍎 äpfel');
+  });
+
+  it('trims notes that are longer than the column allows', () => {
+    const result = validateRow(row({ notes: 'n'.repeat(400) }), 2, LOCATIONS);
+
+    expect(result.valid).toBe(true);
+    expect(result.data.notes).toHaveLength(200);
+  });
+
+  it('rejects an expiry date further ahead than the shelf-life limit', () => {
+    // A spreadsheet that exported dates as serial numbers puts "45678" in this
+    // column, which Date reads as the year 45678 — an item that never expires.
+    const result = validateRow(row({ expiresAt: '45678' }), 2, LOCATIONS);
+
+    expect(result.valid).toBe(false);
+    expect(result.errors.join(' ')).toMatch(/more than 3650 days away/);
+  });
+
+  it('accepts an expiry date in the past, for stock that has already turned', () => {
+    const result = validateRow(row({ expiresAt: '2020-01-01' }), 2, LOCATIONS);
+
+    expect(result.valid).toBe(true);
+    expect(result.data.expiresAt.getFullYear()).toBe(2020);
+  });
+
+  // Surprising, not wrong: these are what JavaScript's Number and Date make of
+  // the text, and each produces a value the person can see in the preview and
+  // correct. Documented so a change in the parsing shows up here first.
+  it.each([
+    ['1e5', 100000],
+    ['0x10', 16],
+    ['$1,200.50', 1200.5],
+    ['  7 ', 7],
+  ])('reads the quantity "%s" as %s', (quantity, expected) => {
+    expect(validateRow(row({ quantity }), 2, LOCATIONS).data.quantity).toBe(expected);
+  });
+
+  it('reads a bare "0" in the expiry column as the year 2000', () => {
+    // Surprising, not wrong: the item lands already expired, which the
+    // inventory list shows in red rather than hiding.
+    const result = validateRow(row({ expiresAt: '0' }), 2, LOCATIONS);
+
+    expect(result.valid).toBe(true);
+    expect(result.data.expiresAt.getFullYear()).toBe(2000);
+  });
+
+  it('resolves a location typed with stray inner spacing', () => {
+    expect(validateRow(row({ location: 'Main   Fridge' }), 2, LOCATIONS).data.locationId).toBe(
+      'loc-fridge'
+    );
+  });
 });
 
 describe('validateCSV', () => {
@@ -281,6 +389,75 @@ describe('validateCSV', () => {
     expect(result.validRows).toHaveLength(147);
     expect(result.errorRows).toHaveLength(3);
     result.validRows.forEach((row) => expect(row.data.locationId).toBe('loc-pantry'));
+  });
+
+  it('points at the line the person sees, not the line after blank ones', () => {
+    // A spreadsheet exported with a blank row in the middle used to shift every
+    // error after it up a line, sending people to fix the wrong row.
+    const result = validateCSV(
+      csv(HEADER, 'Milk,1,gal,Main Fridge', '', '', ',1,gal,Pantry'),
+      LOCATIONS
+    );
+
+    expect(result.totalRows).toBe(2);
+    expect(result.errorRows[0].row).toBe(5);
+  });
+
+  it.each([499, 500, 501, 1000])('validates %s rows — the batch boundary', (count) => {
+    const rows = Array.from({ length: count }, (_, i) => `Item ${i},1,ea,Pantry`);
+    const result = validateCSV(csv(HEADER, ...rows), LOCATIONS);
+
+    expect(result.fileError).toBeNull();
+    expect(result.validRows).toHaveLength(count);
+    expect(result.validRows.at(-1).row).toBe(count + 1);
+  });
+
+  it('accepts a file of exactly MAX_ROWS rows', () => {
+    const rows = Array.from({ length: MAX_ROWS }, () => 'Item,1,ea,Pantry');
+    const result = validateCSV(csv(HEADER, ...rows), LOCATIONS);
+
+    expect(result.fileError).toBeNull();
+    expect(result.totalRows).toBe(MAX_ROWS);
+  });
+
+  it('ignores columns it does not understand instead of refusing the file', () => {
+    const result = validateCSV(
+      csv(`${HEADER},aisle,sku`, 'Milk,1,gal,Main Fridge,dairy,00123'),
+      LOCATIONS
+    );
+
+    expect(result.headers).toEqual(['name', 'quantity', 'unit', 'location']);
+    expect(result.validRows).toHaveLength(1);
+  });
+
+  it('treats a file with no header row as a file with the wrong columns', () => {
+    const result = validateCSV(csv('Milk,1,gal,Main Fridge', 'Rice,2,lbs,Pantry'), LOCATIONS);
+
+    expect(result.fileError).toMatch(/needs a name, quantity, location column/);
+  });
+
+  it('reads a file that is nothing but delimiters as having no rows', () => {
+    expect(validateCSV(csv(HEADER, ',,,', ' , , , '), LOCATIONS).fileError).toMatch(/no rows/);
+  });
+
+  it('keeps a quoted line break out of the row count', () => {
+    const result = validateCSV(
+      csv(`${HEADER},notes`, '"Whole\nMilk",1,gal,Main Fridge,"a,b"', 'Rice,2,lbs,Pantry'),
+      LOCATIONS
+    );
+
+    expect(result.totalRows).toBe(2);
+    expect(result.validRows[0].data.name).toBe('Whole Milk');
+    expect(result.validRows[0].data.notes).toBe('a,b');
+  });
+
+  it('imports what it can from a file of bytes that were not valid UTF-8', () => {
+    // FileReader turns undecodable bytes into U+FFFD. The name is mangled, but
+    // the row is the person's to fix — a whole file should not be lost to it.
+    const result = validateCSV(csv(HEADER, '��,1,ea,Pantry'), LOCATIONS);
+
+    expect(result.validRows).toHaveLength(1);
+    expect(result.validRows[0].data.name).toBe('��');
   });
 
   it('imports the sample file shown in the importer', () => {

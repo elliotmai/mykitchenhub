@@ -10,6 +10,12 @@
 // The validated row shape maps 1:1 onto the inventory document the security
 // rules require (see firestore/firestore.rules): name, normalized, quantity,
 // unit, locationId, locationType, addedAt and source: 'csv-import'.
+//
+// functions/src/csvImport/csvValidation.js is the same logic in CommonJS, for
+// the Cloud Function. The two are kept honest by the contract test in
+// __tests__/csvValidation.contract.test.js, which runs one corpus of files
+// through both and fails if they disagree about any row. Change one, change
+// the other, in the same commit.
 
 import Papa from 'papaparse';
 
@@ -36,6 +42,7 @@ const MAX_NAME_LENGTH = 80;
 const MAX_NOTES_LENGTH = 200;
 const MAX_QUANTITY = 1_000_000;
 const MAX_SHELF_LIFE_DAYS = 3650;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 // Header spellings we accept, keyed by their squashed lowercase form.
 const HEADER_ALIASES = {
@@ -106,39 +113,88 @@ const TYPE_KEYWORDS = {
 // rather than colliding with each other.
 const IGNORED_PREFIX = '__ignored_';
 
+/** Collapse every run of whitespace to one space. A cell is one line of text. */
+const squash = (value) =>
+  String(value ?? '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
 /** Squash a header to its canonical name, or '' when we don't recognise it. */
 export const canonicalHeader = (header) => {
-  const key = String(header ?? '')
-    .trim()
+  const key = squash(header)
     .toLowerCase()
     .replace(/[\s_\-.]+/g, '');
   return HEADER_ALIASES[key] ?? '';
 };
 
 /**
+ * Decide what each column of the header row means.
+ *
+ * A column we don't understand — and a second column meaning the same thing as
+ * an earlier one, which is what a file carrying both "item" and "product"
+ * gives us — gets a throwaway name and is dropped. First spelling wins.
+ */
+const planHeaders = (rawHeaders) => {
+  const claimed = new Set();
+
+  return rawHeaders.map((raw, index) => {
+    const canonical = canonicalHeader(raw);
+    if (!canonical || claimed.has(canonical)) return `${IGNORED_PREFIX}${index}`;
+    claimed.add(canonical);
+    return canonical;
+  });
+};
+
+/** Zip one row of values onto the planned column names. */
+const buildRow = (fields, values) => {
+  const row = {};
+  fields.forEach((field, index) => {
+    row[field] = values[index] ?? '';
+  });
+  // Values past the last column: a stray comma, or a row from a wider file.
+  if (values.length > fields.length) row.__parsed_extra = values.slice(fields.length);
+  return row;
+};
+
+const isBlankRow = (values) => values.every((value) => squash(value) === '');
+
+/**
  * Parse raw CSV text into header-keyed rows.
  *
- * Unrecognised columns collapse onto the '' key and are ignored, so a file
- * carrying extra bookkeeping columns still imports.
+ * Unrecognised columns are dropped, so a file carrying extra bookkeeping
+ * columns still imports. Blank lines are dropped too, but only after the line
+ * each row came from has been recorded in `lines` — the preview points people
+ * at a line in their spreadsheet, so it has to be the line they actually see.
+ *
+ * PapaParse's own `header: true` mode is deliberately not used: it resolves
+ * columns that collide after our aliasing by renaming them, which depends on
+ * how many times it happens to call `transformHeader`.
  */
 export const parseCSVText = (text) => {
   const source = String(text ?? '').trim();
 
   if (!source) {
-    return { rows: [], headers: [], parseErrors: [] };
+    return { rows: [], headers: [], lines: [], parseErrors: [] };
   }
 
-  const { data, meta, errors } = Papa.parse(source, {
-    header: true,
-    skipEmptyLines: 'greedy',
-    // Unknown columns get a unique throwaway name: two of them sharing one
-    // name would make PapaParse warn about duplicate headers.
-    transformHeader: (header, index) => canonicalHeader(header) || `${IGNORED_PREFIX}${index}`,
+  const { data, errors } = Papa.parse(source, { skipEmptyLines: false });
+  const fields = planHeaders(data[0] ?? []);
+
+  const rows = [];
+  const lines = [];
+
+  data.slice(1).forEach((values, index) => {
+    if (isBlankRow(values)) return;
+    rows.push(buildRow(fields, values));
+    // +2: line 1 is the header, and spreadsheet lines are 1-based. A field
+    // holding a quoted line break shifts everything after it by a line.
+    lines.push(index + 2);
   });
 
   return {
-    rows: data,
-    headers: (meta?.fields ?? []).filter((field) => field && !field.startsWith(IGNORED_PREFIX)),
+    rows,
+    headers: fields.filter((field) => field && !field.startsWith(IGNORED_PREFIX)),
+    lines,
     parseErrors: errors ?? [],
   };
 };
@@ -147,10 +203,7 @@ export const parseCSVText = (text) => {
 // Field readers — each returns a value or pushes a human-readable problem
 // ---------------------------------------------------------------------------
 
-const cell = (row, key) => {
-  const value = row?.[key];
-  return value === undefined || value === null ? '' : String(value).trim();
-};
+const cell = (row, key) => squash(row?.[key]);
 
 const toNumber = (raw) => Number(String(raw).replace(/[$,\s]/g, ''));
 
@@ -159,7 +212,7 @@ const buildLocationIndex = (locations) => {
   const byType = new Map();
 
   locations.forEach((location) => {
-    if (location?.label) byLabel.set(String(location.label).trim().toLowerCase(), location);
+    if (location?.label) byLabel.set(squash(location.label).toLowerCase(), location);
     // First location of each type wins, so "fridge" means the main fridge.
     if (location?.type && !byType.has(location.type)) byType.set(location.type, location);
   });
@@ -174,9 +227,7 @@ const buildLocationIndex = (locations) => {
  * location *type* ("freezer" → whichever freezer comes first).
  */
 export const resolveLocation = (value, locations = []) => {
-  const wanted = String(value ?? '')
-    .trim()
-    .toLowerCase();
+  const wanted = squash(value).toLowerCase();
   if (!wanted) return null;
 
   const { byLabel, byType } = buildLocationIndex(locations);
@@ -196,7 +247,9 @@ export const resolveLocation = (value, locations = []) => {
 export const validateRow = (row, rowNumber, locations = []) => {
   const errors = [];
 
-  if (row?.__parsed_extra) {
+  // A trailing comma leaves an empty extra value on every row of some exports;
+  // only values with something in them mean the row is really misaligned.
+  if ((row?.__parsed_extra ?? []).some((value) => squash(value) !== '')) {
     errors.push('More values than there are columns — check for a stray comma.');
   }
 
@@ -251,6 +304,13 @@ export const validateRow = (row, rowNumber, locations = []) => {
     const parsed = new Date(rawExpires);
     if (Number.isNaN(parsed.getTime())) {
       errors.push(`Expiry date "${rawExpires}" is not a date we can read.`);
+    } else if (parsed.getTime() > Date.now() + MAX_SHELF_LIFE_DAYS * MS_PER_DAY) {
+      // A spreadsheet that exported dates as serial numbers puts "45678" here,
+      // which Date reads as the year 45678. Same limit as shelf life, so the
+      // two columns can't disagree about how far ahead is believable.
+      errors.push(
+        `Expiry date "${rawExpires}" is more than ${MAX_SHELF_LIFE_DAYS} days away — check that column.`
+      );
     } else {
       expiresAt = parsed;
     }
@@ -316,7 +376,7 @@ export const validateCSV = (text, locations = []) => {
     };
   }
 
-  const { rows, headers } = parseCSVText(text);
+  const { rows, headers, lines } = parseCSVText(text);
 
   const missing = REQUIRED_COLUMNS.filter((column) => !headers.includes(column));
   if (missing.length > 0) {
@@ -345,8 +405,7 @@ export const validateCSV = (text, locations = []) => {
   const errorRows = [];
 
   rows.forEach((row, index) => {
-    // +2: line 1 is the header, and spreadsheet rows are 1-based.
-    const validated = validateRow(row, index + 2, locations);
+    const validated = validateRow(row, lines[index], locations);
     (validated.valid ? validRows : errorRows).push(validated);
   });
 

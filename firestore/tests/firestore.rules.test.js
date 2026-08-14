@@ -78,6 +78,30 @@ const validImportRecord = (overrides = {}) => ({
   ...overrides,
 });
 
+// The document both CSV importers build — src/hooks/useCSVImport.js
+// buildInventoryDoc and functions/src/csvImport/importInventoryFromCSV.js
+// buildInventoryDoc. Kept whole, extra fields included, because the rules see
+// the whole document: a field neither layer is allowed to write is exactly the
+// kind of drift this suite exists to catch.
+const validImportedItem = (overrides = {}) => ({
+  name: 'Whole Milk',
+  normalized: 'whole milk',
+  quantity: 2,
+  unit: 'gal',
+  locationId: 'loc-1',
+  locationType: 'fridge',
+  addedAt: new Date().toISOString(),
+  expiresAt: new Date().toISOString(),
+  shelfLifeDays: 7,
+  notes: '',
+  source: 'csv-import',
+  purchaseHistory: [
+    { addedAt: new Date().toISOString(), quantity: 2, unit: 'gal', price: null, store: '' },
+  ],
+  totalTimesPurchased: 1,
+  ...overrides,
+});
+
 const validRecipe = (overrides = {}) => ({
   name: 'Sheet Pan Salmon',
   ingredients: [{ name: 'salmon', quantity: 2, unit: 'fillet' }],
@@ -243,6 +267,34 @@ describe('inventory items', () => {
     await assertFails(as(OWNER).doc(itemPath(OWNER)).set(validItem({ source: 'telepathy' })));
   });
 
+  it('accepts the document shape the CSV importer writes', async () => {
+    await assertSucceeds(as(OWNER).doc(itemPath(OWNER, 'csv-1')).set(validImportedItem()));
+  });
+
+  it.each(['fridge', 'freezer', 'pantry'])(
+    'accepts a CSV row resolved to a %s location',
+    async (locationType) => {
+      await assertSucceeds(
+        as(OWNER).doc(itemPath(OWNER, `csv-${locationType}`)).set(validImportedItem({ locationType }))
+      );
+    }
+  );
+
+  it('rejects an imported item with a quantity the validator should have caught', async () => {
+    // Belt and braces: both csvValidation copies reject "0", and if one ever
+    // stops, the database still will.
+    await assertFails(as(OWNER).doc(itemPath(OWNER)).set(validImportedItem({ quantity: 0 })));
+  });
+
+  it('rejects an imported item missing the fields the importer promises', async () => {
+    const { normalized, ...withoutNormalized } = validImportedItem();
+    await assertFails(as(OWNER).doc(itemPath(OWNER)).set(withoutNormalized));
+  });
+
+  it("keeps one user's import out of another user's inventory", async () => {
+    await assertFails(as(INTRUDER).doc(itemPath(OWNER, 'csv-2')).set(validImportedItem()));
+  });
+
   it('requires a positive quantity on create', async () => {
     await assertFails(as(OWNER).doc(itemPath(OWNER)).set(validItem({ quantity: 0 })));
     await assertFails(as(OWNER).doc(itemPath(OWNER)).set(validItem({ quantity: -3 })));
@@ -326,6 +378,29 @@ describe('import history', () => {
     );
     await assertFails(
       as(OWNER).doc(importPath(OWNER)).set(validImportRecord({ itemsSkipped: -1 }))
+    );
+  });
+
+  it('accepts a run that logged nothing wrong and one that logged the full 20', async () => {
+    // MAX_LOGGED_ERRORS in both importers caps the array at 20; the rules must
+    // take both ends of that.
+    await assertSucceeds(
+      as(OWNER)
+        .doc(importPath(OWNER, 'import-clean'))
+        .set(validImportRecord({ errorCount: 0, errors: [] }))
+    );
+    await assertSucceeds(
+      as(OWNER)
+        .doc(importPath(OWNER, 'import-noisy'))
+        .set(
+          validImportRecord({
+            errorCount: 57,
+            errors: Array.from({ length: 20 }, (_, i) => ({
+              row: i + 2,
+              message: 'Missing quantity.',
+            })),
+          })
+        )
     );
   });
 

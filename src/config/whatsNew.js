@@ -14,6 +14,16 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.08.14.2',
+    date: 'August 2026',
+    items: [
+      '📆 Items brought in from a spreadsheet now keep the expiry date they were given — editing one later no longer quietly pushes it further away.',
+      '📋 Messy spreadsheets import cleanly: blank rows between items, a stray comma at the end of a line, and odd spacing in the location column are all handled.',
+      '🔎 The line numbers in the "rows we had to skip" list now match the lines in your file, even when the file has blank rows in it.',
+      '🔁 Fixed a file and want to try again? Choosing that same file a second time works now, instead of appearing to do nothing.',
+    ],
+  },
+  {
     version: '2026.08.14.1',
     date: 'August 2026',
     items: [

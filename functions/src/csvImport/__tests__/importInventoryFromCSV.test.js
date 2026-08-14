@@ -169,6 +169,28 @@ describe('resolveShelfLifeDays', () => {
   it('falls back again to the default for that kind of storage', () => {
     expect(resolveShelfLifeDays({ name: 'unheard-of thing', locationType: 'freezer' })).toBe(90);
   });
+
+  it('falls back for an ingredient that does not belong in that location', () => {
+    // The table says milk has no pantry shelf life at all. Someone put it there
+    // anyway, so give it the pantry default rather than writing null.
+    expect(resolveShelfLifeDays({ name: 'milk', locationType: 'pantry' })).toBe(90);
+  });
+
+  it('gives an already-expired item at least a day', () => {
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() - 30);
+
+    expect(resolveShelfLifeDays({ expiresAt, name: 'milk', locationType: 'fridge' })).toBe(1);
+  });
+
+  it('always resolves to a positive number of days', () => {
+    ['fridge', 'freezer', 'pantry'].forEach((locationType) => {
+      const days = resolveShelfLifeDays({ name: 'unheard-of thing', locationType });
+
+      expect(typeof days).toBe('number');
+      expect(days).toBeGreaterThan(0);
+    });
+  });
 });
 
 describe('buildInventoryDoc', () => {
@@ -279,6 +301,56 @@ describe('importCSVForUser', () => {
 
     expect(result.itemsImported).toBe(150);
     expect(batches).toHaveLength(1);
+  });
+
+  it.each([
+    [499, [499]],
+    [500, [500]],
+    [501, [500, 1]],
+    [1000, [500, 500]],
+  ])('commits %s rows as %j', async (count, expected) => {
+    seedLocations();
+    const rows = Array.from({ length: count }, (_, i) => `Item ${i},1,ea,Pantry`);
+
+    const result = await run(csv(HEADER, ...rows));
+
+    expect(result.itemsImported).toBe(count);
+    expect(batches.map((b) => b.set.mock.calls.length)).toEqual(expected);
+  });
+
+  it('reports a file whose every row is broken as a completed run that added nothing', async () => {
+    // Surprising but deliberate: the run itself finished, and the history
+    // record is what tells the person their file needs work. It is `failed`
+    // only when Firestore refused a write.
+    seedLocations();
+
+    const result = await run(csv(HEADER, ',1,ea,Pantry', 'Jar,1,ea,Wine Cellar'));
+
+    expect(result).toMatchObject({ status: 'completed', itemsImported: 0, itemsSkipped: 2 });
+    expect(batches).toHaveLength(0);
+    expect(historyRecord().data).toMatchObject({ status: 'completed', itemsImported: 0 });
+  });
+
+  it('imports the same file twice without noticing', async () => {
+    // There is no de-duplication: importing January's shop twice gives two of
+    // everything, and two history records saying so. The history list in the
+    // importer is what makes a repeat obvious.
+    seedLocations();
+    const file = csv(HEADER, 'Milk,1,gal,Main Fridge');
+
+    await run(file, 'january.csv');
+    await run(file, 'january.csv');
+
+    expect(batchedItems()).toHaveLength(2);
+    expect(writes.filter((w) => w.path.includes('/importHistory/'))).toHaveLength(2);
+  });
+
+  it('numbers a bad row after a blank line by the line the person sees', async () => {
+    seedLocations();
+
+    const result = await run(csv(HEADER, 'Milk,1,gal,Main Fridge', '', ',1,gal,Pantry'));
+
+    expect(result.errors).toEqual([{ row: 4, message: 'Missing item name.' }]);
   });
 
   it('logs the run in the import history', async () => {
