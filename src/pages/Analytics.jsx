@@ -1,26 +1,28 @@
 // src/pages/Analytics.jsx
-// Analytics page - placeholder for Phase 8
+// Analytics page - shopping insights built from inventory purchase history.
 
 import React from 'react';
-import { Card } from 'react-bootstrap';
-import { BarChart3 } from 'lucide-react';
+import useShoppingAnalytics from '../hooks/useShoppingAnalytics';
+import { ShoppingPatterns } from '../components/Analytics';
+import '../components/Analytics/Analytics.css';
 
+/**
+ * Analytics Page
+ *
+ * Shows shopping patterns: what gets bought most often, what it costs, how
+ * spending moves month to month, and which store is cheapest.
+ */
 const Analytics = () => {
+  const analytics = useShoppingAnalytics();
+
   return (
     <div className="analytics-page">
       <div className="mb-4">
-        <h1 className="h3 mb-0">Analytics</h1>
+        <h1 className="h3 mb-1">Analytics</h1>
+        <p className="text-muted mb-0">What you buy, what it costs, and where you buy it.</p>
       </div>
 
-      <Card>
-        <Card.Body className="text-center py-5">
-          <BarChart3 size={64} className="text-muted mb-3 opacity-50" />
-          <h4>Analytics & Insights Coming Soon</h4>
-          <p className="text-muted mb-0">
-            This feature will be implemented in Phase 8 of the roadmap.
-          </p>
-        </Card.Body>
-      </Card>
+      <ShoppingPatterns analytics={analytics} />
     </div>
   );
 };
