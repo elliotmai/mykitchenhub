@@ -1,6 +1,12 @@
 // Authentication and route protection, against a real build + emulators.
+//
+// This is the one spec that exercises signing in, so it opts out of the shared
+// signed-in storage state that every other spec relies on.
 
 const { test, expect, login, TEST_USER } = require('./fixtures');
+const { SIGNED_OUT_STATE } = require('./storage-state');
+
+test.use({ storageState: SIGNED_OUT_STATE });
 
 test.describe('authentication', () => {
   test('sends a signed-out visitor to the login page', async ({ page }) => {

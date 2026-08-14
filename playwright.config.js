@@ -4,10 +4,12 @@
 // the real Firestore security rules.
 //
 // Run with:  npm run test:e2e
-// which wraps this in `firebase emulators:exec --only auth,firestore`.
+// which builds first, then wraps this in
+// `firebase emulators:exec --only auth,firestore`.
 
 const fs = require('fs');
 const { defineConfig, devices } = require('@playwright/test');
+const { STORAGE_STATE } = require('./e2e/storage-state');
 
 const PORT = process.env.E2E_PORT || 3000;
 const BASE_URL = `http://127.0.0.1:${PORT}`;
@@ -32,9 +34,9 @@ module.exports = defineConfig({
 
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  // A spec signs in through the real login form against the auth emulator,
-  // which alone costs ~15s; with several workers sharing the emulator, 30s is
-  // not enough headroom.
+
+  // Signing in is done once by the `setup` project, so a spec's own budget only
+  // has to cover navigation and interaction.
   timeout: 60_000,
   expect: { timeout: 10_000 },
 
@@ -46,19 +48,29 @@ module.exports = defineConfig({
     baseURL: BASE_URL,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    // Video is off: traces already carry a DOM-accurate replay, and videos made
+    // the failure artifact ~160 MB.
+    video: 'off',
+    launchOptions,
   },
 
   projects: [
     {
+      // Signs in once and writes e2e/.auth/user.json.
+      name: 'setup',
+      testMatch: /auth\.setup\.js/,
+    },
+    {
       name: 'desktop-chromium',
-      use: { ...devices['Desktop Chrome'], launchOptions },
+      use: { ...devices['Desktop Chrome'], launchOptions, storageState: STORAGE_STATE },
+      dependencies: ['setup'],
     },
     {
       // The app is mobile-first (roadmap 9.1), so the mobile viewport is a
       // first-class target rather than an afterthought.
       name: 'mobile-chromium',
-      use: { ...devices['Pixel 7'], launchOptions },
+      use: { ...devices['Pixel 7'], launchOptions, storageState: STORAGE_STATE },
+      dependencies: ['setup'],
     },
   ],
 
