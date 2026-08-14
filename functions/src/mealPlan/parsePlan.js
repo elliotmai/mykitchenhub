@@ -39,21 +39,32 @@ const cleanIngredients = (ingredients) =>
     }))
     .filter((ingredient) => ingredient.normalized);
 
+/**
+ * Two quantities only add up when they are counted the same way.
+ *
+ * "2 cups flour" plus "200 g flour" is not "202 cups flour", so the list is
+ * keyed on ingredient *and* unit — and a stocked jar of one unit never covers
+ * a recipe measured in another.
+ */
+const unitKey = (unit) => normalize(unit);
+const stockKey = (name, unit) => `${normalize(name)}|${unitKey(unit)}`;
+
 /** Recompute the shopping list rather than trusting the model's arithmetic. */
 function deriveShoppingList(entries, inventory = []) {
   const stock = new Map();
   inventory.forEach((item) => {
-    const key = normalize(item.normalized || item.name);
+    const key = stockKey(item.normalized || item.name, item.unit);
     stock.set(key, (stock.get(key) ?? 0) + (Number(item.quantity) || 0));
   });
 
   const needed = new Map();
   entries.forEach((entry) => {
-    entry.usesIngredients.forEach((ingredient) => {
-      const existing = needed.get(ingredient.normalized);
+    (entry.usesIngredients || []).forEach((ingredient) => {
+      const key = stockKey(ingredient.normalized, ingredient.unit);
+      const existing = needed.get(key);
       if (existing) existing.quantity += ingredient.quantity;
       else
-        needed.set(ingredient.normalized, {
+        needed.set(key, {
           name: ingredient.name || ingredient.normalized,
           normalized: ingredient.normalized,
           quantity: ingredient.quantity,
@@ -64,14 +75,15 @@ function deriveShoppingList(entries, inventory = []) {
 
   return [...needed.values()]
     .map((item) => {
-      const onHand = stock.get(item.normalized) ?? 0;
+      const onHand = stock.get(stockKey(item.normalized, item.unit)) ?? 0;
       return {
         ...item,
         quantity: Math.round(item.quantity * 100) / 100,
+        onHand,
         haveInInventory: item.quantity > 0 && onHand >= item.quantity,
       };
     })
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => a.name.localeCompare(b.name) || a.unit.localeCompare(b.unit));
 }
 
 /**
@@ -103,9 +115,13 @@ function parsePlan(raw, context) {
       const recipeName = String(entry?.recipeName ?? '').trim();
       if (!recipeName) return null;
 
+      // A named recipe the library does not have is the model inventing an id;
+      // keep the meal, drop the dangling reference.
       const recipeId = knownRecipes.has(entry?.recipeId) ? entry.recipeId : null;
       const ingredients = cleanIngredients(entry?.usesIngredients);
-      const fallbackIngredients = recipeId ? knownRecipes.get(recipeId).ingredients : [];
+      // A library recipe with no ingredient list yields undefined here, which
+      // Firestore rejects on write — always hand back an array.
+      const fallbackIngredients = (recipeId ? knownRecipes.get(recipeId).ingredients : null) || [];
 
       const servings = Math.max(
         1,

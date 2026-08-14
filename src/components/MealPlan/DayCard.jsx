@@ -19,8 +19,17 @@ const MEAL_TYPE_ICONS = {
   snack: '🍎',
 };
 
+const STATUS_BADGES = {
+  cooked: { label: 'Cooked', variant: 'success' },
+  skipped: { label: 'Skipped', variant: 'secondary' },
+};
+
 const MealEntry = ({ entry, days, onCook, onRemove, onMove, busy }) => {
   const cooked = entry.status === 'cooked';
+  // `skipped` is part of the shared entry contract, so it has to render as
+  // something other than "still for dinner".
+  const settled = cooked || entry.status === 'skipped';
+  const badge = STATUS_BADGES[entry.status];
 
   const handleDragStart = (event) => {
     event.dataTransfer?.setData?.(DRAG_TYPE, entry.id);
@@ -30,7 +39,7 @@ const MealEntry = ({ entry, days, onCook, onRemove, onMove, busy }) => {
 
   return (
     <div
-      draggable={!cooked}
+      draggable={!settled}
       onDragStart={handleDragStart}
       data-testid={`meal-entry-${entry.id}`}
       className="d-flex flex-column gap-1 p-2"
@@ -38,12 +47,14 @@ const MealEntry = ({ entry, days, onCook, onRemove, onMove, busy }) => {
         borderRadius: 'var(--mkh-radius-md)',
         border: '1px solid var(--mkh-border)',
         background: cooked ? 'var(--mkh-expiring-safe)' : 'var(--mkh-surface, #fff)',
-        opacity: cooked ? 0.75 : 1,
-        cursor: cooked ? 'default' : 'grab',
+        opacity: settled ? 0.75 : 1,
+        cursor: settled ? 'default' : 'grab',
       }}
     >
       <div className="d-flex align-items-start gap-1">
-        {!cooked && <GripVertical size={14} className="text-muted flex-shrink-0 mt-1" />}
+        {!settled && (
+          <GripVertical size={14} className="text-muted flex-shrink-0 mt-1" aria-hidden="true" />
+        )}
         <div className="flex-grow-1 min-width-0">
           <div
             className="fw-semibold text-truncate"
@@ -64,9 +75,9 @@ const MealEntry = ({ entry, days, onCook, onRemove, onMove, busy }) => {
             </span>
           </div>
         </div>
-        {cooked && (
-          <Badge bg="success" style={{ fontSize: 'var(--mkh-font-size-tiny)' }}>
-            Cooked
+        {badge && (
+          <Badge bg={badge.variant} style={{ fontSize: 'var(--mkh-font-size-tiny)' }}>
+            {badge.label}
           </Badge>
         )}
       </div>
@@ -79,44 +90,49 @@ const MealEntry = ({ entry, days, onCook, onRemove, onMove, busy }) => {
         </div>
       )}
 
-      {!cooked && (
-        <div className="d-flex gap-1 align-items-center">
-          <Button
-            size="sm"
-            variant="outline-success"
-            className="d-flex align-items-center gap-1 py-0"
-            style={{ fontSize: 'var(--mkh-font-size-tiny)' }}
-            disabled={busy}
-            onClick={() => onCook(entry)}
-          >
-            <Check size={12} />
-            Cooked
-          </Button>
-          <Form.Select
-            size="sm"
-            aria-label={`Move ${entry.recipeName} to another day`}
-            value={entry.date}
-            onChange={(event) => onMove(entry, event.target.value)}
-            style={{ fontSize: 'var(--mkh-font-size-tiny)', maxWidth: '6.5rem' }}
-          >
-            {days.map((day) => (
-              <option key={day.key} value={day.key}>
-                {day.label} {day.dayOfMonth}
-              </option>
-            ))}
-          </Form.Select>
-          <Button
-            size="sm"
-            variant="link"
-            className="p-0 ms-auto"
-            aria-label={`Remove ${entry.recipeName}`}
-            style={{ color: 'var(--mkh-danger-text)' }}
-            onClick={() => onRemove(entry)}
-          >
-            <Trash2 size={13} />
-          </Button>
-        </div>
-      )}
+      {/* A cooked or skipped meal keeps its remove button: logging the wrong
+          meal, or scheduling a recipe that has since been deleted, otherwise
+          leaves a card with no way off the board. */}
+      <div className="d-flex gap-1 align-items-center">
+        {!settled && (
+          <>
+            <Button
+              size="sm"
+              variant="outline-success"
+              className="d-flex align-items-center gap-1 py-0"
+              style={{ fontSize: 'var(--mkh-font-size-tiny)' }}
+              disabled={busy}
+              onClick={() => onCook(entry)}
+            >
+              <Check size={12} aria-hidden="true" />
+              Cooked
+            </Button>
+            <Form.Select
+              size="sm"
+              aria-label={`Move ${entry.recipeName} to another day`}
+              value={entry.date}
+              onChange={(event) => onMove(entry, event.target.value)}
+              style={{ fontSize: 'var(--mkh-font-size-tiny)', maxWidth: '6.5rem' }}
+            >
+              {days.map((day) => (
+                <option key={day.key} value={day.key}>
+                  {day.label} {day.dayOfMonth}
+                </option>
+              ))}
+            </Form.Select>
+          </>
+        )}
+        <Button
+          size="sm"
+          variant="link"
+          className="p-0 ms-auto"
+          aria-label={`Remove ${entry.recipeName}`}
+          style={{ color: 'var(--mkh-danger-text)' }}
+          onClick={() => onRemove(entry)}
+        >
+          <Trash2 size={13} aria-hidden="true" />
+        </Button>
+      </div>
     </div>
   );
 };
@@ -132,7 +148,7 @@ const MealEntry = ({ entry, days, onCook, onRemove, onMove, busy }) => {
  * @param {function} onRemove - (entry) => void
  * @param {function} onMove   - (entry, dayKey) => void
  * @param {function} onDropMeal - (entryId, dayKey) => void
- * @param {boolean}  busy     - disables the cook button while a write is in flight
+ * @param {string}   busyEntryId - the one meal whose "Cooked" write is in flight
  */
 const DayCard = ({
   day,
@@ -143,7 +159,7 @@ const DayCard = ({
   onRemove,
   onMove,
   onDropMeal,
-  busy,
+  busyEntryId = null,
 }) => {
   const [dragOver, setDragOver] = useState(false);
 
@@ -151,6 +167,13 @@ const DayCard = ({
     event.preventDefault();
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
     setDragOver(true);
+  };
+
+  // Dragging across a child element fires dragleave on the card. Ignoring the
+  // ones that stay inside keeps the drop outline from strobing.
+  const handleDragLeave = (event) => {
+    if (event.currentTarget.contains(event.relatedTarget)) return;
+    setDragOver(false);
   };
 
   const handleDrop = (event) => {
@@ -165,7 +188,7 @@ const DayCard = ({
     <Card
       data-testid={`day-card-${day.key}`}
       onDragOver={handleDragOver}
-      onDragLeave={() => setDragOver(false)}
+      onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       className="h-100 shadow-sm"
       style={{
@@ -211,7 +234,7 @@ const DayCard = ({
                 onCook={onCook}
                 onRemove={onRemove}
                 onMove={onMove}
-                busy={busy}
+                busy={busyEntryId === entry.id}
               />
             ))}
           </div>

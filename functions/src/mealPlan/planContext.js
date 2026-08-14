@@ -73,15 +73,60 @@ const readPreferences = (profile = {}) => {
   };
 };
 
+const WEEKDAY_NAMES = {
+  sunday: 0,
+  sun: 0,
+  monday: 1,
+  mon: 1,
+  tuesday: 2,
+  tue: 2,
+  tues: 2,
+  wednesday: 3,
+  wed: 3,
+  weds: 3,
+  thursday: 4,
+  thu: 4,
+  thur: 4,
+  thurs: 4,
+  friday: 5,
+  fri: 5,
+  saturday: 6,
+  sat: 6,
+};
+
+/**
+ * One delivery day, as a JS weekday (0 = Sunday), or null.
+ *
+ * SCHEMA_DOCUMENTATION.md documents `helloFresh.deliveryDay` as a name
+ * ("monday"); a numeric `deliveryDays` list has also been used. Numbers follow
+ * ISO weekdays (1 = Monday … 7 = Sunday), with 0 accepted for Sunday too.
+ * Anything unrecognised is dropped rather than silently landing on Monday.
+ */
+const toWeekday = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  const asNumber = Number(value);
+  if (!Number.isNaN(asNumber) && typeof value !== 'boolean') {
+    if (asNumber === 0 || asNumber === 7) return 0;
+    if (asNumber >= 1 && asNumber <= 6) return asNumber;
+    return null;
+  }
+  const name = normalize(value);
+  return name in WEEKDAY_NAMES ? WEEKDAY_NAMES[name] : null;
+};
+
 /** HelloFresh delivery days, as day keys inside the planned week. */
 const readHelloFresh = (profile = {}, dayKeys = []) => {
   const hf = profile.helloFresh || {};
   const active = Boolean(hf.enabled ?? hf.active ?? hf.linked);
-  // Stored as weekday numbers (1 = Monday) per the HelloFresh section.
-  const deliveryDays = Array.isArray(hf.deliveryDays) ? hf.deliveryDays : [];
-  const deliveryDayKeys = deliveryDays
-    .map((weekday) => dayKeys[Number(weekday) - 1])
-    .filter(Boolean);
+
+  const configured = Array.isArray(hf.deliveryDays)
+    ? hf.deliveryDays
+    : [hf.deliveryDays ?? hf.deliveryDay];
+  const weekdays = new Set(configured.map(toWeekday).filter((day) => day !== null));
+
+  // Match on the day a key actually falls on, so this holds even when the week
+  // does not start on a Monday.
+  const deliveryDayKeys = dayKeys.filter((key) => weekdays.has(fromDayKey(key).getDay()));
 
   return {
     active,
@@ -141,12 +186,25 @@ async function collectPlanContext(db, uid, weekStart, days = 7, now = new Date()
   const weekEntries = docsOf(entriesSnap).filter((entry) => dayKeys.includes(entry.date));
   const helloFresh = readHelloFresh(profile, dayKeys);
 
-  // Days a delivered HelloFresh meal already owns — the planner must leave
-  // these alone rather than double-booking dinner.
+  // Days that already have a dinner the planner must leave alone: a HelloFresh
+  // delivery, a meal scheduled by hand, a waste-prevention pick, or a meal from
+  // a previous generation that has already been cooked.
+  //
+  // The one exception is this week's own uncooked AI meals — regenerating
+  // replaces exactly those (see generatePlan in src/hooks/useMealPlan.js), so
+  // treating them as taken would make a second "Generate plan" find no room.
+  const replacedByRegeneration = (entry) =>
+    entry.source === 'ai' && entry.planId === weekStart && entry.status !== 'cooked';
+
   const takenDays = [
     ...new Set(
       weekEntries
-        .filter((entry) => entry.source === 'hellofresh' && entry.mealType === 'dinner')
+        .filter(
+          (entry) =>
+            entry.mealType === 'dinner' &&
+            entry.status !== 'skipped' &&
+            !replacedByRegeneration(entry)
+        )
         .map((entry) => entry.date)
     ),
   ];
@@ -181,6 +239,7 @@ module.exports = {
   daysUntil,
   readPreferences,
   readHelloFresh,
+  toWeekday,
   RECIPE_LIMIT,
   EXPIRING_WITHIN_DAYS,
 };

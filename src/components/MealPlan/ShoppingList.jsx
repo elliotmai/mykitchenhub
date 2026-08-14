@@ -5,10 +5,19 @@ import React from 'react';
 import { Badge, Card } from 'react-bootstrap';
 import { Check, ShoppingCart } from 'lucide-react';
 
+/** "1 of 3 cups already in your kitchen" — only when some, but not all, is. */
+export const partialStockLabel = (item) => {
+  const onHand = Number(item?.onHand || 0);
+  if (onHand <= 0 || onHand >= Number(item?.quantity || 0)) return null;
+  const rounded = Math.round(onHand * 100) / 100;
+  return `${rounded}${item.unit ? ` ${item.unit}` : ''} already in your kitchen`;
+};
+
 /**
  * ShoppingList
  *
- * @param {array} items - from buildShoppingList(): { name, quantity, unit, haveInInventory }
+ * @param {array} items - from buildShoppingList():
+ *   { key, name, quantity, unit, onHand, haveInInventory }
  */
 const ShoppingList = ({ items = [] }) => {
   const toBuy = items.filter((item) => !item.haveInInventory);
@@ -37,18 +46,32 @@ const ShoppingList = ({ items = [] }) => {
               </p>
             ) : (
               <ul className="list-unstyled mb-0 d-flex flex-column gap-1">
-                {toBuy.map((item) => (
-                  <li
-                    key={item.normalized}
-                    className="d-flex justify-content-between align-items-baseline"
-                    style={{ fontSize: 'var(--mkh-font-size-small)' }}
-                  >
-                    <span className="text-capitalize">{item.name}</span>
-                    <span className="text-muted">
-                      {item.quantity} {item.unit}
-                    </span>
-                  </li>
-                ))}
+                {toBuy.map((item) => {
+                  const partial = partialStockLabel(item);
+                  return (
+                    <li
+                      key={item.key ?? `${item.normalized} ${item.unit}`}
+                      style={{ fontSize: 'var(--mkh-font-size-small)' }}
+                    >
+                      <div className="d-flex justify-content-between align-items-baseline gap-2">
+                        <span className="text-capitalize">{item.name}</span>
+                        <span className="text-muted text-nowrap">
+                          {item.quantity} {item.unit}
+                        </span>
+                      </div>
+                      {partial && (
+                        <div
+                          style={{
+                            fontSize: 'var(--mkh-font-size-tiny)',
+                            color: 'var(--mkh-text-muted)',
+                          }}
+                        >
+                          {partial}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
 
@@ -63,7 +86,7 @@ const ShoppingList = ({ items = [] }) => {
                 <ul className="list-unstyled mb-0 d-flex flex-column gap-1">
                   {covered.map((item) => (
                     <li
-                      key={item.normalized}
+                      key={item.key ?? `${item.normalized} ${item.unit}`}
                       className="d-flex align-items-center gap-1 text-muted"
                       style={{ fontSize: 'var(--mkh-font-size-small)' }}
                     >

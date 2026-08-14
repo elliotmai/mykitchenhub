@@ -11,6 +11,7 @@ const { deriveShoppingList } = require('./parsePlan');
 /** Does this recipe break a restriction, allergy, or dislike? */
 function isExcluded(recipe, preferences) {
   const banned = [
+    ...(preferences.dietaryRestrictions || []),
     ...(preferences.allergies || []),
     ...(preferences.dislikedIngredients || []),
   ]
@@ -63,6 +64,9 @@ function deriveBatchCooking(entries) {
   byIngredient.forEach(({ name, entries: members }, key) => {
     const dates = [...new Set(members.map((m) => m.date))].sort();
     if (dates.length < 2) return;
+    // With a short recipe library the same meal lands on several days; "prep
+    // onion once, it's used in Curry and Curry" is not a tip worth reading.
+    if (new Set(members.map((m) => m.recipeName)).size < 2) return;
     tips.push({
       group: key,
       title: `Prep ${name} once`,
