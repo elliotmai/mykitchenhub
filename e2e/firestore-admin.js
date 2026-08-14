@@ -66,6 +66,23 @@ const importHistoryRecords = async () => {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 };
 
+/** Every delivery logged by the seeded account. */
+const deliveries = async () => {
+  const uid = await testUserId();
+  const snap = await admin.firestore().collection(`users/${uid}/deliveries`).get();
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+/** Recipes imported from HelloFresh — the shared library, not a subcollection. */
+const hellofreshRecipes = async () => {
+  const snap = await admin
+    .firestore()
+    .collection('recipes')
+    .where('source', '==', 'hellofresh')
+    .get();
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
 /** Add an inventory item straight to the emulator, bypassing the UI. */
 const seedInventoryItem = async ({ name, quantity = 3, unit = 'ea' }) => {
   const uid = await testUserId();
@@ -147,4 +164,6 @@ module.exports = {
   mealPlanEntries,
   mealPlanEntry,
   seedMealPlanEntry,
+  deliveries,
+  hellofreshRecipes,
 };
