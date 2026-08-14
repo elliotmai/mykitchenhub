@@ -1,0 +1,199 @@
+/* ==========================================================================
+   Dashboard
+   Stat tiles, urgent alerts and the week preview. Every colour comes from the
+   design-system tokens in src/styles/design-system.css.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Stat tiles
+   -------------------------------------------------------------------------- */
+.stat-card {
+  border: 1px solid var(--mkh-border);
+}
+
+.stat-card--link {
+  text-decoration: none;
+  color: inherit;
+  transition:
+    box-shadow var(--mkh-transition-base),
+    transform var(--mkh-transition-fast);
+}
+
+.stat-card--link:hover {
+  box-shadow: var(--mkh-shadow-md);
+  transform: translateY(-1px);
+  text-decoration: none;
+  color: inherit;
+}
+
+.stat-card__body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--mkh-spacing-xs);
+  padding: var(--mkh-spacing-md);
+}
+
+.stat-card__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  margin-bottom: var(--mkh-spacing-xs);
+  border-radius: var(--mkh-radius-md);
+  background-color: var(--mkh-primary);
+  color: var(--mkh-text-primary);
+}
+
+.stat-card__icon--warning {
+  background-color: var(--mkh-warning);
+}
+
+.stat-card__icon--danger {
+  background-color: var(--mkh-danger);
+}
+
+.stat-card__icon--success {
+  background-color: var(--mkh-success);
+}
+
+/* Proportional figures: a big standalone number looks loose in tabular-nums. */
+.stat-card__value {
+  font-size: 1.75rem;
+  font-weight: var(--mkh-font-weight-semibold);
+  line-height: 1.1;
+  color: var(--mkh-text-primary);
+}
+
+.stat-card__label {
+  font-size: var(--mkh-font-size-small);
+  color: var(--mkh-text-secondary);
+}
+
+.stat-card__hint {
+  font-size: var(--mkh-font-size-tiny);
+  color: var(--mkh-text-muted);
+}
+
+/* --------------------------------------------------------------------------
+   Urgent alerts
+   -------------------------------------------------------------------------- */
+.urgent-alerts__list {
+  list-style: none;
+  margin: 0 0 var(--mkh-spacing-md);
+  padding: 0;
+}
+
+.urgent-alert {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  column-gap: var(--mkh-spacing-sm);
+  padding: var(--mkh-spacing-sm) var(--mkh-spacing-sm) var(--mkh-spacing-sm) var(--mkh-spacing-md);
+  margin-bottom: var(--mkh-spacing-sm);
+  border-radius: var(--mkh-radius-md);
+  border-left: 4px solid var(--mkh-warning-text);
+  background-color: var(--mkh-bg-hover);
+}
+
+.urgent-alert--expired {
+  border-left-color: var(--mkh-danger-text);
+  background-color: var(--mkh-expiring-critical);
+}
+
+.urgent-alert--critical {
+  border-left-color: var(--mkh-warning-text);
+  background-color: var(--mkh-expiring-warning);
+}
+
+.urgent-alert__icon {
+  color: var(--mkh-text-primary);
+}
+
+.urgent-alert__name {
+  font-weight: var(--mkh-font-weight-medium);
+  color: var(--mkh-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.urgent-alert__status {
+  grid-column: 3;
+  font-size: var(--mkh-font-size-tiny);
+  font-weight: var(--mkh-font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--mkh-text-primary);
+  white-space: nowrap;
+}
+
+.urgent-alert__detail {
+  grid-column: 2 / 4;
+  font-size: var(--mkh-font-size-tiny);
+  color: var(--mkh-text-secondary);
+}
+
+/* --------------------------------------------------------------------------
+   Meal plan preview
+   -------------------------------------------------------------------------- */
+.meal-plan-preview__days {
+  list-style: none;
+  margin: 0 0 var(--mkh-spacing-md);
+  padding: 0;
+}
+
+.meal-plan-day {
+  display: grid;
+  grid-template-columns: 3.25rem 1fr;
+  align-items: baseline;
+  gap: var(--mkh-spacing-sm);
+  padding: var(--mkh-spacing-xs) 0;
+  border-bottom: 1px solid var(--mkh-border-light);
+}
+
+.meal-plan-day:last-child {
+  border-bottom: none;
+}
+
+.meal-plan-day__label {
+  font-size: var(--mkh-font-size-tiny);
+  font-weight: var(--mkh-font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--mkh-text-secondary);
+}
+
+.meal-plan-day__meal {
+  color: var(--mkh-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.meal-plan-day--empty .meal-plan-day__meal {
+  color: var(--mkh-text-muted);
+  font-style: italic;
+}
+
+/* --------------------------------------------------------------------------
+   Layout
+   -------------------------------------------------------------------------- */
+.dashboard-page__greeting {
+  margin-bottom: var(--mkh-spacing-xs);
+}
+
+@media (max-width: 575.98px) {
+  .stat-card__value {
+    font-size: 1.5rem;
+  }
+
+  .urgent-alert {
+    grid-template-columns: auto 1fr;
+  }
+
+  .urgent-alert__status {
+    grid-column: 2;
+  }
+
+  .urgent-alert__detail {
+    grid-column: 2 / 3;
+  }
+}
