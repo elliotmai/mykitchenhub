@@ -14,13 +14,13 @@
 // src/config/__tests__/version.test.js fails the build if these drift apart,
 // so the footer can never silently lie about what's deployed.
 
-/** Version string rendered in the footer, e.g. "0.7.3". */
-export const APP_VERSION = '0.7.3';
+/** Version string rendered in the footer, e.g. "0.8.2". */
+export const APP_VERSION = '0.8.2';
 
-/** The roadmap step this build completes, e.g. "7.3". */
-export const ROADMAP_STEP = '7.3';
+/** The roadmap step this build completes, e.g. "8.2". */
+export const ROADMAP_STEP = '8.2';
 
 /** Human-readable name of that roadmap step — shown in the footer tooltip. */
-export const ROADMAP_STEP_NAME = 'Batch Cooking Analysis';
+export const ROADMAP_STEP_NAME = 'Shopping Analytics';
 
 export default APP_VERSION;
