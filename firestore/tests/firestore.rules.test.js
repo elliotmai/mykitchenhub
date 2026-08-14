@@ -91,16 +91,22 @@ const validNotification = (overrides = {}) => ({
   ...overrides,
 });
 
+// Phase 7's shape. Phase 6's "Add to Meal Plan" is one of its writers, so this
+// fixture is exactly what useRecipeSuggestions.addToMealPlan sends.
 const validMealPlanEntry = (overrides = {}) => ({
+  date: '2026-08-14',
+  mealType: 'dinner',
   recipeId: 'recipe-1',
   recipeName: 'Sheet Pan Salmon',
-  plannedFor: '2026-08-14',
-  mealType: 'dinner',
   servings: 2,
   status: 'planned',
-  source: 'waste-alerts',
-  usesExpiringItems: ['spinach'],
+  source: 'waste-prevention',
   createdAt: new Date().toISOString(),
+  cookedAt: null,
+  usesIngredients: [{ name: 'Spinach', normalized: 'spinach', quantity: 1, unit: 'bag' }],
+  batchGroup: null,
+  notes: '',
+  planId: null,
   ...overrides,
 });
 
@@ -477,23 +483,41 @@ describe('notifications', () => {
 // ---------------------------------------------------------------------------
 
 describe('meal plan entries', () => {
-  const mealPath = (uid, id = 'meal-1') => `users/${uid}/mealPlan/${id}`;
+  // The collection and its rules are Phase 7's. These cases exist because
+  // Phase 6.3 writes into it, so they guard against Phase 6 drifting from that
+  // contract — the shape below is exactly what "Add to Meal Plan" sends.
+  const mealPath = (uid, id = 'meal-1') => `users/${uid}/mealPlanEntries/${id}`;
 
-  it('accepts the document shape the recipe suggestions write', async () => {
+  it('accepts the document the waste-alert recipe suggestions write', async () => {
     await assertSucceeds(as(OWNER).doc(mealPath(OWNER)).set(validMealPlanEntry()));
   });
 
-  it('requires the recipe it points at', async () => {
-    const { recipeId, ...withoutRecipe } = validMealPlanEntry();
-    await assertFails(as(OWNER).doc(mealPath(OWNER)).set(withoutRecipe));
-  });
-
-  it('requires the day it is planned for', async () => {
-    const { plannedFor, ...withoutDay } = validMealPlanEntry();
+  it('requires the day the meal is planned for', async () => {
+    const { date, ...withoutDay } = validMealPlanEntry();
     await assertFails(as(OWNER).doc(mealPath(OWNER)).set(withoutDay));
   });
 
-  it.each(['waste-alerts', 'manual', 'ai-generated', 'hellofresh'])(
+  it('requires the day to be a YYYY-MM-DD string, not a Timestamp', async () => {
+    await assertFails(
+      as(OWNER).doc(mealPath(OWNER)).set(validMealPlanEntry({ date: new Date() }))
+    );
+    await assertFails(
+      as(OWNER).doc(mealPath(OWNER)).set(validMealPlanEntry({ date: '15 August 2026' }))
+    );
+  });
+
+  it('requires the name the day card renders', async () => {
+    const { recipeName, ...withoutName } = validMealPlanEntry();
+    await assertFails(as(OWNER).doc(mealPath(OWNER)).set(withoutName));
+  });
+
+  it('accepts the source Phase 6 tags its entries with', async () => {
+    await assertSucceeds(
+      as(OWNER).doc(mealPath(OWNER)).set(validMealPlanEntry({ source: 'waste-prevention' }))
+    );
+  });
+
+  it.each(['manual', 'ai', 'hellofresh', 'waste-prevention'])(
     'accepts source "%s"',
     async (source) => {
       await assertSucceeds(
@@ -504,14 +528,24 @@ describe('meal plan entries', () => {
 
   it('rejects an unrecognised meal plan source', async () => {
     await assertFails(
+      as(OWNER).doc(mealPath(OWNER)).set(validMealPlanEntry({ source: 'waste-alerts' }))
+    );
+    await assertFails(
       as(OWNER).doc(mealPath(OWNER)).set(validMealPlanEntry({ source: 'telepathy' }))
     );
   });
 
-  it('accepts extra fields, so Phase 7 can extend the entry', async () => {
+  it.each(['breakfast', 'lunch', 'dinner', 'snack'])('accepts mealType "%s"', async (mealType) => {
     await assertSucceeds(
-      as(OWNER).doc(mealPath(OWNER)).set(validMealPlanEntry({ notes: 'double the garlic' }))
+      as(OWNER).doc(mealPath(OWNER, `meal-${mealType}`)).set(validMealPlanEntry({ mealType }))
     );
+  });
+
+  it('rejects an unrecognised meal type or a non-positive serving count', async () => {
+    await assertFails(
+      as(OWNER).doc(mealPath(OWNER)).set(validMealPlanEntry({ mealType: 'brunch' }))
+    );
+    await assertFails(as(OWNER).doc(mealPath(OWNER)).set(validMealPlanEntry({ servings: 0 })));
   });
 
   it('lets the owner mark a planned meal as cooked', async () => {
@@ -519,7 +553,9 @@ describe('meal plan entries', () => {
     await seed((db) => db.doc(mealPath(OWNER)).set(entry));
 
     await assertSucceeds(
-      as(OWNER).doc(mealPath(OWNER)).update({ createdAt: entry.createdAt, status: 'cooked' })
+      as(OWNER)
+        .doc(mealPath(OWNER))
+        .update({ ...entry, status: 'cooked', cookedAt: new Date().toISOString() })
     );
   });
 

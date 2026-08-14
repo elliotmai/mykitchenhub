@@ -150,23 +150,6 @@ export const makeNotification = (overrides = {}) => ({
 });
 
 // ---------------------------------------------------------------------------
-// users/{userId}/mealPlan/{entryId}
-// ---------------------------------------------------------------------------
-export const makeMealPlanEntry = (overrides = {}) => ({
-  id: nextId('meal'),
-  recipeId: 'recipe-1',
-  recipeName: 'Sheet Pan Salmon',
-  plannedFor: new Date().toISOString().slice(0, 10),
-  mealType: 'dinner',
-  servings: 2,
-  status: 'planned',
-  source: 'waste-alerts',
-  usesExpiringItems: [],
-  createdAt: daysFromNow(0),
-  ...overrides,
-});
-
-// ---------------------------------------------------------------------------
 // recipes/{recipeId}
 // ---------------------------------------------------------------------------
 export const makeRecipe = (overrides = {}) => ({

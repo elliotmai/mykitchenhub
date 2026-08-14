@@ -140,24 +140,39 @@ service cloud.firestore {
       }
 
       // ============================================
-      // MEAL PLAN SUBCOLLECTION
+      // MEAL PLAN ENTRIES SUBCOLLECTION
       // ============================================
 
-      // Written by the waste-alert recipe suggestions (6.3); the meal plan UI
-      // that renders these is Phase 7. Required fields are kept to the ones
-      // every writer must supply so that phase can add its own.
-      match /mealPlan/{entryId} {
+      // Phase 7 owns this collection and this rule — the shape is copied
+      // verbatim from its branch. Phase 6's "Add to Meal Plan" button is one
+      // of the writers its schema documentation names, tagging entries
+      // `source: 'waste-prevention'`.
+      match /mealPlanEntries/{entryId} {
+        // Users can read their own scheduled meals
         allow read: if isOwner(userId);
 
+        // Users can schedule a meal
         allow create: if isOwner(userId)
-          && hasRequiredFields(['recipeId', 'recipeName', 'plannedFor',
-                                'source', 'createdAt'])
-          && request.resource.data.source in ['waste-alerts', 'manual',
-                                                'ai-generated', 'hellofresh'];
+          && hasRequiredFields(['date', 'mealType', 'recipeName', 'servings',
+                                'status', 'source', 'createdAt'])
+          // `date` is a YYYY-MM-DD string — the day cards key on it
+          && request.resource.data.date is string
+          && request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+          && request.resource.data.mealType in ['breakfast', 'lunch', 'dinner', 'snack']
+          && request.resource.data.status in ['planned', 'cooked', 'skipped']
+          && request.resource.data.source in ['manual', 'ai', 'hellofresh', 'waste-prevention']
+          && request.resource.data.servings > 0;
 
+        // Users can reschedule (change `date`) and mark cooked (change `status`)
         allow update: if isOwner(userId)
-          && request.resource.data.createdAt == resource.data.createdAt;
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.date is string
+          && request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+          && request.resource.data.mealType in ['breakfast', 'lunch', 'dinner', 'snack']
+          && request.resource.data.status in ['planned', 'cooked', 'skipped']
+          && request.resource.data.servings > 0;
 
+        // Users can remove a scheduled meal
         allow delete: if isOwner(userId);
       }
     }

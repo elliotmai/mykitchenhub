@@ -4,8 +4,12 @@
 //
 // Reads the `recipes` collection per firestore.rules (any signed-in user may
 // read it) and matches recipe `ingredients[].name` / `.normalized` against the
-// inventory's `normalized` field. Writing a chosen recipe into the meal plan
-// creates a users/{uid}/mealPlan document; the meal-plan UI itself is Phase 7.
+// inventory's `normalized` field.
+//
+// "Add to Meal Plan" writes a users/{uid}/mealPlanEntries document in the shape
+// Phase 7 defines — that collection and its rules are Phase 7's, and its schema
+// documentation names this button as one of its writers. The meal plan UI that
+// renders these entries is Phase 7's too; this is only the link out.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -24,8 +28,13 @@ import { byExpirySoonestFirst } from './useInventory';
 /** Recipes pulled per lookup — plenty for matching, small enough to stay cheap. */
 export const RECIPE_FETCH_LIMIT = 200;
 
-/** Meal plan entries this hook writes are tagged with their origin. */
-export const MEAL_PLAN_SOURCE = 'waste-alerts';
+/**
+ * How meals scheduled from here are tagged.
+ *
+ * This is one of the `source` values Phase 7's mealPlanEntries rules allow —
+ * it is their vocabulary, not ours, so it stays spelled their way.
+ */
+export const MEAL_PLAN_SOURCE = 'waste-prevention';
 
 const normalize = (value) =>
   String(value ?? '')
@@ -156,29 +165,40 @@ const useRecipeSuggestions = (expiringItems = []) => {
   /**
    * Put a recipe on the meal plan for a given day.
    *
-   * Writes users/{uid}/mealPlan/{entryId} in the shape firestore.rules
-   * requires. Phase 7 owns rendering these; this is only the link out.
+   * Writes users/{uid}/mealPlanEntries/{entryId} in Phase 7's documented shape:
+   * a `date` string rather than a Timestamp, `source: 'waste-prevention'`, and
+   * `usesIngredients` so Phase 7's "Mark as Cooked" knows what to decrement.
+   * Every field is theirs — if that shape changes, this changes with it.
    */
   const addToMealPlan = useCallback(
-    async (match, { plannedFor, mealType = 'dinner', servings } = {}) => {
+    async (match, { date, mealType = 'dinner', servings } = {}) => {
       if (!user?.uid) return { success: false, error: 'Not authenticated' };
 
       const recipe = match?.recipe ?? match;
       if (!recipe?.id) return { success: false, error: 'That recipe is missing an id.' };
 
       try {
-        await addDoc(collection(db, 'users', user.uid, 'mealPlan'), {
+        await addDoc(collection(db, 'users', user.uid, 'mealPlanEntries'), {
+          date: date || todayIsoDate(),
+          mealType,
           recipeId: recipe.id,
           recipeName: recipeTitle(recipe),
-          plannedFor: plannedFor || todayIsoDate(),
-          mealType,
           servings: Number(servings ?? recipe.servings ?? 2),
           status: 'planned',
           source: MEAL_PLAN_SOURCE,
-          usesExpiringItems: (match?.usesItems ?? []).map(
-            (item) => item.normalized ?? normalize(item.name)
-          ),
           createdAt: serverTimestamp(),
+          cookedAt: null,
+          // The expiring food this meal is meant to rescue, in the shape the
+          // meal plan matches against inventory `normalized`.
+          usesIngredients: (match?.usesItems ?? []).map((item) => ({
+            name: item.name,
+            normalized: item.normalized ?? normalize(item.name),
+            quantity: Number(item.quantity) || 1,
+            unit: item.unit || '',
+          })),
+          batchGroup: null,
+          notes: '',
+          planId: null,
         });
 
         return { success: true };

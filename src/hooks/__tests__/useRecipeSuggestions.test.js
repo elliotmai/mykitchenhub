@@ -206,7 +206,7 @@ describe('useRecipeSuggestions', () => {
 describe('useRecipeSuggestions.addToMealPlan', () => {
   const spinach = makeItem({ id: 'item-1', name: 'Spinach', expiresAt: daysFromNow(1) });
 
-  it('writes a meal plan entry in the documented shape', async () => {
+  it("writes a mealPlanEntries document in Phase 7's shape", async () => {
     const { result } = await renderSuggestions([recipe('Creamed Spinach', ['spinach'])], [spinach]);
 
     let response;
@@ -217,16 +217,58 @@ describe('useRecipeSuggestions.addToMealPlan', () => {
     expect(response).toEqual({ success: true });
 
     const [ref, payload] = fs.addDoc.mock.calls[0];
-    expect(fs.pathOf(ref)).toBe(`users/${UID}/mealPlan`);
+    // The collection Phase 7 owns and reads — not one of our own invention.
+    expect(fs.pathOf(ref)).toBe(`users/${UID}/mealPlanEntries`);
     expect(payload).toMatchObject({
+      recipeId: result.current.suggestions[0].recipe.id,
       recipeName: 'Creamed Spinach',
       mealType: 'dinner',
+      servings: 2,
       status: 'planned',
       source: MEAL_PLAN_SOURCE,
-      usesExpiringItems: ['spinach'],
+      cookedAt: null,
+      batchGroup: null,
+      notes: '',
+      planId: null,
     });
-    expect(payload.plannedFor).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(payload.createdAt).toEqual({ __sentinel: 'serverTimestamp' });
+  });
+
+  it('dates the entry as a YYYY-MM-DD string, never a Timestamp', async () => {
+    // Phase 7's rules reject anything else, and its day cards key on the string.
+    const { result } = await renderSuggestions([recipe('Creamed Spinach', ['spinach'])], [spinach]);
+
+    await act(async () => {
+      await result.current.addToMealPlan(result.current.suggestions[0]);
+    });
+
+    const payload = fs.addDoc.mock.calls[0][1];
+    expect(typeof payload.date).toBe('string');
+    expect(payload.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('tags the entry as waste prevention, so the meal plan can say why it is there', async () => {
+    const { result } = await renderSuggestions([recipe('Creamed Spinach', ['spinach'])], [spinach]);
+
+    await act(async () => {
+      await result.current.addToMealPlan(result.current.suggestions[0]);
+    });
+
+    expect(fs.addDoc.mock.calls[0][1].source).toBe('waste-prevention');
+  });
+
+  it('records the expiring food the meal is meant to use up', async () => {
+    // Phase 7's "Mark as Cooked" decrements inventory from this list, so it
+    // carries the normalized name and a quantity, not just a label.
+    const { result } = await renderSuggestions([recipe('Creamed Spinach', ['spinach'])], [spinach]);
+
+    await act(async () => {
+      await result.current.addToMealPlan(result.current.suggestions[0]);
+    });
+
+    expect(fs.addDoc.mock.calls[0][1].usesIngredients).toEqual([
+      { name: 'Spinach', normalized: 'spinach', quantity: 1, unit: 'gal' },
+    ]);
   });
 
   it('accepts a chosen day and meal', async () => {
@@ -234,14 +276,14 @@ describe('useRecipeSuggestions.addToMealPlan', () => {
 
     await act(async () => {
       await result.current.addToMealPlan(result.current.suggestions[0], {
-        plannedFor: '2026-08-20',
+        date: '2026-08-20',
         mealType: 'lunch',
         servings: 4,
       });
     });
 
     expect(fs.addDoc.mock.calls[0][1]).toMatchObject({
-      plannedFor: '2026-08-20',
+      date: '2026-08-20',
       mealType: 'lunch',
       servings: 4,
     });

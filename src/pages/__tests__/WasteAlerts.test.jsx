@@ -159,13 +159,15 @@ describe('WasteAlerts page', () => {
     });
 
     const [ref, payload] = fs.addDoc.mock.calls[0];
-    expect(fs.pathOf(ref)).toBe(`users/${UID}/mealPlan`);
+    // Phase 7 owns this collection; Phase 6 writes into it in their shape.
+    expect(fs.pathOf(ref)).toBe(`users/${UID}/mealPlanEntries`);
     expect(payload).toMatchObject({
       recipeId: 'recipe-1',
       recipeName: 'Creamed Spinach',
-      source: 'waste-alerts',
+      source: 'waste-prevention',
       status: 'planned',
     });
+    expect(payload.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
   it("shows the morning's in-app alert", async () => {

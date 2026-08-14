@@ -233,37 +233,39 @@ rather than duplicating it.
 
 ---
 
-### 3b. `users/{userId}/mealPlan` Subcollection
+### 3c. `users/{userId}/mealPlanEntries` Subcollection
 
-**Purpose:** Planned meals. Written by the waste-alert recipe suggestions
-(Phase 6.3); the meal plan UI that renders these belongs to Phase 7.
+**Owned by Phase 7**, which defines the full shape and its security rules. It is
+listed here because the waste-alert recipe suggestions (Phase 6.3) are one of
+its writers: "Add to Meal Plan" schedules a meal that uses up expiring food.
 
-**Document Structure:**
+What Phase 6 writes, matching that contract exactly:
+
 ```javascript
-{
-  id: "auto-generated",
-  recipeId: "recipe-id",            // Reference to a recipes/{recipeId} document
-  recipeName: "Chicken Stir Fry",   // Denormalized so the plan renders without a join
-  plannedFor: "2026-08-14",         // YYYY-MM-DD, in the user's own timezone
-  mealType: "dinner",               // "breakfast" | "lunch" | "dinner" | "snack"
+await addDoc(collection(db, 'users', uid, 'mealPlanEntries'), {
+  date: '2026-08-15',                 // YYYY-MM-DD string, never a Timestamp
+  mealType: 'dinner',
+  recipeId: recipe.id,
+  recipeName: recipe.name,
   servings: 2,
-  status: "planned",                // "planned" | "cooked" | "skipped"
-  source: "waste-alerts",           // "waste-alerts" | "manual" | "ai-generated" | "hellofresh"
-  usesExpiringItems: ["spinach"],   // Normalized names this meal rescues
-  createdAt: Timestamp
-}
+  status: 'planned',
+  source: 'waste-prevention',         // the value Phase 7 reserves for this button
+  createdAt: serverTimestamp(),
+  cookedAt: null,
+  usesIngredients: [                  // what "Mark as Cooked" decrements
+    { name: 'Spinach', normalized: 'spinach', quantity: 1, unit: 'bag' }
+  ],
+  batchGroup: null,
+  notes: '',
+  planId: null,
+});
 ```
 
-**Security Rules:**
-- Owner-only read, create, update and delete
-- Required on create: `recipeId`, `recipeName`, `plannedFor`, `source`, `createdAt`
-- `source` must be one of the four values above
-- `createdAt` cannot be rewritten by an update
-
-Required fields are deliberately the minimum every writer must supply, so
-Phase 7 can add its own without breaking documents already written.
+See Phase 7's own section for the field-by-field description, the required
+fields, and the rest of the `source` vocabulary.
 
 ---
+
 
 ### 4. `recipes` Collection
 
