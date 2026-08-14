@@ -19,7 +19,7 @@ import {
 
 import { db } from '../services/firebase';
 import { useAuth } from './useAuth';
-import { byExpirySoonestFirst, getDaysUntilExpiration } from './useInventory';
+import { byExpirySoonestFirst } from './useInventory';
 
 /** Recipes pulled per lookup — plenty for matching, small enough to stay cheap. */
 export const RECIPE_FETCH_LIMIT = 200;
@@ -196,8 +196,6 @@ const useRecipeSuggestions = (expiringItems = []) => {
     loading,
     error,
     addToMealPlan,
-    /** Days until the most urgent matched item, for the "cook this first" nudge. */
-    daysUntil: getDaysUntilExpiration,
   };
 };
 

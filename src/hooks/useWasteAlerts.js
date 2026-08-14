@@ -146,6 +146,9 @@ const useWasteAlerts = ({ withinDays = DEFAULT_ALERT_WINDOW_DAYS } = {}) => {
         return { success: false, error: 'There is not enough here to split. Freeze all instead.' };
       }
 
+      // Create the frozen half first: if that write fails, the cook still has
+      // the whole item where they left it. The other order could quietly halve
+      // their inventory.
       const frozen = await addItem({
         name: item.name,
         quantity: half,
