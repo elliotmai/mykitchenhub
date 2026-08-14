@@ -180,11 +180,11 @@
   color: var(--mkh-text-primary);
 }
 
-/* "+2 more" on a day with several meals — secondary to the meal it follows. */
-.meal-plan-day__extra {
-  font-size: var(--mkh-font-size-tiny);
-  color: var(--mkh-text-muted);
-  white-space: nowrap;
+/* A day can hold more than one meal; they stack rather than being collapsed. */
+.meal-plan-day__meals {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
 }
 
 /* --------------------------------------------------------------------------

@@ -22,15 +22,19 @@ import { Calendar, Sparkles } from 'lucide-react';
  */
 export const buildWeekRows = (weekDays = [], entriesByDay = {}) =>
   weekDays.map((day) => {
-    const entries = entriesByDay?.[day.key] ?? [];
+    const entries = Array.isArray(entriesByDay?.[day.key]) ? entriesByDay[day.key] : [];
     return {
       key: day.key,
       label: day.label,
       isToday: Boolean(day.isToday),
-      // The tile has one line per day, so it shows the first meal and counts
-      // the rest rather than turning into a second meal-plan page.
-      title: entries[0]?.recipeName?.trim() || '',
-      extra: Math.max(0, entries.length - 1),
+      // Every meal on the day, not just the first: a day with lunch and dinner
+      // on it should say so rather than quietly hiding one behind a counter.
+      meals: entries
+        .map((entry, index) => ({
+          key: entry?.id ?? `${day.key}-${index}`,
+          title: (typeof entry?.recipeName === 'string' ? entry.recipeName : '').trim(),
+        }))
+        .filter((meal) => meal.title),
     };
   });
 
@@ -83,19 +87,24 @@ const MealPlanPreview = ({ weekDays = [], entriesByDay = {}, weekLabel = '', loa
                   key={row.key}
                   className={[
                     'meal-plan-day',
-                    row.title ? '' : 'meal-plan-day--empty',
+                    row.meals.length ? '' : 'meal-plan-day--empty',
                     row.isToday ? 'meal-plan-day--today' : '',
                   ]
                     .filter(Boolean)
                     .join(' ')}
                 >
                   <span className="meal-plan-day__label">{row.label}</span>
-                  <span className="meal-plan-day__meal">
-                    {row.title || 'Nothing planned'}
-                    {row.extra > 0 ? (
-                      <span className="meal-plan-day__extra"> +{row.extra} more</span>
-                    ) : null}
-                  </span>
+                  {row.meals.length === 0 ? (
+                    <span className="meal-plan-day__meal">Nothing planned</span>
+                  ) : (
+                    <span className="meal-plan-day__meals">
+                      {row.meals.map((meal) => (
+                        <span key={meal.key} className="meal-plan-day__meal">
+                          {meal.title}
+                        </span>
+                      ))}
+                    </span>
+                  )}
                 </li>
               ))}
             </ol>

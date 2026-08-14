@@ -46,7 +46,7 @@ describe('buildWeekRows', () => {
 
     expect(rows).toHaveLength(7);
     expect(rows.map((r) => r.label)).toEqual(LABELS);
-    expect(rows.every((r) => r.title === '')).toBe(true);
+    expect(rows.every((r) => r.meals.length === 0)).toBe(true);
   });
 
   it("slots each day's meal against it and leaves the rest empty", () => {
@@ -56,30 +56,34 @@ describe('buildWeekRows', () => {
       [days[3].key]: [entry('Chili')],
     });
 
-    expect(rows[0].title).toBe('Salmon');
-    expect(rows[3].title).toBe('Chili');
-    expect(rows[1].title).toBe('');
+    expect(rows[0].meals.map((m) => m.title)).toEqual(['Salmon']);
+    expect(rows[3].meals.map((m) => m.title)).toEqual(['Chili']);
+    expect(rows[1].meals).toEqual([]);
   });
 
-  it('shows the first meal of a busy day and counts the rest', () => {
+  it('lists every meal on a busy day rather than hiding them behind a count', () => {
     const days = weekDays();
     const rows = buildWeekRows(days, {
       [days[0].key]: [entry('Porridge'), entry('Soup'), entry('Salmon')],
     });
 
-    expect(rows[0].title).toBe('Porridge');
-    expect(rows[0].extra).toBe(2);
+    expect(rows[0].meals.map((m) => m.title)).toEqual(['Porridge', 'Soup', 'Salmon']);
   });
 
   it('marks today so the row can be highlighted', () => {
     expect(buildWeekRows(weekDays(2), {})[2].isToday).toBe(true);
   });
 
-  it('survives an entry with no recipe name', () => {
+  it('drops an entry with no recipe name rather than rendering a blank line', () => {
     const days = weekDays();
-    const rows = buildWeekRows(days, { [days[0].key]: [entry('   ')] });
+    const rows = buildWeekRows(days, { [days[0].key]: [entry('   '), entry('Salmon')] });
 
-    expect(rows[0].title).toBe('');
+    expect(rows[0].meals.map((m) => m.title)).toEqual(['Salmon']);
+  });
+
+  it('ignores a day whose value is not a list', () => {
+    const days = weekDays();
+    expect(buildWeekRows(days, { [days[0].key]: 'dinner' })[0].meals).toEqual([]);
   });
 
   it('handles being given nothing at all', () => {
@@ -119,7 +123,7 @@ describe('MealPlanPreview', () => {
     expect(screen.getAllByText('Nothing planned')).toHaveLength(6);
   });
 
-  it('notes the extra meals on a day with more than one', () => {
+  it('shows both meals when a day has two', () => {
     const days = weekDays();
     renderWithProviders(
       <MealPlanPreview
@@ -128,7 +132,8 @@ describe('MealPlanPreview', () => {
       />
     );
 
-    expect(screen.getByText('+1 more')).toBeInTheDocument();
+    expect(screen.getByText('Soup')).toBeInTheDocument();
+    expect(screen.getByText('Salmon')).toBeInTheDocument();
   });
 
   it('shows the week it is describing', () => {

@@ -1,13 +1,58 @@
 // The dashboard against a real build, real emulators and real security rules.
 //
 // The seed (e2e/global-setup.js) gives the account three items — one expired,
-// one due tomorrow, one that keeps for months — and no recipes and no meal
-// plans. That is deliberately the state the dashboard has to survive: half its
-// collections do not exist yet.
+// one due tomorrow, one that keeps for months — and no recipes. That is
+// deliberately a state the dashboard has to survive: it reads collections other
+// roadmap phases own, and they may be empty.
+//
+// The important spec here is the last one. Every panel is fed by a collection
+// somebody else writes, so a unit test can only prove the dashboard renders the
+// shape it was told to expect. Scheduling a meal through the meal-plan UI and
+// then reading it off the dashboard is what proves the two halves agree — a
+// reader pointed at the wrong collection passes every mocked test and shows an
+// empty week forever.
 
 const { test, expect } = require('./fixtures');
+const { mealPlanEntry } = require('./firestore-admin');
 
 const statValues = (page) => page.getByTestId('stat-card-value');
+
+/** `YYYY-MM-DD` in local time — the format meal plan entries are keyed on. */
+const toDayKey = (date) => {
+  const pad = (v) => String(v).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+};
+
+const TODAY = toDayKey(new Date());
+
+/**
+ * Put a meal on today through the real meal-plan UI, the way a person would.
+ *
+ * Deliberately not a direct Firestore write: the point is to exercise the
+ * writer the app actually ships, so the dashboard is reading whatever that
+ * writer produces rather than whatever a fixture claims it produces.
+ */
+const scheduleMealToday = async (page, recipeName) => {
+  await page.goto('/meal-plan', { waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('heading', { name: 'Meal Plan' })).toBeVisible();
+
+  const dayCard = page.getByTestId(`day-card-${TODAY}`);
+  await dayCard.getByRole('button', { name: /Add a meal on/ }).click();
+
+  const modal = page.locator('.modal.show');
+  await expect(modal).toBeVisible();
+  await modal.getByLabel('What are you cooking?').fill(recipeName);
+  await modal.getByRole('button', { name: 'Add to plan' }).click();
+  await expect(modal).not.toBeVisible();
+
+  // On screen is not proof — confirm it reached Firestore through the rules.
+  await expect
+    .poll(async () => Boolean(await mealPlanEntry(recipeName)), {
+      message: `waiting for "${recipeName}" to reach Firestore`,
+      timeout: 10_000,
+    })
+    .toBe(true);
+};
 
 /**
  * Read a tile's number.
@@ -102,6 +147,28 @@ test.describe('dashboard', () => {
     await page.locator('a.stat-card').first().click();
 
     await expect(page).toHaveURL(/\/inventory/);
+  });
+
+  test('shows a meal scheduled from the meal-plan page', async ({ authedPage: page }) => {
+    // Unique per run: specs share one seeded account and run in parallel.
+    const recipeName = `E2E Dashboard Dinner ${Date.now()}`;
+
+    await scheduleMealToday(page, recipeName);
+
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+
+    // The preview reads the same collection the meal-plan page just wrote to.
+    // If the two ever point at different collections, this is what fails.
+    const preview = page.locator('.meal-plan-preview');
+    await expect(preview).toContainText(recipeName, { timeout: 20_000 });
+
+    // …and the meal is counted, not just listed.
+    expect(await statNumber(page, 3)).toBeGreaterThanOrEqual(1);
+
+    // It lands on today's row, not on some other day of the week.
+    const todayRow = preview.locator('.meal-plan-day--today');
+    await expect(todayRow).toHaveCount(1);
+    await expect(todayRow).toContainText(recipeName);
   });
 
   test('fits a phone screen without sideways scrolling', async ({ authedPage: page }) => {
