@@ -2,7 +2,7 @@
 
 const defaultStorageLocations = [
   {
-    name: 'Main Fridge',
+    label: 'Main Fridge',
     type: 'fridge',
     icon: '🧊',
     color: '#3498db',
@@ -11,7 +11,7 @@ const defaultStorageLocations = [
     isDefault: true
   },
   {
-    name: 'Freezer',
+    label: 'Freezer',
     type: 'freezer',
     icon: '❄️',
     color: '#9b59b6',
@@ -20,7 +20,7 @@ const defaultStorageLocations = [
     isDefault: true
   },
   {
-    name: 'Pantry',
+    label: 'Pantry',
     type: 'pantry',
     icon: '🏺',
     color: '#e67e22',
@@ -29,7 +29,7 @@ const defaultStorageLocations = [
     isDefault: true
   },
   {
-    name: 'Counter',
+    label: 'Counter',
     type: 'pantry',
     icon: '🍞',
     color: '#f39c12',
@@ -38,7 +38,7 @@ const defaultStorageLocations = [
     isDefault: true
   },
   {
-    name: 'Garage Fridge',
+    label: 'Garage Fridge',
     type: 'fridge',
     icon: '🚗',
     color: '#1abc9c',
@@ -47,7 +47,7 @@ const defaultStorageLocations = [
     isDefault: false
   },
   {
-    name: 'Chest Freezer',
+    label: 'Chest Freezer',
     type: 'freezer',
     icon: '📦',
     color: '#34495e',
@@ -80,14 +80,14 @@ function getLocationsByType(type) {
 
 /**
  * Create a custom location object
- * @param {string} name - Location name
+ * @param {string} label - User-facing location label
  * @param {string} type - Location type
  * @param {object} options - Additional options (icon, color, description)
  * @returns {object} - Storage location object
  */
-function createCustomLocation(name, type, options = {}) {
+function createCustomLocation(label, type, options = {}) {
   return {
-    name,
+    label,
     type,
     icon: options.icon || '📍',
     color: options.color || '#95a5a6',

@@ -3,20 +3,18 @@
 // and a responsive card grid. Delegates item add/edit/delete to parent.
 
 import React, { useState, useMemo } from 'react';
-import {
-  Row, Col, Form, Nav, Spinner, Alert, Button, Badge, InputGroup,
-} from 'react-bootstrap';
+import { Row, Col, Form, Nav, Spinner, Alert, Button, Badge, InputGroup } from 'react-bootstrap';
 import { Search, Plus, Package, X } from 'lucide-react';
 import ItemCard from './ItemCard';
 
 const ALL_TAB = '__all__';
 
 const EXPIRY_FILTERS = [
-  { value: 'all',      label: 'All'         },
-  { value: 'expired',  label: '🔴 Expired'  },
+  { value: 'all', label: 'All' },
+  { value: 'expired', label: '🔴 Expired' },
   { value: 'critical', label: '🟠 ≤ 2 days' },
-  { value: 'warning',  label: '🟡 ≤ 5 days' },
-  { value: 'safe',     label: '🟢 Fresh'    },
+  { value: 'warning', label: '🟡 ≤ 5 days' },
+  { value: 'safe', label: '🟢 Fresh' },
 ];
 
 /**
@@ -30,8 +28,8 @@ const EXPIRY_FILTERS = [
  * @param {function} onDelete    - (item) => void
  */
 const InventoryList = ({ items = [], locations = [], loading, onAdd, onEdit, onDelete }) => {
-  const [activeTab,    setActiveTab]    = useState(ALL_TAB);
-  const [search,       setSearch]       = useState('');
+  const [activeTab, setActiveTab] = useState(ALL_TAB);
+  const [search, setSearch] = useState('');
   const [expiryFilter, setExpiryFilter] = useState('all');
 
   // ---------------------------------------------------------------------------
@@ -79,12 +77,12 @@ const InventoryList = ({ items = [], locations = [], loading, onAdd, onEdit, onD
     if (expiryFilter !== 'all') {
       result = result.filter((i) => {
         if (!i.expiresAt) return expiryFilter === 'safe';
-        const exp  = i.expiresAt?.toDate ? i.expiresAt.toDate() : new Date(i.expiresAt);
+        const exp = i.expiresAt?.toDate ? i.expiresAt.toDate() : new Date(i.expiresAt);
         const days = Math.ceil((exp - new Date()) / (1000 * 60 * 60 * 24));
-        if (expiryFilter === 'expired')  return days < 0;
+        if (expiryFilter === 'expired') return days < 0;
         if (expiryFilter === 'critical') return days >= 0 && days <= 2;
-        if (expiryFilter === 'warning')  return days >= 0 && days <= 5;
-        if (expiryFilter === 'safe')     return days > 5;
+        if (expiryFilter === 'warning') return days >= 0 && days <= 5;
+        if (expiryFilter === 'safe') return days > 5;
         return true;
       });
     }
@@ -117,20 +115,16 @@ const InventoryList = ({ items = [], locations = [], loading, onAdd, onEdit, onD
   // ---------------------------------------------------------------------------
   return (
     <div className="inventory-list">
-
       {/* ── Page header ── */}
       <div className="d-flex justify-content-between align-items-center mb-3">
         <div>
           <h1 className="h3 mb-0">Inventory</h1>
           <small className="text-muted">
-            {items.length} item{items.length !== 1 ? 's' : ''} across {locations.length} location{locations.length !== 1 ? 's' : ''}
+            {items.length} item{items.length !== 1 ? 's' : ''} across {locations.length} location
+            {locations.length !== 1 ? 's' : ''}
           </small>
         </div>
-        <Button
-          variant="primary"
-          className="d-flex align-items-center gap-2"
-          onClick={onAdd}
-        >
+        <Button variant="primary" className="d-flex align-items-center gap-2" onClick={onAdd}>
           <Plus size={18} />
           Add Item
         </Button>
@@ -139,13 +133,18 @@ const InventoryList = ({ items = [], locations = [], loading, onAdd, onEdit, onD
       {/* ── No locations warning ── */}
       {locations.length === 0 && (
         <Alert variant="warning" className="mb-3">
-          You have no storage locations yet. Go to <strong>Settings</strong> to add a location before adding items.
+          You have no storage locations yet. Go to <strong>Settings</strong> to add a location
+          before adding items.
         </Alert>
       )}
 
       {/* ── Location tabs ── */}
       {locations.length > 0 && (
-        <Nav variant="tabs" className="mb-3 flex-nowrap overflow-auto" style={{ borderBottom: '2px solid var(--mkh-border-light)' }}>
+        <Nav
+          variant="tabs"
+          className="mb-3 flex-nowrap overflow-auto"
+          style={{ borderBottom: '2px solid var(--mkh-border-light)' }}
+        >
           <Nav.Item>
             <Nav.Link
               eventKey={ALL_TAB}
@@ -182,7 +181,9 @@ const InventoryList = ({ items = [], locations = [], loading, onAdd, onEdit, onD
       <Row className="mb-3 g-2 align-items-center">
         <Col xs={12} sm={7} md={8}>
           <InputGroup>
-            <InputGroup.Text style={{ background: 'var(--mkh-bg-card)', border: '1px solid var(--mkh-border)' }}>
+            <InputGroup.Text
+              style={{ background: 'var(--mkh-bg-card)', border: '1px solid var(--mkh-border)' }}
+            >
               <Search size={16} className="text-muted" />
             </InputGroup.Text>
             <Form.Control
@@ -211,7 +212,9 @@ const InventoryList = ({ items = [], locations = [], loading, onAdd, onEdit, onD
             style={{ border: '1px solid var(--mkh-border)' }}
           >
             {EXPIRY_FILTERS.map((f) => (
-              <option key={f.value} value={f.value}>{f.label}</option>
+              <option key={f.value} value={f.value}>
+                {f.label}
+              </option>
             ))}
           </Form.Select>
         </Col>
@@ -225,7 +228,11 @@ const InventoryList = ({ items = [], locations = [], loading, onAdd, onEdit, onD
               bg="light"
               text="dark"
               className="d-flex align-items-center gap-1 px-2 py-1"
-              style={{ border: '1px solid var(--mkh-border)', borderRadius: 'var(--mkh-radius-full)', cursor: 'pointer' }}
+              style={{
+                border: '1px solid var(--mkh-border)',
+                borderRadius: 'var(--mkh-radius-full)',
+                cursor: 'pointer',
+              }}
               onClick={() => setSearch('')}
             >
               "{search}" <X size={10} />
@@ -236,7 +243,11 @@ const InventoryList = ({ items = [], locations = [], loading, onAdd, onEdit, onD
               bg="light"
               text="dark"
               className="d-flex align-items-center gap-1 px-2 py-1"
-              style={{ border: '1px solid var(--mkh-border)', borderRadius: 'var(--mkh-radius-full)', cursor: 'pointer' }}
+              style={{
+                border: '1px solid var(--mkh-border)',
+                borderRadius: 'var(--mkh-radius-full)',
+                cursor: 'pointer',
+              }}
               onClick={() => setExpiryFilter('all')}
             >
               {EXPIRY_FILTERS.find((f) => f.value === expiryFilter)?.label} <X size={10} />
@@ -268,7 +279,10 @@ const InventoryList = ({ items = [], locations = [], loading, onAdd, onEdit, onD
           <h6>No items match your filters</h6>
           <Button
             variant="link"
-            onClick={() => { setSearch(''); setExpiryFilter('all'); }}
+            onClick={() => {
+              setSearch('');
+              setExpiryFilter('all');
+            }}
           >
             Clear filters
           </Button>
@@ -288,7 +302,6 @@ const InventoryList = ({ items = [], locations = [], loading, onAdd, onEdit, onD
           ))}
         </Row>
       )}
-
     </div>
   );
 };

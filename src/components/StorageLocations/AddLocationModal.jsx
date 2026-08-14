@@ -6,17 +6,24 @@ import { Modal, Form, Button, Row, Col, Alert } from 'react-bootstrap';
 import { MapPin } from 'lucide-react';
 
 const LOCATION_TYPES = [
-  { value: 'fridge',  label: 'Fridge',  icon: '🧊', defaultColor: '#3498db' },
-  { value: 'freezer', label: 'Freezer', icon: '❄️',  defaultColor: '#9b59b6' },
-  { value: 'pantry',  label: 'Pantry',  icon: '🏺', defaultColor: '#e67e22' },
+  { value: 'fridge', label: 'Fridge', icon: '🧊', defaultColor: '#3498db' },
+  { value: 'freezer', label: 'Freezer', icon: '❄️', defaultColor: '#9b59b6' },
+  { value: 'pantry', label: 'Pantry', icon: '🏺', defaultColor: '#e67e22' },
 ];
 
 const ICON_OPTIONS = ['🧊', '❄️', '🏺', '🍞', '🚗', '📦', '🥩', '🧁', '🫙', '📍'];
 
 const COLOR_OPTIONS = [
-  '#3498db', '#9b59b6', '#e67e22', '#e74c3c',
-  '#2ecc71', '#1abc9c', '#f39c12', '#34495e',
-  '#e91e63', '#00bcd4',
+  '#3498db',
+  '#9b59b6',
+  '#e67e22',
+  '#e74c3c',
+  '#2ecc71',
+  '#1abc9c',
+  '#f39c12',
+  '#34495e',
+  '#e91e63',
+  '#00bcd4',
 ];
 
 /**
@@ -31,18 +38,18 @@ const AddLocationModal = ({ show, onHide, onSave, editLocation = null }) => {
   const isEditing = Boolean(editLocation);
 
   const [label, setLabel] = useState('');
-  const [type,  setType]  = useState('fridge');
-  const [icon,  setIcon]  = useState('🧊');
+  const [type, setType] = useState('fridge');
+  const [icon, setIcon] = useState('🧊');
   const [color, setColor] = useState('#3498db');
-  const [saving, setSaving]   = useState(false);
-  const [error,  setError]    = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   // Pre-fill when editing
   useEffect(() => {
     if (editLocation) {
       setLabel(editLocation.label || '');
-      setType(editLocation.type  || 'fridge');
-      setIcon(editLocation.icon  || '🧊');
+      setType(editLocation.type || 'fridge');
+      setIcon(editLocation.icon || '🧊');
       setColor(editLocation.color || '#3498db');
     } else {
       setLabel('');
@@ -96,7 +103,11 @@ const AddLocationModal = ({ show, onHide, onSave, editLocation = null }) => {
 
       <Form onSubmit={handleSubmit}>
         <Modal.Body className="pt-3">
-          {error && <Alert variant="danger" className="py-2">{error}</Alert>}
+          {error && (
+            <Alert variant="danger" className="py-2">
+              {error}
+            </Alert>
+          )}
 
           {/* Name */}
           <Form.Group className="mb-3">
@@ -133,12 +144,16 @@ const AddLocationModal = ({ show, onHide, onSave, editLocation = null }) => {
                   }}
                 >
                   <div style={{ fontSize: '1.5rem' }}>{t.icon}</div>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 600, marginTop: 4 }}>{t.label}</div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 600, marginTop: 4 }}>
+                    {t.label}
+                  </div>
                 </button>
               ))}
             </div>
             {isEditing && (
-              <Form.Text className="text-muted">Location type cannot be changed after creation.</Form.Text>
+              <Form.Text className="text-muted">
+                Location type cannot be changed after creation.
+              </Form.Text>
             )}
           </Form.Group>
 
@@ -201,7 +216,9 @@ const AddLocationModal = ({ show, onHide, onSave, editLocation = null }) => {
             <div style={{ fontSize: '2rem' }}>{icon}</div>
             <div>
               <div style={{ fontWeight: 700, color }}>{label || 'Location Name'}</div>
-              <div style={{ fontSize: '0.8rem', color: '#6c757d', textTransform: 'capitalize' }}>{type}</div>
+              <div style={{ fontSize: '0.8rem', color: '#6c757d', textTransform: 'capitalize' }}>
+                {type}
+              </div>
             </div>
           </div>
         </Modal.Body>

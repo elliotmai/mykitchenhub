@@ -27,10 +27,10 @@ const functionsUrl = process.env.REACT_APP_FIREBASE_FUNCTIONS_URL;
 
 /**
  * useAuth Hook
- * 
+ *
  * Access authentication state and methods from any component.
  * Must be used within an AuthProvider.
- * 
+ *
  * Usage:
  * const { user, loading, login, signup, logout } = useAuth();
  */
@@ -44,7 +44,7 @@ export const useAuth = () => {
 
 /**
  * AuthProvider Component
- * 
+ *
  * Wraps the app and provides authentication context to all children.
  * Handles auth state persistence and user session management.
  */
@@ -88,26 +88,22 @@ export const AuthProvider = ({ children }) => {
   const createUserProfile = async (userId, email, displayName = null) => {
     try {
       // Call the Cloud Function to set up the user
-      
-      
+
       if (!functionsUrl) {
         throw new Error('REACT_APP_FIREBASE_FUNCTIONS_URL not configured');
       }
 
-      const response = await fetch(
-        `${functionsUrl}/onUserCreated`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            userId,
-            email,
-            displayName: displayName || email.split('@')[0],
-          }),
-        }
-      );
+      const response = await fetch(`${functionsUrl}/onUserCreated`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId,
+          email,
+          displayName: displayName || email.split('@')[0],
+        }),
+      });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -120,7 +116,7 @@ export const AuthProvider = ({ children }) => {
       // Fetch the created user profile
       const userRef = doc(db, 'users', userId);
       const userDoc = await getDoc(userRef);
-      
+
       if (userDoc.exists()) {
         const userData = userDoc.data();
         setUserProfile(userData);
@@ -130,7 +126,7 @@ export const AuthProvider = ({ children }) => {
       throw new Error('User profile not found after creation');
     } catch (error) {
       console.error('Error creating user profile via Cloud Function:', error);
-      
+
       // Fallback: Create basic user document if Cloud Function fails
       console.log('Falling back to local user creation...');
       const userRef = doc(db, 'users', userId);
@@ -142,33 +138,33 @@ export const AuthProvider = ({ children }) => {
           smsAlerts: {
             enabled: false,
             phoneNumber: '',
-            time: '09:00'
+            time: '09:00',
           },
           notifications: {
             expiringSoon: true,
             mealPlanReminders: true,
-            lowInventory: false
+            lowInventory: false,
           },
           dietary: {
             restrictions: [],
             preferences: [],
-            allergies: []
+            allergies: [],
           },
           helloFresh: {
             linked: false,
-            deliveryDays: [1, 3, 5]
-          }
+            deliveryDays: [1, 3, 5],
+          },
         },
         stats: {
           totalRecipes: 0,
           totalItems: 0,
-          wasteReduction: 0
-        }
+          wasteReduction: 0,
+        },
       };
 
       await setDoc(userRef, fallbackData);
       setUserProfile(fallbackData);
-      
+
       // Create basic storage locations as fallback
       const defaultLocations = [
         { name: 'Main Fridge', type: 'fridge', icon: '🧊', color: '#3498db', order: 1 },
@@ -178,7 +174,13 @@ export const AuthProvider = ({ children }) => {
       ];
 
       for (const location of defaultLocations) {
-        const locationRef = doc(db, 'users', userId, 'storageLocations', `${location.type}_${location.order}`);
+        const locationRef = doc(
+          db,
+          'users',
+          userId,
+          'storageLocations',
+          `${location.type}_${location.order}`
+        );
         await setDoc(locationRef, {
           ...location,
           isDefault: true,
@@ -186,9 +188,9 @@ export const AuthProvider = ({ children }) => {
           createdAt: serverTimestamp(),
         });
       }
-      
+
       console.log('Created fallback storage locations');
-      
+
       return fallbackData;
     }
   };
@@ -200,7 +202,7 @@ export const AuthProvider = ({ children }) => {
     setError(null);
     try {
       const { user: newUser } = await createUserWithEmailAndPassword(auth, email, password);
-      
+
       // Update display name if provided
       if (displayName) {
         await updateProfile(newUser, { displayName });
@@ -262,69 +264,78 @@ export const AuthProvider = ({ children }) => {
   /**
    * Update user profile
    */
-  const updateUserProfile = useCallback(async (updates) => {
-    if (!user) return { success: false, error: 'No user logged in' };
+  const updateUserProfile = useCallback(
+    async (updates) => {
+      if (!user) return { success: false, error: 'No user logged in' };
 
-    try {
-      // Update Firebase Auth profile if display name is included
-      if (updates.displayName) {
-        await updateProfile(user, { displayName: updates.displayName });
+      try {
+        // Update Firebase Auth profile if display name is included
+        if (updates.displayName) {
+          await updateProfile(user, { displayName: updates.displayName });
+        }
+
+        // Update Firestore profile
+        const userRef = doc(db, 'users', user.uid);
+        await setDoc(userRef, updates, { merge: true });
+
+        setUserProfile((prev) => ({ ...prev, ...updates }));
+        return { success: true };
+      } catch (err) {
+        return { success: false, error: err.message };
       }
-
-      // Update Firestore profile
-      const userRef = doc(db, 'users', user.uid);
-      await setDoc(userRef, updates, { merge: true });
-      
-      setUserProfile(prev => ({ ...prev, ...updates }));
-      return { success: true };
-    } catch (err) {
-      return { success: false, error: err.message };
-    }
-  }, [user]);
+    },
+    [user]
+  );
 
   /**
    * Update user email
    */
-  const updateUserEmail = useCallback(async (newEmail, currentPassword) => {
-    if (!user) return { success: false, error: 'No user logged in' };
+  const updateUserEmail = useCallback(
+    async (newEmail, currentPassword) => {
+      if (!user) return { success: false, error: 'No user logged in' };
 
-    try {
-      // Re-authenticate first
-      const credential = EmailAuthProvider.credential(user.email, currentPassword);
-      await reauthenticateWithCredential(user, credential);
-      
-      // Update email
-      await updateEmail(user, newEmail);
-      
-      // Update Firestore
-      const userRef = doc(db, 'users', user.uid);
-      await setDoc(userRef, { email: newEmail }, { merge: true });
-      
-      return { success: true };
-    } catch (err) {
-      return { success: false, error: getAuthErrorMessage(err.code) };
-    }
-  }, [user]);
+      try {
+        // Re-authenticate first
+        const credential = EmailAuthProvider.credential(user.email, currentPassword);
+        await reauthenticateWithCredential(user, credential);
+
+        // Update email
+        await updateEmail(user, newEmail);
+
+        // Update Firestore
+        const userRef = doc(db, 'users', user.uid);
+        await setDoc(userRef, { email: newEmail }, { merge: true });
+
+        return { success: true };
+      } catch (err) {
+        return { success: false, error: getAuthErrorMessage(err.code) };
+      }
+    },
+    [user]
+  );
 
   /**
    * Update user password
    */
-  const updateUserPassword = useCallback(async (currentPassword, newPassword) => {
-    if (!user) return { success: false, error: 'No user logged in' };
+  const updateUserPassword = useCallback(
+    async (currentPassword, newPassword) => {
+      if (!user) return { success: false, error: 'No user logged in' };
 
-    try {
-      // Re-authenticate first
-      const credential = EmailAuthProvider.credential(user.email, currentPassword);
-      await reauthenticateWithCredential(user, credential);
-      
-      // Update password
-      await updatePassword(user, newPassword);
-      
-      return { success: true };
-    } catch (err) {
-      return { success: false, error: getAuthErrorMessage(err.code) };
-    }
-  }, [user]);
+      try {
+        // Re-authenticate first
+        const credential = EmailAuthProvider.credential(user.email, currentPassword);
+        await reauthenticateWithCredential(user, credential);
+
+        // Update password
+        await updatePassword(user, newPassword);
+
+        return { success: true };
+      } catch (err) {
+        return { success: false, error: getAuthErrorMessage(err.code) };
+      }
+    },
+    [user]
+  );
 
   const value = {
     // State
@@ -333,7 +344,7 @@ export const AuthProvider = ({ children }) => {
     loading,
     error,
     isAuthenticated: !!user,
-    
+
     // Methods
     login,
     signup,
@@ -344,11 +355,7 @@ export const AuthProvider = ({ children }) => {
     updateUserPassword,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
 /**
@@ -356,9 +363,11 @@ export const AuthProvider = ({ children }) => {
  */
 const getAuthErrorMessage = (errorCode) => {
   const errorMessages = {
-    'auth/email-already-in-use': 'This email is already registered. Please log in or use a different email.',
+    'auth/email-already-in-use':
+      'This email is already registered. Please log in or use a different email.',
     'auth/invalid-email': 'Please enter a valid email address.',
-    'auth/operation-not-allowed': 'Email/password accounts are not enabled. Please contact support.',
+    'auth/operation-not-allowed':
+      'Email/password accounts are not enabled. Please contact support.',
     'auth/weak-password': 'Password is too weak. Please use at least 6 characters.',
     'auth/user-disabled': 'This account has been disabled. Please contact support.',
     'auth/user-not-found': 'No account found with this email. Please sign up first.',

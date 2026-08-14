@@ -1,6 +1,6 @@
 {
   "name": "mykitchenhub",
-  "version": "1.3.0",
+  "version": "0.3.2",
   "private": true,
   "description": "Recipe & Inventory Management Progressive Web Application",
   "dependencies": {
@@ -21,27 +21,73 @@
   },
   "devDependencies": {
     "@craco/craco": "^7.1.0",
+    "@playwright/test": "^1.62.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^14.3.1",
+    "@testing-library/user-event": "^14.6.4",
     "@types/papaparse": "^5.3.14",
+    "cross-env": "^7.0.3",
     "eslint": "^8.55.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-config-react-app": "^7.0.1",
+    "npm-run-all": "^4.1.5",
     "prettier": "^3.1.0",
+    "serve": "^14.2.6",
     "workbox-webpack-plugin": "^7.4.0",
     "workbox-window": "^7.4.0"
   },
   "scripts": {
     "prepare": "node .githooks/install.mjs",
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
+    "start": "craco start",
+    "build": "craco build",
     "eject": "react-scripts eject",
+    "test": "craco test",
+    "test:ci": "cross-env CI=true craco test --coverage --watchAll=false --passWithNoTests",
+    "test:coverage": "cross-env CI=true craco test --coverage --watchAll=false",
+    "test:functions": "npm --prefix functions test",
+    "test:rules": "npm --prefix firestore run test:rules",
+    "test:e2e": "firestore/node_modules/.bin/firebase emulators:exec --only auth,firestore --project mykitchenhub-e2e \"playwright test\"",
+    "test:e2e:ui": "firestore/node_modules/.bin/firebase emulators:exec --only auth,firestore --project mykitchenhub-e2e \"playwright test --ui\"",
+    "test:all": "run-s test:ci test:functions test:rules",
     "lint": "eslint src/",
-    "format": "prettier --write src/"
+    "lint:fix": "eslint src/ --fix",
+    "format": "prettier --write src/ e2e/ *.js",
+    "format:check": "prettier --check src/ e2e/ *.js",
+    "validate": "run-s lint format:check test:ci build",
+    "build:e2e": "cross-env REACT_APP_USE_EMULATORS=true REACT_APP_FIREBASE_API_KEY=fake-api-key REACT_APP_FIREBASE_AUTH_DOMAIN=localhost REACT_APP_FIREBASE_PROJECT_ID=mykitchenhub-e2e REACT_APP_FIREBASE_STORAGE_BUCKET=mykitchenhub-e2e.appspot.com REACT_APP_FIREBASE_MESSAGING_SENDER_ID=000000000000 REACT_APP_FIREBASE_APP_ID=1:000000000000:web:e2e REACT_APP_FIREBASE_FUNCTIONS_URL=http://127.0.0.1:5001/mykitchenhub-e2e/us-central1 craco build"
   },
   "eslintConfig": {
     "extends": [
-      "react-app"
+      "react-app",
+      "react-app/jest"
     ]
+  },
+  "jest": {
+    "resetMocks": false,
+    "collectCoverageFrom": [
+      "src/**/*.{js,jsx}",
+      "!src/index.js",
+      "!src/reportWebVitals.js",
+      "!src/service-worker.js",
+      "!src/serviceWorkerRegistration.js",
+      "!src/components/FirebaseTest.jsx",
+      "!src/test-utils/**",
+      "!src/**/__tests__/**",
+      "!src/**/*.{test,spec}.{js,jsx}"
+    ],
+    "coverageReporters": [
+      "text-summary",
+      "lcov",
+      "json-summary"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "statements": 55,
+        "branches": 38,
+        "functions": 48,
+        "lines": 57
+      }
+    }
   },
   "browserslist": {
     "production": [

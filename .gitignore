@@ -39,3 +39,11 @@ serviceAccountKey.json
 # Misc
 *.log
 .cache
+
+# Testing
+/playwright-report
+/test-results
+/blob-report
+firestore-debug.log
+firebase-debug.log
+ui-debug.log

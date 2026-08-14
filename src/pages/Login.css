@@ -8,7 +8,7 @@
    -------------------------------------------------------------------------- */
 .login-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, var(--mkh-bg-primary) 0%, #EDE8E0 100%);
+  background: linear-gradient(135deg, var(--mkh-bg-primary) 0%, #ede8e0 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -156,7 +156,9 @@
   border: 2px solid var(--mkh-border);
   border-radius: var(--mkh-radius-md);
   font-size: var(--mkh-font-size-base);
-  transition: border-color var(--mkh-transition-fast), box-shadow var(--mkh-transition-fast);
+  transition:
+    border-color var(--mkh-transition-fast),
+    box-shadow var(--mkh-transition-fast);
 }
 
 .login-input:focus {

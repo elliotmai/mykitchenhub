@@ -41,7 +41,7 @@ import {
 
 /**
  * App Routes Component
- * 
+ *
  * Defines all application routes with authentication handling.
  */
 const AppRoutes = () => {
@@ -85,7 +85,7 @@ const AppRoutes = () => {
 
 /**
  * App Component
- * 
+ *
  * Root component wrapped with all necessary providers:
  * - BrowserRouter: Client-side routing
  * - AuthProvider: Authentication state

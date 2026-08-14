@@ -14,6 +14,15 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.08.14',
+    date: 'August 2026',
+    items: [
+      '🏷️ Your default storage locations (Main Fridge, Freezer, Pantry, Counter) now show their names properly instead of appearing blank.',
+      '📴 Offline mode actually works now — the app caches itself properly so you can check your kitchen without a signal.',
+      '🔢 The version at the bottom of the screen now tells you exactly which build you are on.',
+    ],
+  },
+  {
     version: '2026.07.26',
     date: 'July 2026',
     items: [

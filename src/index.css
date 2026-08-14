@@ -126,7 +126,9 @@ html {
 .page-enter-active {
   opacity: 1;
   transform: translateY(0);
-  transition: opacity var(--mkh-transition-base), transform var(--mkh-transition-base);
+  transition:
+    opacity var(--mkh-transition-base),
+    transform var(--mkh-transition-base);
 }
 
 .page-exit {

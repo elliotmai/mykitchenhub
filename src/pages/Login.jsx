@@ -20,7 +20,7 @@ const AUTH_MODE = {
 
 /**
  * Login Page Component
- * 
+ *
  * Handles user authentication with three modes:
  * - Login: Sign in with email/password
  * - Signup: Create new account
@@ -231,7 +231,9 @@ const Login = () => {
                           onChange={(e) => setPassword(e.target.value)}
                           className="login-input login-input--password"
                           required
-                          autoComplete={mode === AUTH_MODE.SIGNUP ? 'new-password' : 'current-password'}
+                          autoComplete={
+                            mode === AUTH_MODE.SIGNUP ? 'new-password' : 'current-password'
+                          }
                         />
                         <button
                           type="button"

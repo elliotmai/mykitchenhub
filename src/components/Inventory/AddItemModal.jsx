@@ -8,9 +8,21 @@ import { Package } from 'lucide-react';
 import { SHELF_LIFE_DEFAULTS } from '../../hooks/useInventory';
 
 const UNIT_OPTIONS = [
-  '', 'lbs', 'oz', 'kg', 'g',
-  'cups', 'fl oz', 'L', 'ml',
-  'pieces', 'slices', 'cans', 'bags', 'boxes', 'jars',
+  '',
+  'lbs',
+  'oz',
+  'kg',
+  'g',
+  'cups',
+  'fl oz',
+  'L',
+  'ml',
+  'pieces',
+  'slices',
+  'cans',
+  'bags',
+  'boxes',
+  'jars',
 ];
 
 const EMPTY_FORM = {
@@ -72,9 +84,11 @@ const AddItemModal = ({ show, onHide, onSave, locations = [], editItem = null })
       locationId: locationId,
       locationType: lt,
       // Only set default shelfLifeDays if user hasn't typed a custom value
-      shelfLifeDays: prev.shelfLifeDays === '' || prev.shelfLifeDays === String(SHELF_LIFE_DEFAULTS[prev.locationType])
-        ? String(SHELF_LIFE_DEFAULTS[lt] ?? '')
-        : prev.shelfLifeDays,
+      shelfLifeDays:
+        prev.shelfLifeDays === '' ||
+        prev.shelfLifeDays === String(SHELF_LIFE_DEFAULTS[prev.locationType])
+          ? String(SHELF_LIFE_DEFAULTS[lt] ?? '')
+          : prev.shelfLifeDays,
     }));
   };
 
@@ -131,10 +145,10 @@ const AddItemModal = ({ show, onHide, onSave, locations = [], editItem = null })
 
   const previewDate = previewDays
     ? (() => {
-      const d = new Date();
-      d.setDate(d.getDate() + previewDays);
-      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-    })()
+        const d = new Date();
+        d.setDate(d.getDate() + previewDays);
+        return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+      })()
     : null;
 
   return (
@@ -148,11 +162,17 @@ const AddItemModal = ({ show, onHide, onSave, locations = [], editItem = null })
 
       <Form onSubmit={handleSubmit}>
         <Modal.Body className="pt-3">
-          {error && <Alert variant="danger" className="py-2">{error}</Alert>}
+          {error && (
+            <Alert variant="danger" className="py-2">
+              {error}
+            </Alert>
+          )}
 
           {/* Name */}
           <Form.Group className="mb-3">
-            <Form.Label className="fw-semibold">Item Name <span className="text-danger">*</span></Form.Label>
+            <Form.Label className="fw-semibold">
+              Item Name <span className="text-danger">*</span>
+            </Form.Label>
             <Form.Control
               type="text"
               placeholder='e.g. "Chicken Breast" or "Whole Milk"'
@@ -167,7 +187,9 @@ const AddItemModal = ({ show, onHide, onSave, locations = [], editItem = null })
           <Row className="mb-3">
             <Col xs={5}>
               <Form.Group>
-                <Form.Label className="fw-semibold">Quantity <span className="text-danger">*</span></Form.Label>
+                <Form.Label className="fw-semibold">
+                  Quantity <span className="text-danger">*</span>
+                </Form.Label>
                 <Form.Control
                   type="number"
                   placeholder="e.g. 2"
@@ -183,7 +205,9 @@ const AddItemModal = ({ show, onHide, onSave, locations = [], editItem = null })
                 <Form.Label className="fw-semibold">Unit</Form.Label>
                 <Form.Select value={form.unit} onChange={handleChange('unit')}>
                   {UNIT_OPTIONS.map((u) => (
-                    <option key={u} value={u}>{u || '— none —'}</option>
+                    <option key={u} value={u}>
+                      {u || '— none —'}
+                    </option>
                   ))}
                 </Form.Select>
               </Form.Group>
@@ -192,7 +216,9 @@ const AddItemModal = ({ show, onHide, onSave, locations = [], editItem = null })
 
           {/* Storage Location */}
           <Form.Group className="mb-3">
-            <Form.Label className="fw-semibold">Storage Location <span className="text-danger">*</span></Form.Label>
+            <Form.Label className="fw-semibold">
+              Storage Location <span className="text-danger">*</span>
+            </Form.Label>
             {locations.length === 0 ? (
               <Alert variant="warning" className="py-2 mb-0">
                 No storage locations found. Add one in Settings first.
@@ -205,7 +231,8 @@ const AddItemModal = ({ show, onHide, onSave, locations = [], editItem = null })
                 <option value="">Select a location…</option>
                 {locations.map((loc) => (
                   <option key={loc.id} value={loc.id}>
-                    {loc.icon ? `${loc.icon} ` : ''}{loc.label} ({loc.type})
+                    {loc.icon ? `${loc.icon} ` : ''}
+                    {loc.label} ({loc.type})
                   </option>
                 ))}
               </Form.Select>
@@ -217,7 +244,11 @@ const AddItemModal = ({ show, onHide, onSave, locations = [], editItem = null })
             <Form.Label className="fw-semibold">Shelf Life (days)</Form.Label>
             <Form.Control
               type="number"
-              placeholder={form.locationType ? `Default: ${SHELF_LIFE_DEFAULTS[form.locationType] ?? 30}` : 'Select a location first'}
+              placeholder={
+                form.locationType
+                  ? `Default: ${SHELF_LIFE_DEFAULTS[form.locationType] ?? 30}`
+                  : 'Select a location first'
+              }
               value={form.shelfLifeDays}
               onChange={handleChange('shelfLifeDays')}
               min="1"
@@ -275,7 +306,6 @@ const AddItemModal = ({ show, onHide, onSave, locations = [], editItem = null })
               </Col>
             </Row>
           )}
-
         </Modal.Body>
 
         <Modal.Footer className="border-0 pt-0">

@@ -4,14 +4,18 @@
   "description": "Firestore schema initialization and testing scripts for MyKitchenHub",
   "scripts": {
     "init": "node initializeSchema.js",
-    "test": "node testCRUD.js",
-    "deploy-rules": "firebase deploy --only firestore:rules"
+    "test": "npm run test:rules",
+    "deploy-rules": "firebase deploy --only firestore:rules",
+    "test:rules": "firebase emulators:exec --only firestore --project mykitchenhub-rules-test \"jest tests --runInBand\"",
+    "test:crud": "node testCRUD.js"
   },
   "dependencies": {
     "dotenv": "^17.3.1",
     "firebase-admin": "^12.0.0"
   },
   "devDependencies": {
-    "firebase-tools": "^13.0.0"
+    "@firebase/rules-unit-testing": "^3.0.4",
+    "firebase-tools": "^13.0.0",
+    "jest": "^29.7.0"
   }
 }

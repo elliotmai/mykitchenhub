@@ -4,20 +4,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { auth, db, isFirebaseInitialized } from '../services/firebase';
-import { 
-  createUserWithEmailAndPassword, 
+import {
+  createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
-  onAuthStateChanged 
+  onAuthStateChanged,
 } from 'firebase/auth';
-import { 
-  collection, 
-  addDoc, 
-  getDocs, 
-  serverTimestamp,
-  deleteDoc,
-  doc 
-} from 'firebase/firestore';
+import { collection, addDoc, getDocs, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
 
 const FirebaseTest = () => {
   const [status, setStatus] = useState({
@@ -34,7 +27,7 @@ const FirebaseTest = () => {
   // Check Firebase initialization on mount
   useEffect(() => {
     // Check basic initialization
-    setStatus(prev => ({
+    setStatus((prev) => ({
       ...prev,
       firebase: isFirebaseInitialized() ? '✅ Connected' : '❌ Not initialized',
     }));
@@ -42,7 +35,7 @@ const FirebaseTest = () => {
     // Listen for auth state changes
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-      setStatus(prev => ({
+      setStatus((prev) => ({
         ...prev,
         auth: currentUser ? `✅ Signed in as ${currentUser.email}` : '✅ Ready (not signed in)',
       }));
@@ -59,25 +52,25 @@ const FirebaseTest = () => {
     try {
       // Try to read from Firestore
       const testCollection = collection(db, '_connectionTest');
-      
+
       // Write a test document
       const docRef = await addDoc(testCollection, {
         test: true,
         timestamp: serverTimestamp(),
       });
-      
+
       // Read it back
       const snapshot = await getDocs(testCollection);
-      
+
       // Clean up - delete the test document
       await deleteDoc(doc(db, '_connectionTest', docRef.id));
-      
-      setStatus(prev => ({
+
+      setStatus((prev) => ({
         ...prev,
         firestore: `✅ Connected (read/write working)`,
       }));
     } catch (error) {
-      setStatus(prev => ({
+      setStatus((prev) => ({
         ...prev,
         firestore: `❌ Error: ${error.message}`,
       }));
@@ -91,11 +84,7 @@ const FirebaseTest = () => {
     setMessage('');
 
     try {
-      const userCredential = await createUserWithEmailAndPassword(
-        auth, 
-        testEmail, 
-        testPassword
-      );
+      const userCredential = await createUserWithEmailAndPassword(auth, testEmail, testPassword);
       setMessage(`✅ Account created for ${userCredential.user.email}`);
     } catch (error) {
       setMessage(`❌ Sign up error: ${error.message}`);
@@ -110,11 +99,7 @@ const FirebaseTest = () => {
     setMessage('');
 
     try {
-      const userCredential = await signInWithEmailAndPassword(
-        auth, 
-        testEmail, 
-        testPassword
-      );
+      const userCredential = await signInWithEmailAndPassword(auth, testEmail, testPassword);
       setMessage(`✅ Signed in as ${userCredential.user.email}`);
     } catch (error) {
       setMessage(`❌ Sign in error: ${error.message}`);
@@ -217,7 +202,7 @@ const FirebaseTest = () => {
   return (
     <div style={styles.container}>
       <h1 style={styles.header}>🔥 Firebase Connection Test</h1>
-      
+
       <div style={styles.warning}>
         ⚠️ <strong>Delete this component</strong> after confirming Firebase works!
         <br />
@@ -235,7 +220,7 @@ const FirebaseTest = () => {
           <span>Authentication:</span>
           <span>{status.auth}</span>
         </div>
-        <div style={{...styles.statusItem, borderBottom: 'none'}}>
+        <div style={{ ...styles.statusItem, borderBottom: 'none' }}>
           <span>Firestore Database:</span>
           <span>{status.firestore}</span>
         </div>
@@ -244,10 +229,10 @@ const FirebaseTest = () => {
       {/* Auth Test Form */}
       <div style={styles.form}>
         <h3>Test Authentication</h3>
-        <p style={{color: '#7F8C8D', fontSize: '14px'}}>
+        <p style={{ color: '#7F8C8D', fontSize: '14px' }}>
           Use a test email (can be fake, e.g., test@example.com)
         </p>
-        
+
         <form onSubmit={handleSignIn}>
           <input
             type="email"
@@ -266,29 +251,29 @@ const FirebaseTest = () => {
             minLength={6}
             required
           />
-          
+
           <div>
-            <button 
+            <button
               type="button"
               onClick={handleSignUp}
               disabled={loading}
-              style={{...styles.button, ...styles.secondaryButton}}
+              style={{ ...styles.button, ...styles.secondaryButton }}
             >
               {loading ? '...' : 'Sign Up'}
             </button>
-            <button 
+            <button
               type="submit"
               disabled={loading}
-              style={{...styles.button, ...styles.primaryButton}}
+              style={{ ...styles.button, ...styles.primaryButton }}
             >
               {loading ? '...' : 'Sign In'}
             </button>
             {user && (
-              <button 
+              <button
                 type="button"
                 onClick={handleSignOut}
                 disabled={loading}
-                style={{...styles.button, ...styles.dangerButton}}
+                style={{ ...styles.button, ...styles.dangerButton }}
               >
                 Sign Out
               </button>
@@ -296,16 +281,12 @@ const FirebaseTest = () => {
           </div>
         </form>
 
-        {message && (
-          <div style={styles.message}>
-            {message}
-          </div>
-        )}
+        {message && <div style={styles.message}>{message}</div>}
       </div>
 
       {/* Current User Info */}
       {user && (
-        <div style={{...styles.statusCard, marginTop: '20px'}}>
+        <div style={{ ...styles.statusCard, marginTop: '20px' }}>
           <h3>Current User</h3>
           <div style={styles.statusItem}>
             <span>Email:</span>
@@ -313,9 +294,9 @@ const FirebaseTest = () => {
           </div>
           <div style={styles.statusItem}>
             <span>UID:</span>
-            <span style={{fontSize: '12px'}}>{user.uid}</span>
+            <span style={{ fontSize: '12px' }}>{user.uid}</span>
           </div>
-          <div style={{...styles.statusItem, borderBottom: 'none'}}>
+          <div style={{ ...styles.statusItem, borderBottom: 'none' }}>
             <span>Created:</span>
             <span>{new Date(user.metadata.creationTime).toLocaleDateString()}</span>
           </div>

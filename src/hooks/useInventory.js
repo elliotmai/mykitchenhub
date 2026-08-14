@@ -22,8 +22,8 @@ import { useAuth } from './useAuth';
 // ---------------------------------------------------------------------------
 export const SHELF_LIFE_DEFAULTS = {
   freezer: 180,
-  fridge:  7,
-  pantry:  90,
+  fridge: 7,
+  pantry: 90,
 };
 
 // ---------------------------------------------------------------------------
@@ -42,11 +42,11 @@ export const calcExpiresAt = (locationType, shelfLifeDays) => {
 // ---------------------------------------------------------------------------
 export const getExpirationStatus = (expiresAt) => {
   if (!expiresAt) return 'safe';
-  const now  = new Date();
-  const exp  = expiresAt?.toDate ? expiresAt.toDate() : new Date(expiresAt);
+  const now = new Date();
+  const exp = expiresAt?.toDate ? expiresAt.toDate() : new Date(expiresAt);
   const days = Math.ceil((exp - now) / (1000 * 60 * 60 * 24));
 
-  if (days < 0)  return 'expired';
+  if (days < 0) return 'expired';
   if (days <= 2) return 'critical';
   if (days <= 5) return 'warning';
   return 'safe';
@@ -57,11 +57,11 @@ export const getExpirationStatus = (expiresAt) => {
 // ---------------------------------------------------------------------------
 export const getExpirationLabel = (expiresAt) => {
   if (!expiresAt) return 'No expiry';
-  const now  = new Date();
-  const exp  = expiresAt?.toDate ? expiresAt.toDate() : new Date(expiresAt);
+  const now = new Date();
+  const exp = expiresAt?.toDate ? expiresAt.toDate() : new Date(expiresAt);
   const days = Math.ceil((exp - now) / (1000 * 60 * 60 * 24));
 
-  if (days < 0)  return `Expired ${Math.abs(days)}d ago`;
+  if (days < 0) return `Expired ${Math.abs(days)}d ago`;
   if (days === 0) return 'Expires today';
   if (days === 1) return 'Expires tomorrow';
   if (days <= 30) return `Expires in ${days}d`;
@@ -81,9 +81,9 @@ export const getExpirationLabel = (expiresAt) => {
  */
 const useInventory = () => {
   const { user } = useAuth();
-  const [items,   setItems]   = useState([]);
+  const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState(null);
+  const [error, setError] = useState(null);
 
   // ---------------------------------------------------------------------------
   // Real-time listener
@@ -120,12 +120,23 @@ const useInventory = () => {
   // Add item
   // ---------------------------------------------------------------------------
   const addItem = useCallback(
-    async ({ name, quantity, unit, locationId, locationType, notes, shelfLifeDays, price, store }) => {
+    async ({
+      name,
+      quantity,
+      unit,
+      locationId,
+      locationType,
+      notes,
+      shelfLifeDays,
+      price,
+      store,
+    }) => {
       if (!user?.uid) return { success: false, error: 'Not authenticated' };
 
-      if (!name?.trim())           return { success: false, error: 'Name is required.' };
-      if (!quantity || quantity <= 0) return { success: false, error: 'Quantity must be greater than 0.' };
-      if (!locationId)      return { success: false, error: 'Please select a storage location.' };
+      if (!name?.trim()) return { success: false, error: 'Name is required.' };
+      if (!quantity || quantity <= 0)
+        return { success: false, error: 'Quantity must be greater than 0.' };
+      if (!locationId) return { success: false, error: 'Please select a storage location.' };
       if (!['fridge', 'freezer', 'pantry'].includes(locationType))
         return { success: false, error: 'Invalid location type.' };
 
@@ -135,24 +146,26 @@ const useInventory = () => {
         const now = new Date();
 
         await addDoc(collection(db, 'users', user.uid, 'inventory'), {
-          name:              name.trim(),
-          normalized:        name.trim().toLowerCase(),
-          quantity:          Number(quantity),
-          unit:              unit || '',
+          name: name.trim(),
+          normalized: name.trim().toLowerCase(),
+          quantity: Number(quantity),
+          unit: unit || '',
           locationId,
           locationType,
-          addedAt:           serverTimestamp(),
+          addedAt: serverTimestamp(),
           expiresAt,
-          shelfLifeDays:     resolvedShelfLife,
-          notes:             notes || '',
-          addedBy:            'manual',
-          purchaseHistory: [{
-            addedAt:  now,
-            quantity: Number(quantity),
-            unit:     unit || '',
-            price:    price ? Number(price) : null,
-            store:    store || '',
-          }],
+          shelfLifeDays: resolvedShelfLife,
+          notes: notes || '',
+          source: 'manual',
+          purchaseHistory: [
+            {
+              addedAt: now,
+              quantity: Number(quantity),
+              unit: unit || '',
+              price: price ? Number(price) : null,
+              store: store || '',
+            },
+          ],
           totalTimesPurchased: 1,
         });
 
@@ -179,7 +192,7 @@ const useInventory = () => {
         const patch = { ...updates, updatedAt: serverTimestamp() };
         if (updates.locationType || updates.shelfLifeDays) {
           const existing = items.find((i) => i.id === itemId);
-          const lt  = updates.locationType  ?? existing?.locationType;
+          const lt = updates.locationType ?? existing?.locationType;
           const sld = updates.shelfLifeDays ?? existing?.shelfLifeDays;
           patch.expiresAt = calcExpiresAt(lt, sld);
         }
@@ -215,10 +228,7 @@ const useInventory = () => {
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
-  const getItemById = useCallback(
-    (id) => items.find((i) => i.id === id) || null,
-    [items]
-  );
+  const getItemById = useCallback((id) => items.find((i) => i.id === id) || null, [items]);
 
   const getItemsByLocation = useCallback(
     (locationId) => items.filter((i) => i.locationId === locationId),

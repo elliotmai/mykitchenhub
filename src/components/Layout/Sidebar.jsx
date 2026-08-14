@@ -64,11 +64,11 @@ const BOTTOM_NAV_ITEMS = [
 
 /**
  * Sidebar Component
- * 
+ *
  * Responsive navigation sidebar:
  * - Desktop: Fixed sidebar on the left
  * - Mobile: Slide-in overlay with backdrop
- * 
+ *
  * @param {boolean} isOpen - Whether sidebar is open (mobile)
  * @param {function} onClose - Callback to close sidebar
  * @param {number} alertCount - Number of active alerts
@@ -87,11 +87,7 @@ const Sidebar = ({ isOpen, onClose, alertCount = 0 }) => {
   // Handle click outside to close (mobile)
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (
-        isOpen &&
-        sidebarRef.current &&
-        !sidebarRef.current.contains(event.target)
-      ) {
+      if (isOpen && sidebarRef.current && !sidebarRef.current.contains(event.target)) {
         onClose();
       }
     };

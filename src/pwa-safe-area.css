@@ -5,7 +5,6 @@
    This file handles safe areas for installed PWA mode where the app
    runs fullscreen without browser chrome.
    ========================================================================== */
-   
 
 /* --------------------------------------------------------------------------
    PWA Standalone Mode - Fixed Navbar Handling
@@ -17,7 +16,6 @@
    3. Adjust main content and sidebar positioning
    -------------------------------------------------------------------------- */
 @media all and (display-mode: standalone) {
-
   /* --- Body background for status bar area --- */
   body {
     /* Background color shows behind status bar */
@@ -102,9 +100,8 @@
    Offline Indicator (fixed at bottom)
    -------------------------------------------------------------------------- */
 @media all and (display-mode: standalone) {
-
   .offline-indicator,
-  [class*="offline"]>div:last-child {
+  [class*='offline'] > div:last-child {
     bottom: env(safe-area-inset-bottom, 0px) !important;
   }
 }

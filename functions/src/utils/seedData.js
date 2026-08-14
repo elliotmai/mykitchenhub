@@ -88,7 +88,7 @@ async function seedInventory(userId, itemCount = 20) {
     }
     
     // Ensure location has all required properties
-    if (!location.id || !location.name || !location.type) {
+    if (!location.id || !location.label || !location.type) {
       console.warn(`Invalid location data for ${item.name}, skipping`);
       continue;
     }
@@ -106,11 +106,11 @@ async function seedInventory(userId, itemCount = 20) {
       quantity: item.quantity,
       unit: item.unit,
       locationId: location.id,
-      locationName: location.name || 'Unknown',
+      locationName: location.label || 'Unknown',
       locationType: location.type,
       purchaseDate: purchaseDate.toISOString(),
       expirationDate: expirationDate ? expirationDate.toISOString() : null,
-      addedBy: 'seed',
+      source: 'seed',
       notes: 'Test data',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
