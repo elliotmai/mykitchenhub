@@ -175,13 +175,22 @@ export const makeNotification = (overrides = {}) => ({
 // ---------------------------------------------------------------------------
 // recipes/{recipeId}
 // ---------------------------------------------------------------------------
+/**
+ * A recipe as the rules accept it.
+ *
+ * `name`, not `title`: firestore.rules requires `name` on create, and the
+ * recipe picker orders by it — a document without one is invisible to a
+ * Firestore `orderBy('name')` query, however good the rest of it looks.
+ * `source` and `difficulty` are required too.
+ */
 export const makeRecipe = (overrides = {}) => ({
   id: nextId('recipe'),
-  title: 'Sheet Pan Salmon',
-  source: 'manual',
+  name: 'Sheet Pan Salmon',
+  source: 'user-created',
+  difficulty: 'easy',
   ingredients: [
-    { name: 'salmon', quantity: 2, unit: 'fillet' },
-    { name: 'spinach', quantity: 1, unit: 'bag' },
+    { name: 'salmon', normalized: 'salmon', quantity: 2, unit: 'fillet' },
+    { name: 'spinach', normalized: 'spinach', quantity: 1, unit: 'bag' },
   ],
   instructions: ['Heat oven to 400F.', 'Roast 15 minutes.'],
   tags: ['dinner', 'quick'],
