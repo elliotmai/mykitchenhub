@@ -645,69 +645,14 @@ exports.sendDailyWasteAlerts = functions.pubsub
 // ============================================================================
 
 /**
- * HTTP function to generate weekly meal plan using Claude AI
- * 
- * Expected request body:
- * {
- *   userId: "user-firebase-uid",
- *   preferences: {
- *     dietaryRestrictions: ["vegetarian", "gluten-free"],
- *     dislikes: ["mushrooms"],
- *     servings: 2,
- *     mealsPerWeek: 5
- *   }
- * }
+ * Callable function that builds a week of meals with Claude, from the user's
+ * expiring ingredients, preferences, HelloFresh schedule, and recipe library.
+ *
+ * Implementation lives in src/mealPlan/. It only generates — the client writes
+ * the plan, so it passes through the same security rules as a hand-scheduled
+ * meal. Degrades to a local planner when ANTHROPIC_API_KEY is absent.
  */
-exports.generateMealPlan = functions
-  .runWith({
-    timeoutSeconds: 120,  // AI calls may take longer
-    memory: '512MB'
-  })
-  .https.onRequest(async (req, res) => {
-    try {
-      console.log('Starting AI meal plan generation...');
-      
-      // TODO: Implement in Phase 7
-      // 1. Authenticate request
-      // 2. Get user's:
-      //    - Expiring inventory items
-      //    - Available recipes
-      //    - HelloFresh schedule
-      //    - Dietary preferences
-      // 3. Build AI prompt with context
-      // 4. Call Anthropic Claude API
-      // 5. Parse AI response into structured meal plan
-      // 6. Save meal plan to Firestore
-      // 7. Return meal plan
-      
-      const { userId, preferences } = req.body;
-      
-      if (!userId) {
-        return res.status(400).json({
-          error: 'Missing required field: userId'
-        });
-      }
-
-      // Placeholder response
-      res.status(200).json({
-        status: 'success',
-        message: 'AI meal plan generation function ready (stub)',
-        mealPlan: {
-          weekOf: new Date().toISOString(),
-          meals: [],
-          shoppingList: []
-        },
-        timestamp: new Date().toISOString()
-      });
-      
-    } catch (error) {
-      console.error('Error in generateMealPlan:', error);
-      res.status(500).json({
-        error: 'Internal server error',
-        message: error.message
-      });
-    }
-  });
+exports.generateMealPlan = require('./src/mealPlan/generateMealPlan').generateMealPlan;
 
 // ==========================================================================
 // FUNCTION 6: Storage Location Management (Create, Update, Delete with Safety Checks)
@@ -750,23 +695,27 @@ async function sendSMS(phoneNumber, message) {
 
 /**
  * Helper: Call Claude AI API
+ *
+ * Implemented in src/mealPlan/anthropicClient.js — it reads ANTHROPIC_API_KEY
+ * (falling back to Firebase Functions config), uses the official
+ * @anthropic-ai/sdk, and returns null when no credential is configured so
+ * callers can degrade instead of failing.
  */
 async function callClaudeAI(prompt) {
-  // TODO: Implement in Phase 7
-  // const response = await axios.post('https://api.anthropic.com/v1/messages', {
-  //   model: 'claude-3-5-sonnet-20241022',
-  //   max_tokens: 1024,
-  //   messages: [{ role: 'user', content: prompt }]
-  // }, {
-  //   headers: {
-  //     'x-api-key': process.env.ANTHROPIC_API_KEY,
-  //     'anthropic-version': '2023-06-01'
-  //   }
-  // });
-  // return response.data.content[0].text;
-  
-  console.log('Claude AI stub called with prompt:', prompt);
-  return 'AI response placeholder';
+  const { createClient, MODEL, MAX_TOKENS, textOf } = require('./src/mealPlan/anthropicClient');
+  const client = createClient();
+  if (!client) {
+    console.warn('Claude API key not configured; skipping call.');
+    return null;
+  }
+
+  const response = await client.messages.create({
+    model: MODEL,
+    max_tokens: MAX_TOKENS,
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  return response?.stop_reason === 'refusal' ? null : textOf(response);
 }
 
 /**
