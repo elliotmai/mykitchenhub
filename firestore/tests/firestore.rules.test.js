@@ -78,6 +78,32 @@ const validImportRecord = (overrides = {}) => ({
   ...overrides,
 });
 
+const validNotification = (overrides = {}) => ({
+  type: 'waste-alert',
+  title: '2 items to use up soon',
+  body: 'spinach (today) and milk (tomorrow).',
+  createdAt: new Date().toISOString(),
+  read: false,
+  channel: 'in-app',
+  smsStatus: 'not-configured',
+  itemIds: ['item-1'],
+  itemCount: 2,
+  ...overrides,
+});
+
+const validMealPlanEntry = (overrides = {}) => ({
+  recipeId: 'recipe-1',
+  recipeName: 'Sheet Pan Salmon',
+  plannedFor: '2026-08-14',
+  mealType: 'dinner',
+  servings: 2,
+  status: 'planned',
+  source: 'waste-alerts',
+  usesExpiringItems: ['spinach'],
+  createdAt: new Date().toISOString(),
+  ...overrides,
+});
+
 const validRecipe = (overrides = {}) => ({
   name: 'Sheet Pan Salmon',
   ingredients: [{ name: 'salmon', quantity: 2, unit: 'fillet' }],
@@ -273,6 +299,32 @@ describe('inventory items', () => {
     await assertFails(as(OWNER).doc(itemPath(OWNER)).set(validItem({ locationType: 'garage' })));
   });
 
+  it.each(['default', 'custom'])('accepts shelfLifeSource "%s"', async (shelfLifeSource) => {
+    await assertSucceeds(
+      as(OWNER)
+        .doc(itemPath(OWNER, `item-${shelfLifeSource}`))
+        .set(validItem({ shelfLifeDays: 7, shelfLifeSource }))
+    );
+  });
+
+  it('accepts the freeze write: a new location, expiry and shelf life at once', async () => {
+    const item = validItem();
+    await seed((db) => db.doc(itemPath(OWNER)).set(item));
+
+    // What "Freeze All" sends — the whole point of it is the longer expiry.
+    await assertSucceeds(
+      as(OWNER).doc(itemPath(OWNER)).update({
+        addedAt: item.addedAt,
+        quantity: item.quantity,
+        locationId: 'loc-freezer',
+        locationType: 'freezer',
+        shelfLifeDays: 90,
+        shelfLifeSource: 'default',
+        expiresAt: new Date(Date.now() + 90 * 86400000).toISOString(),
+      })
+    );
+  });
+
   it("keeps one user out of another user's inventory", async () => {
     await seed((db) => db.doc(itemPath(OWNER)).set(validItem()));
 
@@ -355,6 +407,133 @@ describe('import history', () => {
     await assertFails(as(INTRUDER).doc(importPath(OWNER)).get());
     await assertFails(as(INTRUDER).doc(importPath(OWNER, 'new')).set(validImportRecord()));
     await assertFails(anon().doc(importPath(OWNER)).get());
+  });
+});
+
+// ---------------------------------------------------------------------------
+// users/{userId}/notifications/{notificationId} — the daily waste alert
+// ---------------------------------------------------------------------------
+
+describe('notifications', () => {
+  const notificationPath = (uid, id = 'waste-alert-2026-08-14') =>
+    `users/${uid}/notifications/${id}`;
+
+  it('accepts the document shape the daily waste alert writes', async () => {
+    await assertSucceeds(as(OWNER).doc(notificationPath(OWNER)).set(validNotification()));
+  });
+
+  it('requires the fields the notification list renders', async () => {
+    const { title, ...withoutTitle } = validNotification();
+    await assertFails(as(OWNER).doc(notificationPath(OWNER)).set(withoutTitle));
+  });
+
+  it.each(['waste-alert', 'meal-plan', 'system'])('accepts type "%s"', async (type) => {
+    await assertSucceeds(
+      as(OWNER).doc(notificationPath(OWNER, `n-${type}`)).set(validNotification({ type }))
+    );
+  });
+
+  it('rejects an unrecognised notification type', async () => {
+    await assertFails(
+      as(OWNER).doc(notificationPath(OWNER)).set(validNotification({ type: 'spam' }))
+    );
+  });
+
+  it('lets the owner mark one as read', async () => {
+    const notification = validNotification();
+    await seed((db) => db.doc(notificationPath(OWNER)).set(notification));
+
+    await assertSucceeds(
+      as(OWNER)
+        .doc(notificationPath(OWNER))
+        .update({ createdAt: notification.createdAt, read: true })
+    );
+  });
+
+  it('refuses to let marking as read restamp when the alert arrived', async () => {
+    await seed((db) => db.doc(notificationPath(OWNER)).set(validNotification()));
+
+    await assertFails(
+      as(OWNER).doc(notificationPath(OWNER)).update({ createdAt: '1999-01-01', read: true })
+    );
+  });
+
+  it('lets the owner dismiss one', async () => {
+    await seed((db) => db.doc(notificationPath(OWNER)).set(validNotification()));
+    await assertSucceeds(as(OWNER).doc(notificationPath(OWNER)).delete());
+  });
+
+  it("keeps one user out of another user's alerts", async () => {
+    await seed((db) => db.doc(notificationPath(OWNER)).set(validNotification()));
+
+    await assertFails(as(INTRUDER).doc(notificationPath(OWNER)).get());
+    await assertFails(as(INTRUDER).doc(notificationPath(OWNER)).delete());
+    await assertFails(anon().doc(notificationPath(OWNER)).get());
+  });
+});
+
+// ---------------------------------------------------------------------------
+// users/{userId}/mealPlan/{entryId} — written by "Add to Meal Plan"
+// ---------------------------------------------------------------------------
+
+describe('meal plan entries', () => {
+  const mealPath = (uid, id = 'meal-1') => `users/${uid}/mealPlan/${id}`;
+
+  it('accepts the document shape the recipe suggestions write', async () => {
+    await assertSucceeds(as(OWNER).doc(mealPath(OWNER)).set(validMealPlanEntry()));
+  });
+
+  it('requires the recipe it points at', async () => {
+    const { recipeId, ...withoutRecipe } = validMealPlanEntry();
+    await assertFails(as(OWNER).doc(mealPath(OWNER)).set(withoutRecipe));
+  });
+
+  it('requires the day it is planned for', async () => {
+    const { plannedFor, ...withoutDay } = validMealPlanEntry();
+    await assertFails(as(OWNER).doc(mealPath(OWNER)).set(withoutDay));
+  });
+
+  it.each(['waste-alerts', 'manual', 'ai-generated', 'hellofresh'])(
+    'accepts source "%s"',
+    async (source) => {
+      await assertSucceeds(
+        as(OWNER).doc(mealPath(OWNER, `meal-${source}`)).set(validMealPlanEntry({ source }))
+      );
+    }
+  );
+
+  it('rejects an unrecognised meal plan source', async () => {
+    await assertFails(
+      as(OWNER).doc(mealPath(OWNER)).set(validMealPlanEntry({ source: 'telepathy' }))
+    );
+  });
+
+  it('accepts extra fields, so Phase 7 can extend the entry', async () => {
+    await assertSucceeds(
+      as(OWNER).doc(mealPath(OWNER)).set(validMealPlanEntry({ notes: 'double the garlic' }))
+    );
+  });
+
+  it('lets the owner mark a planned meal as cooked', async () => {
+    const entry = validMealPlanEntry();
+    await seed((db) => db.doc(mealPath(OWNER)).set(entry));
+
+    await assertSucceeds(
+      as(OWNER).doc(mealPath(OWNER)).update({ createdAt: entry.createdAt, status: 'cooked' })
+    );
+  });
+
+  it('lets the owner remove a planned meal', async () => {
+    await seed((db) => db.doc(mealPath(OWNER)).set(validMealPlanEntry()));
+    await assertSucceeds(as(OWNER).doc(mealPath(OWNER)).delete());
+  });
+
+  it("keeps one user out of another user's meal plan", async () => {
+    await seed((db) => db.doc(mealPath(OWNER)).set(validMealPlanEntry()));
+
+    await assertFails(as(INTRUDER).doc(mealPath(OWNER)).get());
+    await assertFails(as(INTRUDER).doc(mealPath(OWNER, 'new')).set(validMealPlanEntry()));
+    await assertFails(anon().doc(mealPath(OWNER)).get());
   });
 });
 

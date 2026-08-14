@@ -37,6 +37,7 @@ import {
   HelloFresh,
   Analytics,
   Settings,
+  WasteAlerts,
 } from './pages';
 
 /**
@@ -71,6 +72,7 @@ const AppRoutes = () => {
         <Route path="/meal-plan" element={<MealPlan />} />
         <Route path="/hellofresh" element={<HelloFresh />} />
         <Route path="/analytics" element={<Analytics />} />
+        <Route path="/waste-alerts" element={<WasteAlerts />} />
         <Route path="/settings" element={<Settings />} />
       </Route>
 

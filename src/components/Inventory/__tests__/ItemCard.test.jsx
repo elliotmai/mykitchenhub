@@ -69,6 +69,25 @@ describe('ItemCard expiration colour-coding', () => {
     expect(container.querySelector('.expiration-critical')).toBeInTheDocument();
   });
 
+  it.each([
+    ['an expired', -1, /check it before you cook/i],
+    ['a critical', 1, /freeze/i],
+  ])('tells the cook what to do about %s item', (_label, days, advice) => {
+    render(<ItemCard item={makeItem({ expiresAt: daysFromNow(days) })} />);
+
+    const warning = screen.getByTestId('expiration-warning');
+    expect(warning).toBeInTheDocument();
+    expect(warning).toHaveTextContent(advice);
+  });
+
+  it.each([
+    ['soon', 4],
+    ['fresh', 60],
+  ])('stays quiet about a %s item, so the warnings mean something', (_label, days) => {
+    render(<ItemCard item={makeItem({ expiresAt: daysFromNow(days) })} />);
+    expect(screen.queryByTestId('expiration-warning')).not.toBeInTheDocument();
+  });
+
   it('treats an item with no expiry as fresh instead of erroring', () => {
     render(<ItemCard item={makeItem({ expiresAt: null })} />);
     expect(screen.getByText('Fresh')).toBeInTheDocument();

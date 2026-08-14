@@ -5,7 +5,7 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, Form, Button, Row, Col, Alert } from 'react-bootstrap';
 import { Package } from 'lucide-react';
-import { SHELF_LIFE_DEFAULTS } from '../../hooks/useInventory';
+import { resolveShelfLifeDays, isCustomShelfLife } from '../../hooks/useInventory';
 
 const UNIT_OPTIONS = [
   '',
@@ -53,6 +53,11 @@ const AddItemModal = ({ show, onHide, onSave, locations = [], editItem = null })
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  // Whether the shelf life on screen is the cook's number or ours. An
+  // untouched field follows the ingredient + location lookup as they type;
+  // a touched one is left exactly as they set it.
+  const [shelfLifeTouched, setShelfLifeTouched] = useState(false);
+
   // Pre-fill when editing or reset on open
   useEffect(() => {
     if (!show) return;
@@ -69,8 +74,10 @@ const AddItemModal = ({ show, onHide, onSave, locations = [], editItem = null })
         price: '',
         store: '',
       });
+      setShelfLifeTouched(isCustomShelfLife(editItem));
     } else {
       setForm(EMPTY_FORM);
+      setShelfLifeTouched(false);
     }
     setError('');
   }, [show, editItem]);
@@ -83,13 +90,31 @@ const AddItemModal = ({ show, onHide, onSave, locations = [], editItem = null })
       ...prev,
       locationId: locationId,
       locationType: lt,
-      // Only set default shelfLifeDays if user hasn't typed a custom value
-      shelfLifeDays:
-        prev.shelfLifeDays === '' ||
-        prev.shelfLifeDays === String(SHELF_LIFE_DEFAULTS[prev.locationType])
-          ? String(SHELF_LIFE_DEFAULTS[lt] ?? '')
-          : prev.shelfLifeDays,
+      shelfLifeDays: shelfLifeTouched
+        ? prev.shelfLifeDays
+        : String(lt ? resolveShelfLifeDays(prev.name, lt) : ''),
     }));
+  };
+
+  // Renaming an item can change which shelf-life entry applies ("milk" keeps
+  // for a week, "rice" for two years), so an untouched field follows along.
+  const handleNameChange = (e) => {
+    const name = e.target.value;
+    setForm((prev) => ({
+      ...prev,
+      name,
+      shelfLifeDays:
+        shelfLifeTouched || !prev.locationType
+          ? prev.shelfLifeDays
+          : String(resolveShelfLifeDays(name, prev.locationType)),
+    }));
+  };
+
+  const handleShelfLifeChange = (e) => {
+    const value = e.target.value;
+    // Clearing the field hands control back to the lookup.
+    setShelfLifeTouched(value !== '');
+    setForm((prev) => ({ ...prev, shelfLifeDays: value }));
   };
 
   const handleChange = (field) => (e) => {
@@ -122,7 +147,11 @@ const AddItemModal = ({ show, onHide, onSave, locations = [], editItem = null })
       unit: form.unit,
       locationId: form.locationId,
       locationType: form.locationType,
-      shelfLifeDays: form.shelfLifeDays ? parseInt(form.shelfLifeDays, 10) : undefined,
+      // Only send a shelf life the cook actually chose. Left alone, the hook
+      // works it out from the ingredient and the location — which is what lets
+      // moving something to the freezer extend how long it keeps.
+      shelfLifeDays:
+        shelfLifeTouched && form.shelfLifeDays ? parseInt(form.shelfLifeDays, 10) : undefined,
       notes: form.notes.trim(),
       price: form.price ? parseFloat(form.price) : null,
       store: form.store.trim(),
@@ -141,7 +170,9 @@ const AddItemModal = ({ show, onHide, onSave, locations = [], editItem = null })
   // Computed shelf-life preview label
   const previewDays = form.shelfLifeDays
     ? parseInt(form.shelfLifeDays, 10)
-    : (SHELF_LIFE_DEFAULTS[form.locationType] ?? null);
+    : form.locationType
+      ? resolveShelfLifeDays(form.name, form.locationType)
+      : null;
 
   const previewDate = previewDays
     ? (() => {
@@ -177,7 +208,7 @@ const AddItemModal = ({ show, onHide, onSave, locations = [], editItem = null })
               type="text"
               placeholder='e.g. "Chicken Breast" or "Whole Milk"'
               value={form.name}
-              onChange={handleChange('name')}
+              onChange={handleNameChange}
               autoFocus
               maxLength={80}
             />
@@ -215,7 +246,7 @@ const AddItemModal = ({ show, onHide, onSave, locations = [], editItem = null })
           </Row>
 
           {/* Storage Location */}
-          <Form.Group className="mb-3">
+          <Form.Group className="mb-3" controlId="item-location">
             <Form.Label className="fw-semibold">
               Storage Location <span className="text-danger">*</span>
             </Form.Label>
@@ -240,17 +271,17 @@ const AddItemModal = ({ show, onHide, onSave, locations = [], editItem = null })
           </Form.Group>
 
           {/* Shelf Life Override */}
-          <Form.Group className="mb-1">
+          <Form.Group className="mb-1" controlId="item-shelf-life">
             <Form.Label className="fw-semibold">Shelf Life (days)</Form.Label>
             <Form.Control
               type="number"
               placeholder={
                 form.locationType
-                  ? `Default: ${SHELF_LIFE_DEFAULTS[form.locationType] ?? 30}`
+                  ? `Default: ${resolveShelfLifeDays(form.name, form.locationType)}`
                   : 'Select a location first'
               }
               value={form.shelfLifeDays}
-              onChange={handleChange('shelfLifeDays')}
+              onChange={handleShelfLifeChange}
               min="1"
               disabled={!form.locationType}
             />

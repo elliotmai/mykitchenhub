@@ -117,6 +117,49 @@ service cloud.firestore {
         // Users can clear their own history
         allow delete: if isOwner(userId);
       }
+
+      // ============================================
+      // NOTIFICATIONS SUBCOLLECTION (waste alerts, 6.2)
+      // ============================================
+
+      // Written by the daily waste-alert function, read and cleared by the
+      // owner. This is the alert channel that always works, with or without an
+      // SMS provider key.
+      match /notifications/{notificationId} {
+        allow read: if isOwner(userId);
+
+        allow create: if isOwner(userId)
+          && hasRequiredFields(['type', 'title', 'body', 'createdAt', 'read'])
+          && request.resource.data.type in ['waste-alert', 'meal-plan', 'system'];
+
+        // Marking one read must not rewrite when it arrived.
+        allow update: if isOwner(userId)
+          && request.resource.data.createdAt == resource.data.createdAt;
+
+        allow delete: if isOwner(userId);
+      }
+
+      // ============================================
+      // MEAL PLAN SUBCOLLECTION
+      // ============================================
+
+      // Written by the waste-alert recipe suggestions (6.3); the meal plan UI
+      // that renders these is Phase 7. Required fields are kept to the ones
+      // every writer must supply so that phase can add its own.
+      match /mealPlan/{entryId} {
+        allow read: if isOwner(userId);
+
+        allow create: if isOwner(userId)
+          && hasRequiredFields(['recipeId', 'recipeName', 'plannedFor',
+                                'source', 'createdAt'])
+          && request.resource.data.source in ['waste-alerts', 'manual',
+                                                'ai-generated', 'hellofresh'];
+
+        allow update: if isOwner(userId)
+          && request.resource.data.createdAt == resource.data.createdAt;
+
+        allow delete: if isOwner(userId);
+      }
     }
     
     // ============================================

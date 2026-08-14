@@ -14,13 +14,13 @@
 // src/config/__tests__/version.test.js fails the build if these drift apart,
 // so the footer can never silently lie about what's deployed.
 
-/** Version string rendered in the footer, e.g. "0.3.3". */
-export const APP_VERSION = '0.3.3';
+/** Version string rendered in the footer, e.g. "0.6.3". */
+export const APP_VERSION = '0.6.3';
 
-/** The roadmap step this build completes, e.g. "3.3". */
-export const ROADMAP_STEP = '3.3';
+/** The roadmap step this build completes, e.g. "6.3". */
+export const ROADMAP_STEP = '6.3';
 
 /** Human-readable name of that roadmap step — shown in the footer tooltip. */
-export const ROADMAP_STEP_NAME = 'CSV Bulk Import';
+export const ROADMAP_STEP_NAME = 'Freezer Suggestions & Recipe Matching';
 
 export default APP_VERSION;

@@ -2,6 +2,63 @@
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
+## Environment variables
+
+Every credential is read from the environment — never hardcoded, never
+committed. See [CONTRIBUTING.md](./CONTRIBUTING.md#3-secrets-and-external-services)
+for the rules.
+
+### Frontend (`.env`, prefixed `REACT_APP_`)
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `REACT_APP_FIREBASE_API_KEY` | yes | Firebase web config |
+| `REACT_APP_FIREBASE_AUTH_DOMAIN` | yes | Firebase web config |
+| `REACT_APP_FIREBASE_PROJECT_ID` | yes | Firebase web config |
+| `REACT_APP_FIREBASE_STORAGE_BUCKET` | yes | Firebase web config |
+| `REACT_APP_FIREBASE_MESSAGING_SENDER_ID` | yes | Firebase web config |
+| `REACT_APP_FIREBASE_APP_ID` | yes | Firebase web config |
+| `REACT_APP_FIREBASE_FUNCTIONS_URL` | yes | Base URL for callable/HTTP functions |
+| `REACT_APP_USE_EMULATORS` | no | `true` points the app at local emulators |
+
+### Cloud Functions (`functions/.env` or `firebase functions:config`)
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `ANTHROPIC_API_KEY` | for AI features | Claude API, used by recipe/meal-plan generation |
+| `SPOONACULAR_API_KEY` | for recipe sync | Spoonacular instruction lookup |
+| `LEGACY_FIREBASE_SERVICE_ACCOUNT_PATH` | for the legacy sync | Path to the "Let's Eat" service account |
+
+#### Daily waste alerts by SMS (roadmap 6.2)
+
+**No SMS provider is configured, and the app works fine without one.** The daily
+waste alert always writes an in-app notification, which is what the Waste Alerts
+page shows. Texts are an optional extra on top: with no key, `sendDailyWasteAlerts`
+logs that it skipped the text and carries on — it never fails, and it never
+blocks the in-app alert.
+
+To switch texting on, set these in the Cloud Functions environment:
+
+| Variable | Required | Default | Purpose |
+| --- | --- | --- | --- |
+| `SMS_PROVIDER` | no | `textbelt` | Which provider to use: `textbelt` or `zixlow` |
+| `TEXTBELT_API_KEY` | to send via Textbelt | — | Textbelt API key |
+| `TEXTBELT_API_URL` | no | `https://textbelt.com/text` | Override, e.g. for a sandbox |
+| `ZIXLOW_API_KEY` | to send via Zixlow | — | Zixlow API key |
+| `ZIXLOW_API_URL` | no | `https://api.zixlow.com/v1/sms/send` | Override, e.g. for a sandbox |
+| `ZIXLOW_SENDER_ID` | no | `MyKitchenHub` | Sender name shown on the text |
+
+```bash
+# Example: enable Textbelt for the deployed functions
+firebase functions:config:set sms.provider="textbelt" sms.textbelt_key="YOUR_KEY"
+# …or, for local development, add to functions/.env (which is gitignored):
+#   SMS_PROVIDER=textbelt
+#   TEXTBELT_API_KEY=YOUR_KEY
+```
+
+Each cook still has to opt in individually under **Settings → Waste Alerts**,
+which sets `preferences.smsAlerts.enabled` and stores the number to text.
+
 ## Available Scripts
 
 In the project directory, you can run:

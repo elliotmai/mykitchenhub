@@ -5,10 +5,18 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import React from 'react';
 
 import useInventory, {
+  EXPIRATION_LEVELS,
   SHELF_LIFE_DEFAULTS,
+  byExpirySoonestFirst,
   calcExpiresAt,
-  getExpirationStatus,
+  getDaysUntilExpiration,
+  getExpirationBadgeStyle,
   getExpirationLabel,
+  getExpirationLevel,
+  getExpirationStatus,
+  hasExplicitShelfLife,
+  isCustomShelfLife,
+  resolveShelfLifeDays,
 } from '../useInventory';
 import { AuthProvider } from '../useAuth';
 import * as fs from '../../test-utils/mocks/firestore';
@@ -111,6 +119,142 @@ describe('calcExpiresAt', () => {
   });
 });
 
+describe('resolveShelfLifeDays', () => {
+  it('prefers the per-ingredient number over the blanket location default', () => {
+    // Chicken lasts two days in the fridge; a blanket "fridge = 7" would be
+    // dangerously wrong for it and needlessly short for a block of cheese.
+    expect(resolveShelfLifeDays('chicken breast', 'fridge')).toBe(2);
+    expect(resolveShelfLifeDays('cheese', 'fridge')).toBe(21);
+  });
+
+  it('is case- and whitespace-insensitive, like the names people type', () => {
+    expect(resolveShelfLifeDays('  Chicken Breast  ', 'fridge')).toBe(2);
+  });
+
+  it('falls back to the location default for an unknown ingredient', () => {
+    expect(resolveShelfLifeDays('Dragonfruit Curd', 'freezer')).toBe(SHELF_LIFE_DEFAULTS.freezer);
+    expect(resolveShelfLifeDays('Dragonfruit Curd', 'fridge')).toBe(SHELF_LIFE_DEFAULTS.fridge);
+  });
+
+  it('still dates an item the table says does not belong where it is', () => {
+    // Milk in the pantry is a bad idea, but it is in there and needs an expiry.
+    expect(resolveShelfLifeDays('milk', 'pantry')).toBe(SHELF_LIFE_DEFAULTS.pantry);
+  });
+
+  it('always gives the freezer at least as long as the fridge', () => {
+    ['milk', 'chicken breast', 'spinach', 'bread', 'Dragonfruit Curd'].forEach((name) => {
+      expect(resolveShelfLifeDays(name, 'freezer')).toBeGreaterThanOrEqual(
+        resolveShelfLifeDays(name, 'fridge')
+      );
+    });
+  });
+});
+
+describe('hasExplicitShelfLife', () => {
+  it.each([
+    [undefined, false],
+    [null, false],
+    ['', false],
+    ['not a number', false],
+    [0, true],
+    [45, true],
+    ['45', true],
+  ])('treats %p as explicit: %p', (value, expected) => {
+    expect(hasExplicitShelfLife(value)).toBe(expected);
+  });
+});
+
+describe('isCustomShelfLife', () => {
+  it('trusts the recorded source when there is one', () => {
+    expect(isCustomShelfLife(makeItem({ shelfLifeSource: 'custom', shelfLifeDays: 7 }))).toBe(true);
+    expect(isCustomShelfLife(makeItem({ shelfLifeSource: 'default', shelfLifeDays: 99 }))).toBe(
+      false
+    );
+  });
+
+  it('infers it for older documents by comparing against the lookup', () => {
+    const asStored = (overrides) => makeItem({ shelfLifeSource: undefined, ...overrides });
+
+    expect(
+      isCustomShelfLife(asStored({ name: 'Milk', locationType: 'fridge', shelfLifeDays: 7 }))
+    ).toBe(false);
+    expect(
+      isCustomShelfLife(asStored({ name: 'Milk', locationType: 'fridge', shelfLifeDays: 21 }))
+    ).toBe(true);
+  });
+
+  it('says no for an item with no shelf life at all', () => {
+    expect(isCustomShelfLife(makeItem({ shelfLifeSource: undefined, shelfLifeDays: null }))).toBe(
+      false
+    );
+    expect(isCustomShelfLife(null)).toBe(false);
+  });
+});
+
+describe('expiration colour-coding', () => {
+  it.each([
+    ['Expired', -1],
+    ['Critical', 1],
+    ['Soon', 4],
+    ['Fresh', 60],
+  ])('labels an item expiring in %2$i days as %1$s', (label, days) => {
+    expect(getExpirationLevel(daysFromNow(days)).label).toBe(label);
+  });
+
+  it('gives every level a css class the stylesheet defines', () => {
+    Object.values(EXPIRATION_LEVELS).forEach((level) => {
+      expect(level.cardClass).toMatch(/^expiration-(critical|warning|safe)$/);
+      expect(level.background).toMatch(/^var\(--mkh-/);
+      expect(level.foreground).toMatch(/^var\(--mkh-/);
+    });
+  });
+
+  it('only tells the cook to act on the two urgent levels', () => {
+    expect(EXPIRATION_LEVELS.expired.warning).toBeTruthy();
+    expect(EXPIRATION_LEVELS.critical.warning).toBeTruthy();
+    expect(EXPIRATION_LEVELS.safe.warning).toBeNull();
+  });
+
+  it('ranks the levels most urgent first', () => {
+    const ranks = ['expired', 'critical', 'warning', 'safe'].map((k) => EXPIRATION_LEVELS[k].rank);
+    expect(ranks).toEqual([...ranks].sort((a, b) => a - b));
+  });
+
+  it('builds a badge style from the level tokens', () => {
+    const style = getExpirationBadgeStyle(daysFromNow(-1));
+    expect(style.background).toBe(EXPIRATION_LEVELS.expired.background);
+    expect(style.border).toContain(EXPIRATION_LEVELS.expired.foreground);
+  });
+
+  it('falls back to fresh rather than crashing on a missing expiry', () => {
+    expect(getExpirationLevel(null).label).toBe('Fresh');
+  });
+});
+
+describe('getDaysUntilExpiration', () => {
+  it('counts forward and backward', () => {
+    expect(getDaysUntilExpiration(daysFromNow(3))).toBe(3);
+    expect(getDaysUntilExpiration(daysFromNow(-2))).toBe(-2);
+  });
+
+  it('returns null for a missing or unparseable date', () => {
+    expect(getDaysUntilExpiration(null)).toBeNull();
+    expect(getDaysUntilExpiration('not a date')).toBeNull();
+  });
+});
+
+describe('byExpirySoonestFirst', () => {
+  it('puts the most urgent item first and undated ones last', () => {
+    const sorted = [
+      makeItem({ name: 'Later', expiresAt: daysFromNow(9) }),
+      makeItem({ name: 'Undated', expiresAt: null }),
+      makeItem({ name: 'Sooner', expiresAt: daysFromNow(1) }),
+    ].sort(byExpirySoonestFirst);
+
+    expect(sorted.map((i) => i.name)).toEqual(['Sooner', 'Later', 'Undated']);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Hook behaviour
 // ---------------------------------------------------------------------------
@@ -191,6 +335,30 @@ describe('useInventory.addItem', () => {
     expect(payload.shelfLifeDays).toBe(SHELF_LIFE_DEFAULTS.fridge);
     expect(payload.source).toBe('manual');
     expect(payload.totalTimesPurchased).toBe(1);
+  });
+
+  it('dates a new item from the ingredient, not just the location', async () => {
+    const { result } = await renderInventory([]);
+
+    await act(async () => {
+      await result.current.addItem({ ...validItem, name: 'Chicken Breast' });
+    });
+
+    const [, payload] = fs.addDoc.mock.calls[0];
+    expect(payload.shelfLifeDays).toBe(resolveShelfLifeDays('Chicken Breast', 'fridge'));
+    expect(payload.shelfLifeSource).toBe('default');
+  });
+
+  it('records a shelf life the cook typed as theirs', async () => {
+    const { result } = await renderInventory([]);
+
+    await act(async () => {
+      await result.current.addItem({ ...validItem, shelfLifeDays: 21 });
+    });
+
+    const [, payload] = fs.addDoc.mock.calls[0];
+    expect(payload.shelfLifeDays).toBe(21);
+    expect(payload.shelfLifeSource).toBe('custom');
   });
 
   it('seeds purchase history so shopping analytics has data from day one', async () => {
@@ -279,14 +447,12 @@ describe('useInventory.updateItem', () => {
     expect(days).toBe(45);
   });
 
-  // Documents current behaviour, which is arguably wrong: moving an item to
-  // the freezer should extend its life, but the hook can't tell a *defaulted*
-  // shelfLifeDays from a user-chosen one, so it keeps the old value. Phase 6
-  // (6.1 Expiration Tracking Logic) owns the fix — when it lands, this test
-  // should flip to expecting SHELF_LIFE_DEFAULTS.freezer.
-  it('currently keeps the stored shelf life when only the location changes', async () => {
+  // Moving something to the freezer has to extend how long it keeps — that is
+  // the entire reason a person freezes food. `shelfLifeSource` is what makes it
+  // possible: a shelf life we defaulted is ours to recalculate.
+  it('extends the shelf life when an item is moved to the freezer', async () => {
     const { result } = await renderInventory([
-      makeItem({ id: 'item-1', locationType: 'fridge', shelfLifeDays: 7 }),
+      makeItem({ id: 'item-1', name: 'Milk', locationType: 'fridge', shelfLifeDays: 7 }),
     ]);
 
     await act(async () => {
@@ -295,8 +461,119 @@ describe('useInventory.updateItem', () => {
 
     const [, patch] = fs.updateDoc.mock.calls[0];
     const days = Math.round((patch.expiresAt - new Date()) / 86400000);
-    expect(days).toBe(7);
-    expect(days).not.toBe(SHELF_LIFE_DEFAULTS.freezer);
+
+    // Milk keeps 90 days frozen against 7 in the fridge, per the shelf-life table.
+    expect(days).toBe(resolveShelfLifeDays('Milk', 'freezer'));
+    expect(days).toBeGreaterThan(7);
+    expect(patch.shelfLifeDays).toBe(days);
+    expect(patch.shelfLifeSource).toBe('default');
+  });
+
+  it('falls back to the location default for an ingredient it has never heard of', async () => {
+    const { result } = await renderInventory([
+      makeItem({
+        id: 'item-1',
+        name: 'Dragonfruit Curd',
+        locationType: 'fridge',
+        shelfLifeDays: 7,
+      }),
+    ]);
+
+    await act(async () => {
+      await result.current.updateItem('item-1', { locationType: 'freezer' });
+    });
+
+    const [, patch] = fs.updateDoc.mock.calls[0];
+    const days = Math.round((patch.expiresAt - new Date()) / 86400000);
+    expect(days).toBe(SHELF_LIFE_DEFAULTS.freezer);
+  });
+
+  it('leaves a shelf life the cook chose alone when the item moves', async () => {
+    const { result } = await renderInventory([
+      makeItem({
+        id: 'item-1',
+        name: 'Milk',
+        locationType: 'fridge',
+        shelfLifeDays: 3,
+        shelfLifeSource: 'custom',
+      }),
+    ]);
+
+    await act(async () => {
+      await result.current.updateItem('item-1', { locationType: 'freezer' });
+    });
+
+    const [, patch] = fs.updateDoc.mock.calls[0];
+    const days = Math.round((patch.expiresAt - new Date()) / 86400000);
+    expect(days).toBe(3);
+    expect(patch).not.toHaveProperty('shelfLifeDays');
+  });
+
+  it('treats an old document with no shelfLifeSource as defaulted when it matches the table', async () => {
+    // Items written before the field existed still have to gain freezer time.
+    const { result } = await renderInventory([
+      makeItem({
+        id: 'item-1',
+        name: 'Milk',
+        locationType: 'fridge',
+        shelfLifeDays: 7,
+        shelfLifeSource: undefined,
+      }),
+    ]);
+
+    await act(async () => {
+      await result.current.updateItem('item-1', { locationType: 'freezer' });
+    });
+
+    const [, patch] = fs.updateDoc.mock.calls[0];
+    const days = Math.round((patch.expiresAt - new Date()) / 86400000);
+    expect(days).toBe(resolveShelfLifeDays('Milk', 'freezer'));
+  });
+
+  it('treats an old document with an off-table shelf life as the cook’s own', async () => {
+    const { result } = await renderInventory([
+      makeItem({
+        id: 'item-1',
+        name: 'Milk',
+        locationType: 'fridge',
+        shelfLifeDays: 21,
+        shelfLifeSource: undefined,
+      }),
+    ]);
+
+    await act(async () => {
+      await result.current.updateItem('item-1', { locationType: 'freezer' });
+    });
+
+    const [, patch] = fs.updateDoc.mock.calls[0];
+    const days = Math.round((patch.expiresAt - new Date()) / 86400000);
+    expect(days).toBe(21);
+  });
+
+  it('recalculates the expiry when a rename lands on a different ingredient', async () => {
+    const { result } = await renderInventory([
+      makeItem({ id: 'item-1', name: 'Milk', locationType: 'pantry', shelfLifeDays: 90 }),
+    ]);
+
+    await act(async () => {
+      await result.current.updateItem('item-1', { name: 'Rice' });
+    });
+
+    const [, patch] = fs.updateDoc.mock.calls[0];
+    const days = Math.round((patch.expiresAt - new Date()) / 86400000);
+    expect(days).toBe(resolveShelfLifeDays('Rice', 'pantry'));
+  });
+
+  it('does not recalculate when the location is re-sent unchanged', async () => {
+    const { result } = await renderInventory([
+      makeItem({ id: 'item-1', name: 'Milk', locationType: 'fridge', shelfLifeDays: 7 }),
+    ]);
+
+    await act(async () => {
+      await result.current.updateItem('item-1', { locationType: 'fridge', quantity: 2 });
+    });
+
+    expect(fs.updateDoc.mock.calls[0][1]).not.toHaveProperty('expiresAt');
   });
 
   it('leaves the expiry alone for edits that do not affect shelf life', async () => {
@@ -320,6 +597,20 @@ describe('useInventory.updateItem', () => {
 
     expect(response).toEqual({ success: false, error: 'Not authenticated' });
     expect(fs.updateDoc).not.toHaveBeenCalled();
+  });
+});
+
+describe('useInventory.getExpiringItems', () => {
+  it('returns only what expires inside the window, most urgent first', async () => {
+    const { result } = await renderInventory([
+      makeItem({ id: 'a', name: 'Rice', expiresAt: daysFromNow(90) }),
+      makeItem({ id: 'b', name: 'Yogurt', expiresAt: daysFromNow(-2) }),
+      makeItem({ id: 'c', name: 'Spinach', expiresAt: daysFromNow(3) }),
+      makeItem({ id: 'd', name: 'Salt', expiresAt: null }),
+    ]);
+
+    const expiring = result.current.getExpiringItems(5);
+    expect(expiring.map((i) => i.name)).toEqual(['Yogurt', 'Spinach']);
   });
 });
 
