@@ -60,9 +60,16 @@ test.describe('waste alerts', () => {
   test('is reachable from the sidebar', async ({ authedPage: page }) => {
     await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
 
-    // On a phone the sidebar sits off-screen until the hamburger opens it —
-    // it is "visible" to CSS the whole time, so the toggle is what to test for.
-    // The hamburger is `d-lg-none`, so on desktop it is display:none.
+    // Wait for the app shell before probing it. `isVisible()` below is a
+    // one-shot check with no auto-waiting, and right after domcontentloaded
+    // React has not mounted the layout yet — so without this the hamburger
+    // reads as absent, the sidebar never opens, and the click below spends the
+    // whole timeout on a link parked off-screen.
+    await expect(page.locator('.app-footer__version')).toBeVisible();
+
+    // On a phone the sidebar sits off-screen until the hamburger opens it. The
+    // hamburger is `d-lg-none`, so on desktop it is display:none and the
+    // sidebar is already on screen.
     const toggle = page.getByRole('button', { name: 'Toggle sidebar' });
     if (await toggle.isVisible()) {
       await toggle.click();
