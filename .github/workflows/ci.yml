@@ -9,9 +9,13 @@ name: CI
 on:
   pull_request:
   push:
-    # Feature branches run the full gate too, so a section can be verified
-    # green *before* it is merged rather than after.
-    branches: [main, 'claude/**']
+    branches: [main]
+  # Validate a feature branch on demand, from the Actions tab or
+  # `gh workflow run ci.yml --ref <branch>`.
+  #
+  # Deliberately NOT `push: claude/**`: work-in-progress branches push many
+  # times before they are ready, and every red run sends the repo owner an
+  # email. Pre-merge validation happens locally or via this manual trigger.
   workflow_dispatch:
 
 concurrency:
