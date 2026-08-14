@@ -567,11 +567,22 @@ describe('buildFallbackPlan', () => {
     expect(plan.entries[0].recipeId).toBeNull();
   });
 
-  it('suggests batching when the same ingredient spans two days', () => {
-    const plan = buildFallbackPlan({ ...context, recipes: [recipe()] });
+  it('suggests batching when two different meals share an ingredient', () => {
+    const plan = buildFallbackPlan({
+      ...context,
+      recipes: [recipe(), recipe({ id: 'recipe-2', name: 'Spinach Soup' })],
+    });
 
     expect(plan.batchCooking[0]).toMatchObject({ group: 'spinach' });
     expect(plan.batchCooking[0].entryDates.length).toBeGreaterThan(1);
+  });
+
+  it('does not suggest batching one recipe with itself when the library is thin', () => {
+    // A single recipe fills all seven days. "Prep spinach once, it's used in
+    // Spinach Frittata and Spinach Frittata" is noise, not advice.
+    const plan = buildFallbackPlan({ ...context, recipes: [recipe()] });
+
+    expect(plan.batchCooking).toEqual([]);
   });
 
   it('returns null when the week has no room', () => {
@@ -781,5 +792,250 @@ describe('anthropicClient', () => {
   it('turns a refusal into an error rather than an empty plan', async () => {
     const client = fakeClient(modelPlan(), { stopReason: 'refusal' });
     await expect(requestPlan(client, { system: 's', user: 'u' })).rejects.toThrow(/declined/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Regressions — each of these failed before the fix it names.
+// ---------------------------------------------------------------------------
+
+const { readHelloFresh, toWeekday, fromDayKey } = require('../planContext');
+const { deriveBatchCooking } = require('../fallbackPlan');
+const { REQUEST_TIMEOUT_MS, MAX_RETRIES } = require('../anthropicClient');
+
+/** A kitchen with something in it and something to cook. */
+const stockedKitchen = {
+  profile: profile(),
+  inventory: [item()],
+  recipes: [recipe()],
+};
+
+describe('a response the model could not finish', () => {
+  it('is refused rather than written as if it were a whole week', async () => {
+    const client = fakeClient(modelPlan(), { stopReason: 'max_tokens' });
+
+    await expect(
+      requestPlan(client, { system: 'plan a week', user: 'the kitchen' })
+    ).rejects.toThrow(/ran out of room/);
+  });
+
+  it('degrades the whole call to the local planner', async () => {
+    const result = await run(stockedKitchen, fakeClient(modelPlan(), { stopReason: 'max_tokens' }));
+
+    expect(result.warning).toBe(FAILED_WARNING);
+    expect(result.plan.degraded).toBe(true);
+    expect(result.plan.entries.length).toBeGreaterThan(0);
+  });
+});
+
+describe('the API call is bounded by the function’s own deadline', () => {
+  it('gives up well inside the 120s the callable runs with', () => {
+    // Left at the SDK default (10 minutes, two retries) a slow call outlives
+    // the function and the cook gets an error instead of the fallback plan.
+    expect(REQUEST_TIMEOUT_MS * (MAX_RETRIES + 1)).toBeLessThan(120000);
+  });
+
+  it('hands those bounds to the client it builds', () => {
+    const client = createClient('sk-test-not-a-real-key');
+
+    // The SDK keeps them on the instance; assert on whichever it exposes.
+    const timeout = client.timeout ?? client._options?.timeout;
+    const retries = client.maxRetries ?? client._options?.maxRetries;
+    expect(timeout).toBe(REQUEST_TIMEOUT_MS);
+    expect(retries).toBe(MAX_RETRIES);
+  });
+});
+
+describe('a shopping list that counts units', () => {
+  const entryUsing = (ingredients) => ({ usesIngredients: ingredients });
+
+  it('does not add cups of flour to grams of flour', () => {
+    const list = deriveShoppingList([
+      entryUsing([{ name: 'Flour', normalized: 'flour', quantity: 2, unit: 'cup' }]),
+      entryUsing([{ name: 'Flour', normalized: 'flour', quantity: 200, unit: 'g' }]),
+    ]);
+
+    expect(list).toHaveLength(2);
+    expect(list.map((i) => `${i.quantity} ${i.unit}`)).toEqual(['2 cup', '200 g']);
+  });
+
+  it('does not let a bag in the pantry cover a recipe measured in grams', () => {
+    const list = deriveShoppingList(
+      [entryUsing([{ name: 'Flour', normalized: 'flour', quantity: 200, unit: 'g' }])],
+      [{ name: 'Flour', normalized: 'flour', quantity: 1, unit: 'bag' }]
+    );
+
+    expect(list[0].haveInInventory).toBe(false);
+    expect(list[0].onHand).toBe(0);
+  });
+
+  it('still totals the same ingredient in the same unit', () => {
+    const list = deriveShoppingList([
+      entryUsing([{ name: 'Flour', normalized: 'flour', quantity: 2, unit: 'cup' }]),
+      entryUsing([{ name: 'Flour', normalized: 'flour', quantity: 1, unit: 'cup' }]),
+    ]);
+
+    expect(list).toEqual([
+      expect.objectContaining({ normalized: 'flour', quantity: 3, unit: 'cup' }),
+    ]);
+  });
+
+  it('reports how much of a partly-stocked ingredient is on hand', () => {
+    const list = deriveShoppingList(
+      [entryUsing([{ name: 'Rice', normalized: 'rice', quantity: 5, unit: 'cup' }])],
+      [{ name: 'Rice', normalized: 'rice', quantity: 2, unit: 'cup' }]
+    );
+
+    expect(list[0]).toMatchObject({ onHand: 2, haveInInventory: false });
+  });
+});
+
+describe('a library recipe with no ingredients listed', () => {
+  it('yields an empty array, not the undefined Firestore rejects', () => {
+    const context = {
+      openDays: DAYS,
+      recipes: [{ id: 'recipe-bare', name: 'Toast' }],
+      inventory: [],
+      preferences: { defaultServings: 2 },
+    };
+
+    const parsed = parsePlan(
+      {
+        entries: [
+          {
+            date: DAYS[0],
+            mealType: 'dinner',
+            recipeId: 'recipe-bare',
+            recipeName: 'Toast',
+            servings: 2,
+            usesIngredients: [],
+            batchGroup: '',
+            notes: '',
+          },
+        ],
+      },
+      context
+    );
+
+    expect(parsed.entries[0].usesIngredients).toEqual([]);
+  });
+});
+
+describe('HelloFresh delivery days as the schema documents them', () => {
+  const weekKeys = weekDayKeys(WEEK_START, 7); // 2026-08-10 is a Monday
+
+  it('reads the documented singular `deliveryDay` name', () => {
+    const hf = readHelloFresh({ helloFresh: { enabled: true, deliveryDay: 'monday' } }, weekKeys);
+
+    expect(hf.deliveryDayKeys).toEqual([WEEK_START]);
+  });
+
+  it('still reads a numeric `deliveryDays` list', () => {
+    const hf = readHelloFresh({ helloFresh: { enabled: true, deliveryDays: [1, 4] } }, weekKeys);
+
+    expect(hf.deliveryDayKeys).toEqual([weekKeys[0], weekKeys[3]]);
+  });
+
+  it('lands Sunday on Sunday under either numbering', () => {
+    expect(toWeekday(7)).toBe(0);
+    expect(toWeekday(0)).toBe(0);
+    expect(readHelloFresh({ helloFresh: { deliveryDays: [7] } }, weekKeys).deliveryDayKeys).toEqual([
+      weekKeys[6],
+    ]);
+  });
+
+  it('drops a delivery day it cannot make sense of instead of guessing Monday', () => {
+    expect(toWeekday('someday')).toBeNull();
+    expect(toWeekday(99)).toBeNull();
+    expect(
+      readHelloFresh({ helloFresh: { deliveryDays: ['someday'] } }, weekKeys).deliveryDayKeys
+    ).toEqual([]);
+  });
+
+  it('matches on the weekday a key falls on, not its position in the list', () => {
+    // A week that starts on a Wednesday: "friday" must still be the Friday.
+    const midWeek = weekDayKeys('2026-08-12', 7);
+    const hf = readHelloFresh({ helloFresh: { deliveryDay: 'friday' } }, midWeek);
+
+    expect(hf.deliveryDayKeys).toHaveLength(1);
+    expect(fromDayKey(hf.deliveryDayKeys[0]).getDay()).toBe(5);
+  });
+});
+
+describe('days that already have a dinner', () => {
+  const dinnerOn = (date, overrides = {}) => ({
+    id: `entry-${date}-${overrides.source || 'manual'}`,
+    date,
+    mealType: 'dinner',
+    status: 'planned',
+    source: 'manual',
+    recipeName: 'Something',
+    planId: null,
+    ...overrides,
+  });
+
+  const openDaysFor = async (entries) =>
+    (await collectPlanContext(makeDb({ entries }), UID, WEEK_START)).openDays;
+
+  it('are off limits when the cook scheduled the meal by hand', async () => {
+    expect(await openDaysFor([dinnerOn(DAYS[0])])).not.toContain(DAYS[0]);
+  });
+
+  it('are off limits when waste prevention put a meal there', async () => {
+    const days = await openDaysFor([dinnerOn(DAYS[1], { source: 'waste-prevention' })]);
+    expect(days).not.toContain(DAYS[1]);
+  });
+
+  it('are off limits when a previous AI meal has already been cooked', async () => {
+    const days = await openDaysFor([
+      dinnerOn(DAYS[2], { source: 'ai', planId: WEEK_START, status: 'cooked' }),
+    ]);
+    expect(days).not.toContain(DAYS[2]);
+  });
+
+  it('open back up for this week’s own uncooked AI meals, so regenerating works', async () => {
+    const days = await openDaysFor(
+      DAYS.map((date) => dinnerOn(date, { source: 'ai', planId: WEEK_START }))
+    );
+    expect(days).toEqual(DAYS);
+  });
+
+  it('open back up when the meal there was skipped', async () => {
+    const days = await openDaysFor([dinnerOn(DAYS[3], { status: 'skipped' })]);
+    expect(days).toContain(DAYS[3]);
+  });
+
+  it('stay open when the only meal there is lunch', async () => {
+    const days = await openDaysFor([dinnerOn(DAYS[4], { mealType: 'lunch' })]);
+    expect(days).toContain(DAYS[4]);
+  });
+
+  it('stop the planner double-booking a hand-scheduled dinner', async () => {
+    const result = await run(
+      { ...stockedKitchen, entries: [dinnerOn(DAYS[0])] },
+      fakeClient(modelPlan())
+    );
+
+    expect(result.plan.entries.map((e) => e.date)).not.toContain(DAYS[0]);
+  });
+});
+
+describe('batch tips from the local planner', () => {
+  it('do not suggest cooking one meal together with itself', () => {
+    const repeated = [
+      { date: DAYS[0], recipeName: 'Curry', usesIngredients: [{ normalized: 'onion', name: 'Onion' }] },
+      { date: DAYS[1], recipeName: 'Curry', usesIngredients: [{ normalized: 'onion', name: 'Onion' }] },
+    ];
+
+    expect(deriveBatchCooking(repeated)).toEqual([]);
+  });
+
+  it('still suggest it for two different meals', () => {
+    const different = [
+      { date: DAYS[0], recipeName: 'Curry', usesIngredients: [{ normalized: 'onion', name: 'Onion' }] },
+      { date: DAYS[1], recipeName: 'Soup', usesIngredients: [{ normalized: 'onion', name: 'Onion' }] },
+    ];
+
+    expect(deriveBatchCooking(different)).toHaveLength(1);
   });
 });

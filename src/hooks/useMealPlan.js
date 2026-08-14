@@ -112,6 +112,40 @@ const normalize = (value) =>
 const shoppingKey = (name, unit) => `${normalize(name)}|${normalize(unit)}`;
 
 /**
+ * Index the kitchen so a lookup can tell "a different measure" from
+ * "no measure recorded".
+ */
+const indexStock = (inventoryItems) => {
+  const byNameAndUnit = new Map();
+  const unitlessByName = new Map();
+  const byName = new Map();
+
+  inventoryItems.forEach((item) => {
+    const name = normalize(item.normalized || item.name);
+    const quantity = Number(item.quantity || 0);
+    const add = (map, key) => map.set(key, (map.get(key) ?? 0) + quantity);
+
+    add(byNameAndUnit, shoppingKey(name, item.unit));
+    add(byName, name);
+    if (!normalize(item.unit)) add(unitlessByName, name);
+  });
+
+  /**
+   * How much of this ingredient the kitchen has, in the unit asked for.
+   *
+   * A jar measured in bags does not cover a recipe measured in grams. An item
+   * stored with no unit at all is a different case — that is a gap in the
+   * record, not a different substance, so it still counts.
+   */
+  return (name, unit) => {
+    if (!normalize(unit)) return byName.get(normalize(name)) ?? 0;
+    return (
+      (byNameAndUnit.get(shoppingKey(name, unit)) ?? 0) + (unitlessByName.get(normalize(name)) ?? 0)
+    );
+  };
+};
+
+/**
  * What still needs buying for the meals on the board.
  *
  * Sums each ingredient across every meal still to be cooked, then subtracts
@@ -120,11 +154,7 @@ const shoppingKey = (name, unit) => `${normalize(name)}|${normalize(unit)}`;
  * how much of a partly-covered item the kitchen already has.
  */
 export const buildShoppingList = (entries = [], inventoryItems = []) => {
-  const stock = new Map();
-  inventoryItems.forEach((item) => {
-    const key = shoppingKey(item.normalized || item.name, item.unit);
-    stock.set(key, (stock.get(key) ?? 0) + Number(item.quantity || 0));
-  });
+  const onHandFor = indexStock(inventoryItems);
 
   const needed = new Map();
   entries.filter(isUpcoming).forEach((entry) => {
@@ -151,7 +181,7 @@ export const buildShoppingList = (entries = [], inventoryItems = []) => {
 
   return [...needed.values()]
     .map((item) => {
-      const onHand = stock.get(item.key) ?? 0;
+      const onHand = onHandFor(item.normalized, item.unit);
       return {
         ...item,
         quantity: Math.round(item.quantity * 100) / 100,

@@ -43,19 +43,48 @@ const cleanIngredients = (ingredients) =>
  * Two quantities only add up when they are counted the same way.
  *
  * "2 cups flour" plus "200 g flour" is not "202 cups flour", so the list is
- * keyed on ingredient *and* unit — and a stocked jar of one unit never covers
- * a recipe measured in another.
+ * keyed on ingredient *and* unit. Mirrors buildShoppingList in
+ * src/hooks/useMealPlan.js, which builds the same list from the client.
  */
-const unitKey = (unit) => normalize(unit);
-const stockKey = (name, unit) => `${normalize(name)}|${unitKey(unit)}`;
+const stockKey = (name, unit) => `${normalize(name)}|${normalize(unit)}`;
+
+/**
+ * Index the kitchen so a lookup can tell "a different measure" from
+ * "no measure recorded".
+ */
+function indexStock(inventory) {
+  const byNameAndUnit = new Map();
+  const unitlessByName = new Map();
+  const byName = new Map();
+
+  inventory.forEach((item) => {
+    const name = normalize(item.normalized || item.name);
+    const quantity = Number(item.quantity) || 0;
+    const add = (map, key) => map.set(key, (map.get(key) ?? 0) + quantity);
+
+    add(byNameAndUnit, stockKey(name, item.unit));
+    add(byName, name);
+    if (!normalize(item.unit)) add(unitlessByName, name);
+  });
+
+  /**
+   * How much of this ingredient the kitchen has, in the unit asked for.
+   *
+   * A jar measured in bags does not cover a recipe measured in grams. An item
+   * stored with no unit at all is a different case — that is a gap in the
+   * record, not a different substance, so it still counts.
+   */
+  return (name, unit) => {
+    if (!normalize(unit)) return byName.get(normalize(name)) ?? 0;
+    return (
+      (byNameAndUnit.get(stockKey(name, unit)) ?? 0) + (unitlessByName.get(normalize(name)) ?? 0)
+    );
+  };
+}
 
 /** Recompute the shopping list rather than trusting the model's arithmetic. */
 function deriveShoppingList(entries, inventory = []) {
-  const stock = new Map();
-  inventory.forEach((item) => {
-    const key = stockKey(item.normalized || item.name, item.unit);
-    stock.set(key, (stock.get(key) ?? 0) + (Number(item.quantity) || 0));
-  });
+  const onHandFor = indexStock(inventory);
 
   const needed = new Map();
   entries.forEach((entry) => {
@@ -68,14 +97,14 @@ function deriveShoppingList(entries, inventory = []) {
           name: ingredient.name || ingredient.normalized,
           normalized: ingredient.normalized,
           quantity: ingredient.quantity,
-          unit: ingredient.unit,
+          unit: ingredient.unit || '',
         });
     });
   });
 
   return [...needed.values()]
     .map((item) => {
-      const onHand = stock.get(stockKey(item.normalized, item.unit)) ?? 0;
+      const onHand = onHandFor(item.normalized, item.unit);
       return {
         ...item,
         quantity: Math.round(item.quantity * 100) / 100,
