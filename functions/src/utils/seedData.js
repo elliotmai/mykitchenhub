@@ -128,6 +128,13 @@ async function seedInventory(userId, itemCount = 20) {
 
 /**
  * Seed sample recipes for testing
+ *
+ * The documents written here must satisfy the `recipes` rules in
+ * firestore/firestore.rules: `name` (not `title`), a `source` drawn from the
+ * documented list, plus `ingredients`, `instructions`, `tags`, `servings`,
+ * `difficulty`, `timesCooked` and `createdAt`. Each ingredient carries
+ * `normalized`, which is what inventory matching keys on.
+ *
  * @param {string} userId - User ID
  */
 async function seedRecipes(userId) {
@@ -138,7 +145,7 @@ async function seedRecipes(userId) {
   
   const sampleRecipes = [
     {
-      title: 'Classic Spaghetti Carbonara',
+      name: 'Classic Spaghetti Carbonara',
       description: 'Traditional Italian pasta dish with eggs, cheese, and pancetta',
       servings: 4,
       prepTime: 10,
@@ -160,13 +167,14 @@ async function seedRecipes(userId) {
         'Season with black pepper and serve'
       ],
       tags: ['italian', 'pasta', 'dinner'],
-      source: 'seed',
-      userId: userId,
-      isPublic: false,
+      source: 'user-created',
+      timesCooked: 0,
+      imageUrl: null,
+      createdBy: userId,
       createdAt: new Date().toISOString()
     },
     {
-      title: 'Chicken Stir Fry',
+      name: 'Chicken Stir Fry',
       description: 'Quick and healthy weeknight dinner',
       servings: 4,
       prepTime: 15,
@@ -191,13 +199,14 @@ async function seedRecipes(userId) {
         'Serve over rice'
       ],
       tags: ['asian', 'chicken', 'healthy', 'quick'],
-      source: 'seed',
-      userId: userId,
-      isPublic: false,
+      source: 'user-created',
+      timesCooked: 0,
+      imageUrl: null,
+      createdBy: userId,
       createdAt: new Date().toISOString()
     },
     {
-      title: 'Greek Salad',
+      name: 'Greek Salad',
       description: 'Fresh and light Mediterranean salad',
       servings: 4,
       prepTime: 15,
@@ -220,9 +229,10 @@ async function seedRecipes(userId) {
         'Toss and serve immediately'
       ],
       tags: ['salad', 'healthy', 'vegetarian', 'mediterranean'],
-      source: 'seed',
-      userId: userId,
-      isPublic: false,
+      source: 'user-created',
+      timesCooked: 0,
+      imageUrl: null,
+      createdBy: userId,
       createdAt: new Date().toISOString()
     }
   ];
@@ -231,7 +241,14 @@ async function seedRecipes(userId) {
   
   for (const recipe of sampleRecipes) {
     const recipeRef = recipesRef.doc();
-    batch.set(recipeRef, recipe);
+    batch.set(recipeRef, {
+      ...recipe,
+      // `normalized` is the field recipe/inventory matching joins on.
+      ingredients: recipe.ingredients.map((ingredient) => ({
+        ...ingredient,
+        normalized: ingredient.name.trim().toLowerCase(),
+      })),
+    });
   }
   
   await batch.commit();
@@ -269,7 +286,7 @@ async function clearInventory(userId) {
  */
 async function clearRecipes(userId) {
   const db = getFirestore();
-  const recipesRef = db.collection('recipes').where('userId', '==', userId);
+  const recipesRef = db.collection('recipes').where('createdBy', '==', userId);
   
   console.log(`Clearing recipes for user ${userId}...`);
   
