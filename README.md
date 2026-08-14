@@ -39,6 +39,19 @@ Instead, it will copy all the configuration files and the transitive dependencie
 
 You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
 
+## Environment variables
+
+### Cloud Functions (`functions/`)
+
+| Variable | Used by | Required? |
+| --- | --- | --- |
+| `ANTHROPIC_API_KEY` | `generateMealPlan` — AI meal planning (roadmap 7.2) | No. Without it the planner still builds a week from what is expiring in the kitchen and tells the cook the AI was skipped. |
+| `LEGACY_FIREBASE_SERVICE_ACCOUNT_PATH` | `syncLegacyRecipes` | Only for the legacy recipe import |
+
+`ANTHROPIC_API_KEY` is a GitHub Actions secret in CI. For a deployment configured
+the older way, `firebase functions:config:set anthropic.key=...` is read as a
+fallback. Never commit a key or print one in a log.
+
 ## Learn More
 
 You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
