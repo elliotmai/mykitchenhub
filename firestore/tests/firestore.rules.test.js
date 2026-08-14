@@ -237,31 +237,6 @@ describe('storage locations', () => {
     await assertSucceeds(as(OWNER).doc(locPath(OWNER, `loc-${type}`)).set(validLocation({ type })));
   });
 
-  it('accepts a restock: another purchase appended and the counters bumped', async () => {
-    const item = validItem();
-    await seed((db) => db.doc(itemPath(OWNER)).set(item));
-
-    await assertSucceeds(
-      as(OWNER)
-        .doc(itemPath(OWNER))
-        .update({
-          addedAt: item.addedAt,
-          quantity: item.quantity + 2,
-          totalTimesPurchased: 2,
-          purchaseHistory: [
-            ...item.purchaseHistory,
-            {
-              addedAt: new Date().toISOString(),
-              quantity: 2,
-              unit: 'gal',
-              price: 3.99,
-              store: 'Aldi',
-            },
-          ],
-        })
-    );
-  });
-
   it('rejects an unknown location type', async () => {
     await assertFails(as(OWNER).doc(locPath(OWNER)).set(validLocation({ type: 'garage' })));
   });
@@ -329,6 +304,31 @@ describe('inventory items', () => {
     await seed((db) => db.doc(itemPath(OWNER)).set(item));
 
     await assertFails(as(OWNER).doc(itemPath(OWNER)).update({ addedAt: '1999-01-01', quantity: 2 }));
+  });
+
+  it('accepts a restock: another purchase appended and the counters bumped', async () => {
+    const item = validItem();
+    await seed((db) => db.doc(itemPath(OWNER)).set(item));
+
+    await assertSucceeds(
+      as(OWNER)
+        .doc(itemPath(OWNER))
+        .update({
+          addedAt: item.addedAt,
+          quantity: item.quantity + 2,
+          totalTimesPurchased: 2,
+          purchaseHistory: [
+            ...item.purchaseHistory,
+            {
+              addedAt: new Date().toISOString(),
+              quantity: 2,
+              unit: 'gal',
+              price: 3.99,
+              store: 'Aldi',
+            },
+          ],
+        })
+    );
   });
 
   it('rejects an unknown location type', async () => {

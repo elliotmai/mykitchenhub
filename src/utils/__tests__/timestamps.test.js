@@ -2,15 +2,7 @@
 // instead of an Invalid Date is the difference between an empty tile and NaN
 // rendered to a user.
 
-import {
-  toDate,
-  startOfWeekMonday,
-  endOfWeekMonday,
-  isSameWeek,
-  monthKey,
-  monthLabel,
-  recentMonthKeys,
-} from '../timestamps';
+import { toDate, monthKey, monthLabel, recentMonthKeys } from '../timestamps';
 import { Timestamp } from '../../test-utils/mocks/firestore';
 
 describe('toDate', () => {
@@ -54,46 +46,6 @@ describe('toDate', () => {
         },
       })
     ).toBeNull();
-  });
-});
-
-describe('week boundaries', () => {
-  it('starts the week on Monday at midnight', () => {
-    // 2026-08-14 is a Friday.
-    const monday = startOfWeekMonday(new Date('2026-08-14T15:30:00'));
-    expect(monday.getDay()).toBe(1);
-    expect(monday.getDate()).toBe(10);
-    expect(monday.getHours()).toBe(0);
-  });
-
-  it('treats Sunday as the end of the week it started, not the beginning of the next', () => {
-    const monday = startOfWeekMonday(new Date('2026-08-16T09:00:00')); // Sunday
-    expect(monday.getDate()).toBe(10);
-  });
-
-  it('ends the week exactly seven days after it starts', () => {
-    const start = startOfWeekMonday(new Date('2026-08-14T15:30:00'));
-    const end = endOfWeekMonday(new Date('2026-08-14T15:30:00'));
-    expect(end - start).toBe(7 * 24 * 60 * 60 * 1000);
-  });
-});
-
-describe('isSameWeek', () => {
-  const friday = new Date('2026-08-14T12:00:00');
-
-  it('accepts a date inside the same Monday-based week', () => {
-    expect(isSameWeek(new Date('2026-08-10T00:00:00'), friday)).toBe(true);
-    expect(isSameWeek(new Date('2026-08-16T23:00:00'), friday)).toBe(true);
-  });
-
-  it('rejects the week either side', () => {
-    expect(isSameWeek(new Date('2026-08-09T23:59:00'), friday)).toBe(false);
-    expect(isSameWeek(new Date('2026-08-17T00:00:00'), friday)).toBe(false);
-  });
-
-  it('rejects a missing date rather than throwing', () => {
-    expect(isSameWeek(null, friday)).toBe(false);
-    expect(isSameWeek(undefined, friday)).toBe(false);
   });
 });
 

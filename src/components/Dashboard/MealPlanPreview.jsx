@@ -1,44 +1,57 @@
 // src/components/Dashboard/MealPlanPreview.jsx
 // This week's dinners at a glance.
 //
-// Read-only: planning lives on /meal-plan (Phase 7). All this does is show the
-// seven days and what, if anything, is against each of them.
+// Read-only. Planning itself lives on /meal-plan, and the data comes from the
+// `mealPlanEntries` contract that page owns (firestore/SCHEMA_DOCUMENTATION.md)
+// — one document per scheduled meal, keyed on a `YYYY-MM-DD` day. All this does
+// is show the seven days and what, if anything, is against each of them.
 
 import React from 'react';
 import { Card } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { Calendar, Sparkles } from 'lucide-react';
-import { DAY_ORDER, dayLabel } from '../../hooks/useMealPlanWeek';
 
 /**
- * Pair every day of the week with its planned meal, so an unplanned Thursday is
- * visible as a gap rather than silently missing from the list.
+ * One row per day of the week, with the meals scheduled on it.
  *
- * @param {Array} meals - normalized meals from useMealPlanWeek
+ * Every day is present whether or not anything is planned, so an empty
+ * Thursday reads as a gap rather than being missing from the list.
+ *
+ * @param {Array} weekDays - `{ key, label, isToday }` rows from useMealPlan
+ * @param {object} entriesByDay - day key → scheduled entries
  */
-export const buildWeekRows = (meals = []) => {
-  const byDay = new Map();
-  meals.forEach((meal) => {
-    if (meal.day && !byDay.has(meal.day)) byDay.set(meal.day, meal);
+export const buildWeekRows = (weekDays = [], entriesByDay = {}) =>
+  weekDays.map((day) => {
+    const entries = entriesByDay?.[day.key] ?? [];
+    return {
+      key: day.key,
+      label: day.label,
+      isToday: Boolean(day.isToday),
+      // The tile has one line per day, so it shows the first meal and counts
+      // the rest rather than turning into a second meal-plan page.
+      title: entries[0]?.recipeName?.trim() || '',
+      extra: Math.max(0, entries.length - 1),
+    };
   });
 
-  return DAY_ORDER.map((day) => ({
-    day,
-    label: dayLabel(day),
-    meal: byDay.get(day) ?? null,
-  }));
-};
+/** How many meals are scheduled across the whole week. */
+export const countPlannedMeals = (entriesByDay = {}) =>
+  Object.values(entriesByDay ?? {}).reduce(
+    (total, entries) => total + (Array.isArray(entries) ? entries.length : 0),
+    0
+  );
 
 /**
  * MealPlanPreview
  *
- * @param {Array} meals - normalized meals for the current week
+ * @param {Array} weekDays - the seven days of the current week
+ * @param {object} entriesByDay - day key → scheduled entries
  * @param {string} weekLabel - e.g. "Aug 10 – Aug 16"
  * @param {boolean} loading - plan still arriving
  */
-const MealPlanPreview = ({ meals = [], weekLabel = '', loading = false }) => {
-  const rows = buildWeekRows(meals);
-  const planned = meals.length;
+const MealPlanPreview = ({ weekDays = [], entriesByDay = {}, weekLabel = '', loading = false }) => {
+  const rows = buildWeekRows(weekDays, entriesByDay);
+  const planned = countPlannedMeals(entriesByDay);
 
   return (
     <Card className="h-100 meal-plan-preview">
@@ -67,12 +80,21 @@ const MealPlanPreview = ({ meals = [], weekLabel = '', loading = false }) => {
             <ol className="meal-plan-preview__days">
               {rows.map((row) => (
                 <li
-                  key={row.day}
-                  className={`meal-plan-day${row.meal ? '' : ' meal-plan-day--empty'}`}
+                  key={row.key}
+                  className={[
+                    'meal-plan-day',
+                    row.title ? '' : 'meal-plan-day--empty',
+                    row.isToday ? 'meal-plan-day--today' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
                 >
                   <span className="meal-plan-day__label">{row.label}</span>
                   <span className="meal-plan-day__meal">
-                    {row.meal ? row.meal.title || 'Planned meal' : 'Nothing planned'}
+                    {row.title || 'Nothing planned'}
+                    {row.extra > 0 ? (
+                      <span className="meal-plan-day__extra"> +{row.extra} more</span>
+                    ) : null}
                   </span>
                 </li>
               ))}

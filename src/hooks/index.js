@@ -5,5 +5,4 @@ export { default as useAuth, useAuth as useAuthHook, AuthProvider } from './useA
 export { default as useCSVImport } from './useCSVImport';
 export { default as useMealPlan } from './useMealPlan';
 export { default as useRecipeCount } from './useRecipeCount';
-export { default as useMealPlanWeek } from './useMealPlanWeek';
 export { default as useShoppingAnalytics } from './useShoppingAnalytics';

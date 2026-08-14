@@ -8,21 +8,21 @@ import { renderWithProviders, screen, firestoreMock as fs } from '../../test-uti
 import {
   asDocs,
   makeItem,
-  makeMealPlan,
+  makeMealPlanEntry,
   makeUserProfile,
   daysFromNow,
 } from '../../test-utils/factories';
-import Dashboard, { countExpiringSoon } from '../Dashboard';
+import Dashboard, { countExpiringSoon, weekRangeLabel } from '../Dashboard';
 
 const UID = 'test-uid';
 const INVENTORY_PATH = `users/${UID}/inventory`;
-const PLANS_PATH = `users/${UID}/mealPlans`;
+const ENTRIES_PATH = `users/${UID}/mealPlanEntries`;
 
 /**
  * Render the dashboard signed in, then deliver the snapshots its three
  * listeners are waiting on.
  */
-const renderDashboard = async ({ items = [], plans = [], recipeCount = 0 } = {}) => {
+const renderDashboard = async ({ items = [], entries = [], recipeCount = 0 } = {}) => {
   fs.getCountFromServer.mockResolvedValue({ data: () => ({ count: recipeCount }) });
 
   const view = renderWithProviders(<Dashboard />, {
@@ -30,14 +30,25 @@ const renderDashboard = async ({ items = [], plans = [], recipeCount = 0 } = {})
     userProfile: makeUserProfile({ displayName: 'Sam' }),
   });
 
-  await waitFor(() => expect(fs.__listenerCount(INVENTORY_PATH)).toBe(1));
+  await waitFor(() => expect(fs.__listenerCount(INVENTORY_PATH)).toBeGreaterThan(0));
   await act(async () => {
     fs.__emit(INVENTORY_PATH, asDocs(items));
-    fs.__emit(PLANS_PATH, asDocs(plans));
+    fs.__emit(ENTRIES_PATH, asDocs(entries));
   });
 
   return view;
 };
+
+describe('weekRangeLabel', () => {
+  it('spans Monday to Sunday of the week it is given', () => {
+    expect(weekRangeLabel('2026-08-10')).toBe('Aug 10 – Aug 16');
+  });
+
+  it('is empty rather than "Invalid Date" without a week', () => {
+    expect(weekRangeLabel('')).toBe('');
+    expect(weekRangeLabel(undefined)).toBe('');
+  });
+});
 
 describe('countExpiringSoon', () => {
   it('counts everything inside the five-day window, expired included', () => {
@@ -72,7 +83,7 @@ describe('Dashboard', () => {
         makeItem({ name: 'Old Yogurt', expiresAt: daysFromNow(-2) }),
         makeItem({ name: 'Rice', expiresAt: daysFromNow(200) }),
       ],
-      plans: [makeMealPlan()],
+      entries: [makeMealPlanEntry(), makeMealPlanEntry({ recipeName: 'Chicken Stir Fry' })],
       recipeCount: 42,
     });
 
@@ -113,21 +124,23 @@ describe('Dashboard', () => {
   });
 
   it("previews this week's dinners", async () => {
-    await renderDashboard({ plans: [makeMealPlan()] });
+    await renderDashboard({
+      entries: [makeMealPlanEntry({ recipeName: 'Sheet Pan Salmon' })],
+    });
 
     expect(screen.getByText('Sheet Pan Salmon')).toBeInTheDocument();
-    expect(screen.getByText('Chicken Stir Fry')).toBeInTheDocument();
+    expect(screen.getAllByRole('listitem')).toHaveLength(7);
   });
 
   it('does not break when the meal plan collection cannot be read', async () => {
     jest.spyOn(console, 'error').mockImplementation(() => {});
 
     renderWithProviders(<Dashboard />, { route: '/dashboard' });
-    await waitFor(() => expect(fs.__listenerCount(PLANS_PATH)).toBe(1));
+    await waitFor(() => expect(fs.__listenerCount(ENTRIES_PATH)).toBeGreaterThan(0));
 
     await act(async () => {
       fs.__emit(INVENTORY_PATH, []);
-      fs.__emitError(PLANS_PATH, new Error('permission-denied'));
+      fs.__emitError(ENTRIES_PATH, new Error('permission-denied'));
     });
 
     expect(screen.getByText('No meals planned for this week yet.')).toBeInTheDocument();
@@ -138,7 +151,7 @@ describe('Dashboard', () => {
     jest.spyOn(console, 'error').mockImplementation(() => {});
 
     renderWithProviders(<Dashboard />, { route: '/dashboard' });
-    await waitFor(() => expect(fs.__listenerCount(INVENTORY_PATH)).toBe(1));
+    await waitFor(() => expect(fs.__listenerCount(INVENTORY_PATH)).toBeGreaterThan(0));
 
     await act(async () => {
       fs.__emitError(INVENTORY_PATH, new Error('permission-denied'));

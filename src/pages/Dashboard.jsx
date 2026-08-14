@@ -12,9 +12,22 @@ import { Package, BookOpen, Calendar, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import useInventory, { getExpirationStatus } from '../hooks/useInventory';
 import useRecipeCount from '../hooks/useRecipeCount';
-import useMealPlanWeek from '../hooks/useMealPlanWeek';
-import { StatCard, UrgentAlerts, MealPlanPreview, QuickActions } from '../components/Dashboard';
+import useMealPlan, { fromDayKey, shiftDayKey } from '../hooks/useMealPlan';
+import {
+  StatCard,
+  UrgentAlerts,
+  MealPlanPreview,
+  QuickActions,
+  countPlannedMeals,
+} from '../components/Dashboard';
 import '../components/Dashboard/Dashboard.css';
+
+/** "Aug 10 – Aug 16" for the week starting at a `YYYY-MM-DD` key. */
+export const weekRangeLabel = (weekStart) => {
+  if (!weekStart) return '';
+  const fmt = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return `${fmt(fromDayKey(weekStart))} – ${fmt(fromDayKey(shiftDayKey(weekStart, 6)))}`;
+};
 
 /** Items in the five-day window the inventory page colour-codes as at-risk. */
 const EXPIRING_STATUSES = ['expired', 'critical', 'warning'];
@@ -35,7 +48,7 @@ const Dashboard = () => {
   const { userProfile } = useAuth();
   const { items, loading: itemsLoading, error: itemsError } = useInventory();
   const { count: recipeCount, loading: recipesLoading } = useRecipeCount();
-  const { meals, mealCount, weekLabel, loading: planLoading } = useMealPlanWeek();
+  const { weekStart, weekDays, entriesByDay, loading: planLoading } = useMealPlan();
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -46,6 +59,8 @@ const Dashboard = () => {
 
   const displayName = userProfile?.displayName || 'there';
   const expiringSoon = countExpiringSoon(items);
+  const mealCount = countPlannedMeals(entriesByDay);
+  const weekLabel = weekRangeLabel(weekStart);
 
   return (
     <div className="dashboard-page">
@@ -115,7 +130,12 @@ const Dashboard = () => {
         </Col>
 
         <Col lg={6}>
-          <MealPlanPreview meals={meals} weekLabel={weekLabel} loading={planLoading} />
+          <MealPlanPreview
+            weekDays={weekDays}
+            entriesByDay={entriesByDay}
+            weekLabel={weekLabel}
+            loading={planLoading}
+          />
         </Col>
 
         <Col lg={6}>

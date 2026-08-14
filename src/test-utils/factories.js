@@ -131,21 +131,6 @@ export const makeItemWithPurchases = (purchases = [], overrides = {}) =>
   });
 
 // ---------------------------------------------------------------------------
-// users/{userId}/mealPlans/{planId}
-// ---------------------------------------------------------------------------
-export const makeMealPlan = (overrides = {}) => ({
-  id: nextId('plan'),
-  weekOf: daysFromNow(0),
-  meals: [
-    { day: 'monday', recipeId: 'recipe-1', recipeName: 'Sheet Pan Salmon', servings: 2 },
-    { day: 'wednesday', recipeId: 'recipe-2', recipeName: 'Chicken Stir Fry', servings: 2 },
-  ],
-  createdAt: daysFromNow(-1),
-  source: 'ai-generated',
-  ...overrides,
-});
-
-// ---------------------------------------------------------------------------
 // users/{userId}/importHistory/{importId}
 // ---------------------------------------------------------------------------
 export const makeImportRecord = (overrides = {}) => ({

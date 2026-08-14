@@ -37,30 +37,6 @@ export const toDate = (value) => {
   return null;
 };
 
-/** Midnight on the Monday of `date`'s week. */
-export const startOfWeekMonday = (date = new Date()) => {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  // getDay(): 0 = Sunday, so Sunday belongs to the week that started 6 days ago.
-  const offset = (d.getDay() + 6) % 7;
-  d.setDate(d.getDate() - offset);
-  return d;
-};
-
-/** Midnight on the Monday *after* `date`'s week — an exclusive upper bound. */
-export const endOfWeekMonday = (date = new Date()) => {
-  const start = startOfWeekMonday(date);
-  start.setDate(start.getDate() + 7);
-  return start;
-};
-
-/** Whether `value` falls inside the same Monday-based week as `reference`. */
-export const isSameWeek = (value, reference = new Date()) => {
-  const d = toDate(value);
-  if (!d) return false;
-  return d >= startOfWeekMonday(reference) && d < endOfWeekMonday(reference);
-};
-
 /** Sortable `YYYY-MM` bucket key. */
 export const monthKey = (date) => {
   const d = toDate(date);
