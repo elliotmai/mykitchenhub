@@ -50,13 +50,17 @@ const test = base.extend({
   },
 
   /**
-   * An already-authenticated page.
+   * A signed-in page, already showing the app.
    *
-   * The session comes from the shared storage state established by the `setup`
-   * project, so this costs nothing — it's an alias that keeps specs explicit
-   * about needing a signed-in user.
+   * The session itself comes from the shared storage state established by the
+   * `setup` project. This still navigates to the dashboard so the fixture
+   * hands back a *loaded* page: specs reasonably expect that, and a fixture
+   * that silently yields about:blank fails in a very confusing way.
+   *
+   * Specs that want a different route just navigate again.
    */
   authedPage: async ({ page }, use) => {
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
     await use(page);
   },
 });
