@@ -33,9 +33,17 @@ export const makeUserProfile = (overrides = {}) => ({
   createdAt: daysFromNow(-30),
   preferences: {
     dietaryRestrictions: [],
-    smsAlerts: false,
-    phoneNumber: null,
-    alertTime: '09:00',
+    // Matches what onUserCreate seeds and what the daily alert function reads.
+    smsAlerts: {
+      enabled: false,
+      phoneNumber: '',
+      time: '09:00',
+    },
+    notifications: {
+      expiringSoon: true,
+      mealPlanReminders: true,
+      lowInventory: false,
+    },
   },
   helloFresh: {
     active: false,
@@ -91,6 +99,7 @@ export const makeItem = (overrides = {}) => {
     addedAt: daysFromNow(-1),
     expiresAt: daysFromNow(7),
     shelfLifeDays: 7,
+    shelfLifeSource: 'default',
     notes: '',
     source: 'manual',
     purchaseHistory: [],
@@ -120,6 +129,23 @@ export const makeImportRecord = (overrides = {}) => ({
   source: 'csv-import',
   errorCount: 3,
   errors: [{ row: 7, message: 'Missing quantity.' }],
+  ...overrides,
+});
+
+// ---------------------------------------------------------------------------
+// users/{userId}/notifications/{notificationId}
+// ---------------------------------------------------------------------------
+export const makeNotification = (overrides = {}) => ({
+  id: nextId('notification'),
+  type: 'waste-alert',
+  title: '2 items to use up soon',
+  body: 'spinach (today) and milk (tomorrow). Freeze what you can, or cook something.',
+  createdAt: daysFromNow(0),
+  read: false,
+  channel: 'in-app',
+  smsStatus: 'not-configured',
+  itemIds: [],
+  itemCount: 2,
   ...overrides,
 });
 

@@ -23,7 +23,20 @@ This document describes the complete Firestore database structure for MyKitchenH
     dietaryRestrictions: ["vegetarian", "gluten-free"],  // Array of restrictions
     dislikedIngredients: ["cilantro", "mushrooms"],       // Array of disliked items
     defaultServings: 1,                                   // Default serving size
-    phoneNumber: "+1234567890"                            // For SMS alerts
+    phoneNumber: "+1234567890",                           // Legacy profile field
+
+    // Daily waste alert preferences (Phase 6.2). Seeded by onUserCreate and
+    // edited from Settings → Waste Alerts.
+    smsAlerts: {
+      enabled: false,              // Whether to also text the daily alert
+      phoneNumber: "+1234567890",  // Number the alert is texted to
+      time: "09:00"                // Preferred send time (alerts run 9 AM ET)
+    },
+    notifications: {
+      expiringSoon: true,          // In-app daily waste alert (default on)
+      mealPlanReminders: true,
+      lowInventory: false
+    }
   },
   
   helloFresh: {
@@ -99,7 +112,8 @@ This document describes the complete Firestore database structure for MyKitchenH
   // Tracking information
   addedAt: Timestamp,                     // When item was added
   expiresAt: Timestamp,                   // Calculated expiration date
-  shelfLifeDays: 270,                     // Shelf life based on location type
+  shelfLifeDays: 270,                     // Shelf life for this ingredient + location
+  shelfLifeSource: "default",             // "default" (we calculated it) | "custom" (the user chose it)
   notes: "organic, from Costco",          // User notes
   source: "manual",                       // "manual" | "hellofresh" | "csv-import" | "seed"
   
@@ -119,6 +133,17 @@ This document describes the complete Firestore database structure for MyKitchenH
 - Freezer: 180-365 days (varies by ingredient)
 - Fridge: 3-14 days (varies by ingredient)
 - Pantry: 30-365 days (varies by ingredient)
+
+`shelfLifeDays` is looked up by ingredient **and** location from the shelf-life
+table (`functions/src/data/ingredientShelfLife.js`, mirrored for the frontend in
+`src/hooks/useIngredientMetadata.js`), falling back to the per-location default
+when the ingredient is unknown.
+
+`shelfLifeSource` records who chose that number. It is what lets a move to the
+freezer recalculate the expiry: a `"default"` value is ours to recalculate, a
+`"custom"` one belongs to the user and is preserved across location changes.
+Documents written before this field existed are treated as `"default"` when
+their stored value matches what the lookup would produce.
 
 **Indexes Required:**
 - Composite: `locationType` + `expiresAt` (for expiring items queries)
@@ -175,6 +200,72 @@ actually did to their kitchen after the fact
 - `itemsImported` and `itemsSkipped` must be >= 0
 
 ---
+
+### 3a. `users/{userId}/notifications` Subcollection
+
+**Purpose:** In-app alerts, written by the daily waste-alert function (Phase 6.2)
+
+**Document Structure:**
+```javascript
+{
+  id: "waste-alert-2026-08-14",     // Deterministic: one per type, per day
+  type: "waste-alert",              // "waste-alert" | "meal-plan" | "system"
+  title: "3 items to use up soon",  // Headline
+  body: "spinach (today), ...",     // Full text
+  createdAt: Timestamp,             // When the alert was generated
+  read: false,                      // Cleared by the user in the app
+  channel: "in-app",                // "in-app" | "sms" — how it actually reached them
+  smsStatus: "not-configured",      // "sent" | "not-configured" | "no-phone-number" | …
+  itemIds: ["item-1", "item-2"],    // Inventory documents the alert is about
+  itemCount: 3
+}
+```
+
+The in-app notification is written on **every** run, whether or not an SMS went
+out, so the daily alert works with no SMS provider key configured. The document
+id is derived from the date, so a re-run on the same day updates the alert
+rather than duplicating it.
+
+**Security Rules:**
+- Owner-only read, create, update and delete
+- `type` must be one of: "waste-alert", "meal-plan", "system"
+- `createdAt` cannot be rewritten by an update (marking as read must not restamp it)
+
+---
+
+### 3c. `users/{userId}/mealPlanEntries` Subcollection
+
+**Owned by Phase 7**, which defines the full shape and its security rules. It is
+listed here because the waste-alert recipe suggestions (Phase 6.3) are one of
+its writers: "Add to Meal Plan" schedules a meal that uses up expiring food.
+
+What Phase 6 writes, matching that contract exactly:
+
+```javascript
+await addDoc(collection(db, 'users', uid, 'mealPlanEntries'), {
+  date: '2026-08-15',                 // YYYY-MM-DD string, never a Timestamp
+  mealType: 'dinner',
+  recipeId: recipe.id,
+  recipeName: recipe.name,
+  servings: 2,
+  status: 'planned',
+  source: 'waste-prevention',         // the value Phase 7 reserves for this button
+  createdAt: serverTimestamp(),
+  cookedAt: null,
+  usesIngredients: [                  // what "Mark as Cooked" decrements
+    { name: 'Spinach', normalized: 'spinach', quantity: 1, unit: 'bag' }
+  ],
+  batchGroup: null,
+  notes: '',
+  planId: null,
+});
+```
+
+See Phase 7's own section for the field-by-field description, the required
+fields, and the rest of the `source` vocabulary.
+
+---
+
 
 ### 4. `recipes` Collection
 

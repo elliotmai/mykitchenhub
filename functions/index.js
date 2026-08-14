@@ -606,39 +606,10 @@ exports.importHelloFreshFromPhoto = functions.https.onRequest(async (req, res) =
 // ============================================================================
 
 /**
- * Scheduled function to send daily SMS alerts for expiring items
- * Runs every day at 9:00 AM
- * 
- * Uses Cloud Scheduler trigger
+ * Scheduled function to send daily alerts for expiring items (9:00 AM daily).
+ * Implementation lives in src/wasteAlerts/ — see roadmap 6.2.
  */
-exports.sendDailyWasteAlerts = functions.pubsub
-  .schedule('0 9 * * *')  // 9:00 AM every day (cron format)
-  .timeZone('America/New_York')  // TODO: Make timezone configurable per user
-  .onRun(async (context) => {
-    try {
-      console.log('Starting daily waste alerts...');
-      
-      // TODO: Implement in Phase 6
-      // 1. Query all users with SMS alerts enabled
-      // 2. For each user:
-      //    a. Get inventory items expiring in next 3 days
-      //    b. Format alert message
-      //    c. Send SMS via Textbelt/Twilio API
-      // 3. Log results
-      
-      // Placeholder implementation
-      const usersSnapshot = await db.collection('users').get();
-      const totalUsers = usersSnapshot.size;
-      
-      console.log(`Daily waste alerts processed for ${totalUsers} users (stub)`);
-      
-      return null;
-      
-    } catch (error) {
-      console.error('Error in sendDailyWasteAlerts:', error);
-      throw error;
-    }
-  });
+exports.sendDailyWasteAlerts = require('./src/wasteAlerts/sendDailyWasteAlerts').sendDailyWasteAlerts;
 
 // ============================================================================
 // FUNCTION 5: Generate AI Meal Plan
@@ -678,19 +649,14 @@ exports.deleteStorageLocation = deleteStorageLocation;
 // ============================================================================
 
 /**
- * Helper: Send SMS via Textbelt API
+ * Helper: Send SMS via the configured provider (Textbelt/Zixlow).
+ *
+ * Implemented in src/wasteAlerts/smsClient.js. With no provider key configured
+ * it logs and reports a skip rather than failing — callers fall back to an
+ * in-app notification.
  */
 async function sendSMS(phoneNumber, message) {
-  // TODO: Implement in Phase 6
-  // const response = await axios.post('https://textbelt.com/text', {
-  //   phone: phoneNumber,
-  //   message: message,
-  //   key: process.env.TEXTBELT_API_KEY
-  // });
-  // return response.data;
-  
-  console.log(`SMS stub: Would send to ${phoneNumber}: ${message}`);
-  return { success: true };
+  return require('./src/wasteAlerts/smsClient').sendSms(phoneNumber, message);
 }
 
 /**

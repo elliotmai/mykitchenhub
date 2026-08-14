@@ -61,24 +61,62 @@ const ingredientShelfLife = {
 };
 
 /**
+ * The shelf-life table itself, for callers that are not React components.
+ *
+ * This file is the frontend's single copy — `functions/src/data/ingredientShelfLife.js`
+ * is the backend's, and a test in the functions suite fails if the two ever
+ * disagree. Import from here rather than starting a third copy.
+ */
+export const INGREDIENT_SHELF_LIFE = ingredientShelfLife;
+
+/** Fallbacks for an ingredient the table has never heard of. */
+const UNKNOWN_INGREDIENT_DEFAULTS = {
+  fridge: 7,
+  freezer: 90,
+  pantry: 30,
+};
+
+/**
+ * Raw table lookup, keeping the three outcomes distinguishable:
+ *
+ *   number     — the ingredient keeps for this many days in that location
+ *   null       — the table knows the ingredient and says it does not belong there
+ *                (lettuce in the freezer)
+ *   undefined  — the table has never heard of it, so the caller picks a default
+ *
+ * `getShelfLife` below collapses `undefined` into a default; callers that need
+ * to tell "don't freeze this" apart from "no idea" want this function instead.
+ */
+export const lookupShelfLife = (ingredientName, locationType) => {
+  const key = String(ingredientName ?? '')
+    .toLowerCase()
+    .trim();
+  const entry = INGREDIENT_SHELF_LIFE[key];
+
+  if (!entry) return undefined;
+  return entry[locationType];
+};
+
+/** Every ingredient the table knows, alphabetically. */
+export const listIngredients = () => Object.keys(INGREDIENT_SHELF_LIFE).sort();
+
+/** Ingredients whose name contains `searchTerm`. */
+export const findIngredients = (searchTerm) => {
+  const term = String(searchTerm ?? '')
+    .toLowerCase()
+    .trim();
+  return listIngredients().filter((ingredient) => ingredient.includes(term));
+};
+
+/**
  * Custom hook for ingredient metadata
  */
 export function useIngredientMetadata() {
   const getShelfLife = (ingredientName, locationType) => {
-    const normalizedName = ingredientName.toLowerCase().trim();
-    const ingredient = ingredientShelfLife[normalizedName];
+    const known = lookupShelfLife(ingredientName, locationType);
+    if (known !== undefined) return known;
 
-    if (!ingredient) {
-      // Return default values if ingredient not found
-      const defaults = {
-        fridge: 7,
-        freezer: 90,
-        pantry: 30,
-      };
-      return defaults[locationType] || 7;
-    }
-
-    return ingredient[locationType];
+    return UNKNOWN_INGREDIENT_DEFAULTS[locationType] || 7;
   };
 
   const calculateExpirationDate = (ingredientName, locationType, purchaseDate = new Date()) => {
@@ -93,14 +131,8 @@ export function useIngredientMetadata() {
     return expirationDate;
   };
 
-  const getAllIngredients = () => {
-    return Object.keys(ingredientShelfLife).sort();
-  };
-
-  const searchIngredients = (searchTerm) => {
-    const term = searchTerm.toLowerCase().trim();
-    return getAllIngredients().filter((ingredient) => ingredient.includes(term));
-  };
+  const getAllIngredients = listIngredients;
+  const searchIngredients = findIngredients;
 
   const getDaysUntilExpiration = (expirationDate) => {
     if (!expirationDate) return null;
@@ -155,11 +187,12 @@ export function useIngredientMetadata() {
  * Hook for autocomplete suggestions
  */
 export function useIngredientAutocomplete(searchTerm) {
-  const { searchIngredients } = useIngredientMetadata();
-
+  // `findIngredients` is a module-level pure function, so the search term is
+  // genuinely the only dependency — no stale-closure hazard, and no lint
+  // warning to suppress. (CRA builds with CI=true treat warnings as errors.)
   const suggestions = useMemo(() => {
     if (!searchTerm || searchTerm.length < 2) return [];
-    return searchIngredients(searchTerm).slice(0, 10); // Limit to 10 suggestions
+    return findIngredients(searchTerm).slice(0, 10); // Limit to 10 suggestions
   }, [searchTerm]);
 
   return suggestions;

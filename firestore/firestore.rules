@@ -119,6 +119,27 @@ service cloud.firestore {
       }
 
       // ============================================
+      // NOTIFICATIONS SUBCOLLECTION (waste alerts, 6.2)
+      // ============================================
+
+      // Written by the daily waste-alert function, read and cleared by the
+      // owner. This is the alert channel that always works, with or without an
+      // SMS provider key.
+      match /notifications/{notificationId} {
+        allow read: if isOwner(userId);
+
+        allow create: if isOwner(userId)
+          && hasRequiredFields(['type', 'title', 'body', 'createdAt', 'read'])
+          && request.resource.data.type in ['waste-alert', 'meal-plan', 'system'];
+
+        // Marking one read must not rewrite when it arrived.
+        allow update: if isOwner(userId)
+          && request.resource.data.createdAt == resource.data.createdAt;
+
+        allow delete: if isOwner(userId);
+      }
+
+      // ============================================
       // MEAL PLAN ENTRIES SUBCOLLECTION
       // One scheduled meal. Written by the meal plan page, by HelloFresh
       // auto-scheduling, and by the waste-prevention "Add to Meal Plan"

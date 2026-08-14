@@ -91,6 +91,19 @@ const validRecipe = (overrides = {}) => ({
   ...overrides,
 });
 
+const validNotification = (overrides = {}) => ({
+  type: 'waste-alert',
+  title: '2 items to use up soon',
+  body: 'spinach (today) and milk (tomorrow).',
+  createdAt: new Date().toISOString(),
+  read: false,
+  channel: 'in-app',
+  smsStatus: 'not-configured',
+  itemIds: ['item-1'],
+  itemCount: 2,
+  ...overrides,
+});
+
 const validMealPlanEntry = (overrides = {}) => ({
   date: '2026-08-15',
   mealType: 'dinner',
@@ -159,7 +172,7 @@ describe('users collection', () => {
     await assertFails(as(OWNER).doc(`users/${OWNER}`).set({ email: 'cook@example.com' }));
   });
 
-  it('stops a user creating a profile under someone else\'s id', async () => {
+  it("stops a user creating a profile under someone else's id", async () => {
     await assertFails(as(INTRUDER).doc(`users/${OWNER}`).set(validUser()));
   });
 
@@ -195,7 +208,9 @@ describe('users collection', () => {
     await seed((db) => db.doc(`users/${OWNER}`).set(profile));
 
     await assertFails(
-      as(OWNER).doc(`users/${OWNER}`).update({ createdAt: profile.createdAt, email: 'new@example.com' })
+      as(OWNER)
+        .doc(`users/${OWNER}`)
+        .update({ createdAt: profile.createdAt, email: 'new@example.com' })
     );
     await assertFails(
       as(OWNER).doc(`users/${OWNER}`).update({ createdAt: '1999-01-01', email: profile.email })
@@ -226,15 +241,27 @@ describe('storage locations', () => {
 
   it('rejects a location keyed on `name` instead of `label`', async () => {
     const { label, ...rest } = validLocation();
-    await assertFails(as(OWNER).doc(locPath(OWNER)).set({ ...rest, name: 'Main Fridge' }));
+    await assertFails(
+      as(OWNER)
+        .doc(locPath(OWNER))
+        .set({ ...rest, name: 'Main Fridge' })
+    );
   });
 
   it.each(['fridge', 'freezer', 'pantry'])('accepts the %s location type', async (type) => {
-    await assertSucceeds(as(OWNER).doc(locPath(OWNER, `loc-${type}`)).set(validLocation({ type })));
+    await assertSucceeds(
+      as(OWNER)
+        .doc(locPath(OWNER, `loc-${type}`))
+        .set(validLocation({ type }))
+    );
   });
 
   it('rejects an unknown location type', async () => {
-    await assertFails(as(OWNER).doc(locPath(OWNER)).set(validLocation({ type: 'garage' })));
+    await assertFails(
+      as(OWNER)
+        .doc(locPath(OWNER))
+        .set(validLocation({ type: 'garage' }))
+    );
   });
 
   it("stops one user writing into another user's locations", async () => {
@@ -265,45 +292,120 @@ describe('inventory items', () => {
 
   it('requires `source` — an item tagged only with `addedBy` is rejected', async () => {
     const { source, ...rest } = validItem();
-    await assertFails(as(OWNER).doc(itemPath(OWNER)).set({ ...rest, addedBy: 'manual' }));
+    await assertFails(
+      as(OWNER)
+        .doc(itemPath(OWNER))
+        .set({ ...rest, addedBy: 'manual' })
+    );
   });
 
   it.each(['manual', 'hellofresh', 'csv-import', 'seed'])('accepts source "%s"', async (source) => {
-    await assertSucceeds(as(OWNER).doc(itemPath(OWNER, `item-${source}`)).set(validItem({ source })));
+    await assertSucceeds(
+      as(OWNER)
+        .doc(itemPath(OWNER, `item-${source}`))
+        .set(validItem({ source }))
+    );
   });
 
   it('rejects an unrecognised source', async () => {
-    await assertFails(as(OWNER).doc(itemPath(OWNER)).set(validItem({ source: 'telepathy' })));
+    await assertFails(
+      as(OWNER)
+        .doc(itemPath(OWNER))
+        .set(validItem({ source: 'telepathy' }))
+    );
   });
 
   it('requires a positive quantity on create', async () => {
-    await assertFails(as(OWNER).doc(itemPath(OWNER)).set(validItem({ quantity: 0 })));
-    await assertFails(as(OWNER).doc(itemPath(OWNER)).set(validItem({ quantity: -3 })));
+    await assertFails(
+      as(OWNER)
+        .doc(itemPath(OWNER))
+        .set(validItem({ quantity: 0 }))
+    );
+    await assertFails(
+      as(OWNER)
+        .doc(itemPath(OWNER))
+        .set(validItem({ quantity: -3 }))
+    );
   });
 
   it('allows an update to zero quantity, for a used-up item', async () => {
     const item = validItem();
     await seed((db) => db.doc(itemPath(OWNER)).set(item));
 
-    await assertSucceeds(as(OWNER).doc(itemPath(OWNER)).update({ addedAt: item.addedAt, quantity: 0 }));
+    await assertSucceeds(
+      as(OWNER).doc(itemPath(OWNER)).update({ addedAt: item.addedAt, quantity: 0 })
+    );
   });
 
   it('rejects a negative quantity on update', async () => {
     const item = validItem();
     await seed((db) => db.doc(itemPath(OWNER)).set(item));
 
-    await assertFails(as(OWNER).doc(itemPath(OWNER)).update({ addedAt: item.addedAt, quantity: -1 }));
+    await assertFails(
+      as(OWNER).doc(itemPath(OWNER)).update({ addedAt: item.addedAt, quantity: -1 })
+    );
   });
 
   it('refuses to let the added date be rewritten', async () => {
     const item = validItem();
     await seed((db) => db.doc(itemPath(OWNER)).set(item));
 
-    await assertFails(as(OWNER).doc(itemPath(OWNER)).update({ addedAt: '1999-01-01', quantity: 2 }));
+    await assertFails(
+      as(OWNER).doc(itemPath(OWNER)).update({ addedAt: '1999-01-01', quantity: 2 })
+    );
   });
 
   it('rejects an unknown location type', async () => {
-    await assertFails(as(OWNER).doc(itemPath(OWNER)).set(validItem({ locationType: 'garage' })));
+    await assertFails(
+      as(OWNER)
+        .doc(itemPath(OWNER))
+        .set(validItem({ locationType: 'garage' }))
+    );
+  });
+
+  it("keeps one user out of another user's inventory", async () => {
+    await seed((db) => db.doc(itemPath(OWNER)).set(validItem()));
+
+    await assertFails(as(INTRUDER).doc(itemPath(OWNER)).get());
+    await assertFails(as(INTRUDER).doc(itemPath(OWNER)).delete());
+    await assertFails(as(INTRUDER).doc(itemPath(OWNER, 'new')).set(validItem()));
+  });
+
+  it('keeps a signed-out visitor out entirely', async () => {
+    await seed((db) => db.doc(itemPath(OWNER)).set(validItem()));
+    await assertFails(anon().doc(itemPath(OWNER)).get());
+  });
+
+  it('lets an owner delete their own item', async () => {
+    await seed((db) => db.doc(itemPath(OWNER)).set(validItem()));
+    await assertSucceeds(as(OWNER).doc(itemPath(OWNER)).delete());
+  });
+  it.each(['default', 'custom'])('accepts shelfLifeSource "%s"', async (shelfLifeSource) => {
+    await assertSucceeds(
+      as(OWNER)
+        .doc(itemPath(OWNER, `item-${shelfLifeSource}`))
+        .set(validItem({ shelfLifeDays: 7, shelfLifeSource }))
+    );
+  });
+
+  it('accepts the freeze write: a new location, expiry and shelf life at once', async () => {
+    const item = validItem();
+    await seed((db) => db.doc(itemPath(OWNER)).set(item));
+
+    // What "Freeze All" sends — the whole point of it is the longer expiry.
+    await assertSucceeds(
+      as(OWNER)
+        .doc(itemPath(OWNER))
+        .update({
+          addedAt: item.addedAt,
+          quantity: item.quantity,
+          locationId: 'loc-freezer',
+          locationType: 'freezer',
+          shelfLifeDays: 90,
+          shelfLifeSource: 'default',
+          expiresAt: new Date(Date.now() + 90 * 86400000).toISOString(),
+        })
+    );
   });
 
   it("keeps one user out of another user's inventory", async () => {
@@ -344,21 +446,35 @@ describe('import history', () => {
 
   it.each(['completed', 'partial', 'failed'])('accepts status "%s"', async (status) => {
     await assertSucceeds(
-      as(OWNER).doc(importPath(OWNER, `import-${status}`)).set(validImportRecord({ status }))
+      as(OWNER)
+        .doc(importPath(OWNER, `import-${status}`))
+        .set(validImportRecord({ status }))
     );
   });
 
   it('rejects an unrecognised status or source', async () => {
-    await assertFails(as(OWNER).doc(importPath(OWNER)).set(validImportRecord({ status: 'ok' })));
-    await assertFails(as(OWNER).doc(importPath(OWNER)).set(validImportRecord({ source: 'manual' })));
+    await assertFails(
+      as(OWNER)
+        .doc(importPath(OWNER))
+        .set(validImportRecord({ status: 'ok' }))
+    );
+    await assertFails(
+      as(OWNER)
+        .doc(importPath(OWNER))
+        .set(validImportRecord({ source: 'manual' }))
+    );
   });
 
   it('rejects negative counts', async () => {
     await assertFails(
-      as(OWNER).doc(importPath(OWNER)).set(validImportRecord({ itemsImported: -1 }))
+      as(OWNER)
+        .doc(importPath(OWNER))
+        .set(validImportRecord({ itemsImported: -1 }))
     );
     await assertFails(
-      as(OWNER).doc(importPath(OWNER)).set(validImportRecord({ itemsSkipped: -1 }))
+      as(OWNER)
+        .doc(importPath(OWNER))
+        .set(validImportRecord({ itemsSkipped: -1 }))
     );
   });
 
@@ -398,6 +514,72 @@ describe('import history', () => {
 // collection, so these cases are the shared contract, not just Phase 7's.
 // ---------------------------------------------------------------------------
 
+describe('notifications', () => {
+  const notificationPath = (uid, id = 'waste-alert-2026-08-14') =>
+    `users/${uid}/notifications/${id}`;
+
+  it('accepts the document shape the daily waste alert writes', async () => {
+    await assertSucceeds(as(OWNER).doc(notificationPath(OWNER)).set(validNotification()));
+  });
+
+  it('requires the fields the notification list renders', async () => {
+    const { title, ...withoutTitle } = validNotification();
+    await assertFails(as(OWNER).doc(notificationPath(OWNER)).set(withoutTitle));
+  });
+
+  it.each(['waste-alert', 'meal-plan', 'system'])('accepts type "%s"', async (type) => {
+    await assertSucceeds(
+      as(OWNER)
+        .doc(notificationPath(OWNER, `n-${type}`))
+        .set(validNotification({ type }))
+    );
+  });
+
+  it('rejects an unrecognised notification type', async () => {
+    await assertFails(
+      as(OWNER)
+        .doc(notificationPath(OWNER))
+        .set(validNotification({ type: 'spam' }))
+    );
+  });
+
+  it('lets the owner mark one as read', async () => {
+    const notification = validNotification();
+    await seed((db) => db.doc(notificationPath(OWNER)).set(notification));
+
+    await assertSucceeds(
+      as(OWNER)
+        .doc(notificationPath(OWNER))
+        .update({ createdAt: notification.createdAt, read: true })
+    );
+  });
+
+  it('refuses to let marking as read restamp when the alert arrived', async () => {
+    await seed((db) => db.doc(notificationPath(OWNER)).set(validNotification()));
+
+    await assertFails(
+      as(OWNER).doc(notificationPath(OWNER)).update({ createdAt: '1999-01-01', read: true })
+    );
+  });
+
+  it('lets the owner dismiss one', async () => {
+    await seed((db) => db.doc(notificationPath(OWNER)).set(validNotification()));
+    await assertSucceeds(as(OWNER).doc(notificationPath(OWNER)).delete());
+  });
+
+  it("keeps one user out of another user's alerts", async () => {
+    await seed((db) => db.doc(notificationPath(OWNER)).set(validNotification()));
+
+    await assertFails(as(INTRUDER).doc(notificationPath(OWNER)).get());
+    await assertFails(as(INTRUDER).doc(notificationPath(OWNER)).delete());
+    await assertFails(anon().doc(notificationPath(OWNER)).get());
+  });
+});
+
+// ---------------------------------------------------------------------------
+// users/{userId}/mealPlan/{entryId} — written by "Add to Meal Plan"
+// ---------------------------------------------------------------------------
+
 describe('meal plan entries', () => {
   const entryPath = (uid, id = 'entry-1') => `users/${uid}/mealPlanEntries/${id}`;
 
@@ -415,24 +597,36 @@ describe('meal plan entries', () => {
   });
 
   it('insists `date` is a YYYY-MM-DD string, not a Timestamp', async () => {
-    await assertFails(as(OWNER).doc(entryPath(OWNER)).set(validMealPlanEntry({ date: new Date() })));
     await assertFails(
-      as(OWNER).doc(entryPath(OWNER)).set(validMealPlanEntry({ date: '15/08/2026' }))
+      as(OWNER)
+        .doc(entryPath(OWNER))
+        .set(validMealPlanEntry({ date: new Date() }))
     );
     await assertFails(
-      as(OWNER).doc(entryPath(OWNER)).set(validMealPlanEntry({ date: '2026-8-5' }))
+      as(OWNER)
+        .doc(entryPath(OWNER))
+        .set(validMealPlanEntry({ date: '15/08/2026' }))
+    );
+    await assertFails(
+      as(OWNER)
+        .doc(entryPath(OWNER))
+        .set(validMealPlanEntry({ date: '2026-8-5' }))
     );
   });
 
   it.each(['breakfast', 'lunch', 'dinner', 'snack'])('accepts mealType "%s"', async (mealType) => {
     await assertSucceeds(
-      as(OWNER).doc(entryPath(OWNER, `entry-${mealType}`)).set(validMealPlanEntry({ mealType }))
+      as(OWNER)
+        .doc(entryPath(OWNER, `entry-${mealType}`))
+        .set(validMealPlanEntry({ mealType }))
     );
   });
 
   it('rejects an unrecognised meal type', async () => {
     await assertFails(
-      as(OWNER).doc(entryPath(OWNER)).set(validMealPlanEntry({ mealType: 'brunch' }))
+      as(OWNER)
+        .doc(entryPath(OWNER))
+        .set(validMealPlanEntry({ mealType: 'brunch' }))
     );
   });
 
@@ -440,32 +634,48 @@ describe('meal plan entries', () => {
     'accepts source "%s" — every feature that schedules meals',
     async (source) => {
       await assertSucceeds(
-        as(OWNER).doc(entryPath(OWNER, `entry-${source}`)).set(validMealPlanEntry({ source }))
+        as(OWNER)
+          .doc(entryPath(OWNER, `entry-${source}`))
+          .set(validMealPlanEntry({ source }))
       );
     }
   );
 
   it('rejects an unrecognised source', async () => {
     await assertFails(
-      as(OWNER).doc(entryPath(OWNER)).set(validMealPlanEntry({ source: 'guesswork' }))
+      as(OWNER)
+        .doc(entryPath(OWNER))
+        .set(validMealPlanEntry({ source: 'guesswork' }))
     );
   });
 
   it.each(['planned', 'cooked', 'skipped'])('accepts status "%s"', async (status) => {
     await assertSucceeds(
-      as(OWNER).doc(entryPath(OWNER, `entry-${status}`)).set(validMealPlanEntry({ status }))
+      as(OWNER)
+        .doc(entryPath(OWNER, `entry-${status}`))
+        .set(validMealPlanEntry({ status }))
     );
   });
 
   it('rejects an unrecognised status', async () => {
     await assertFails(
-      as(OWNER).doc(entryPath(OWNER)).set(validMealPlanEntry({ status: 'burnt' }))
+      as(OWNER)
+        .doc(entryPath(OWNER))
+        .set(validMealPlanEntry({ status: 'burnt' }))
     );
   });
 
   it('requires a positive serving count', async () => {
-    await assertFails(as(OWNER).doc(entryPath(OWNER)).set(validMealPlanEntry({ servings: 0 })));
-    await assertFails(as(OWNER).doc(entryPath(OWNER)).set(validMealPlanEntry({ servings: -2 })));
+    await assertFails(
+      as(OWNER)
+        .doc(entryPath(OWNER))
+        .set(validMealPlanEntry({ servings: 0 }))
+    );
+    await assertFails(
+      as(OWNER)
+        .doc(entryPath(OWNER))
+        .set(validMealPlanEntry({ servings: -2 }))
+    );
   });
 
   it('allows rescheduling a meal onto another day', async () => {
@@ -533,22 +743,40 @@ describe('meal plan weeks', () => {
   });
 
   it('insists `weekStart` is a YYYY-MM-DD string', async () => {
-    await assertFails(as(OWNER).doc(planPath(OWNER)).set(validMealPlan({ weekStart: new Date() })));
     await assertFails(
-      as(OWNER).doc(planPath(OWNER)).set(validMealPlan({ weekStart: 'week of Aug 10' }))
+      as(OWNER)
+        .doc(planPath(OWNER))
+        .set(validMealPlan({ weekStart: new Date() }))
+    );
+    await assertFails(
+      as(OWNER)
+        .doc(planPath(OWNER))
+        .set(validMealPlan({ weekStart: 'week of Aug 10' }))
     );
   });
 
   it.each(['ai', 'manual'])('accepts source "%s"', async (source) => {
-    await assertSucceeds(as(OWNER).doc(planPath(OWNER, `p-${source}`)).set(validMealPlan({ source })));
+    await assertSucceeds(
+      as(OWNER)
+        .doc(planPath(OWNER, `p-${source}`))
+        .set(validMealPlan({ source }))
+    );
   });
 
   it('rejects an unrecognised plan source', async () => {
-    await assertFails(as(OWNER).doc(planPath(OWNER)).set(validMealPlan({ source: 'hellofresh' })));
+    await assertFails(
+      as(OWNER)
+        .doc(planPath(OWNER))
+        .set(validMealPlan({ source: 'hellofresh' }))
+    );
   });
 
   it.each(['draft', 'active', 'archived'])('accepts status "%s"', async (status) => {
-    await assertSucceeds(as(OWNER).doc(planPath(OWNER, `p-${status}`)).set(validMealPlan({ status })));
+    await assertSucceeds(
+      as(OWNER)
+        .doc(planPath(OWNER, `p-${status}`))
+        .set(validMealPlan({ status }))
+    );
   });
 
   it('allows regenerating a week in place', async () => {
@@ -609,7 +837,11 @@ describe('recipes', () => {
   );
 
   it('rejects an unrecognised recipe source', async () => {
-    await assertFails(as(OWNER).doc('recipes/r1').set(validRecipe({ source: 'seed' })));
+    await assertFails(
+      as(OWNER)
+        .doc('recipes/r1')
+        .set(validRecipe({ source: 'seed' }))
+    );
   });
 
   it.each(['easy', 'medium', 'hard'])('accepts difficulty "%s"', async (difficulty) => {
@@ -617,12 +849,24 @@ describe('recipes', () => {
   });
 
   it('rejects an unrecognised difficulty', async () => {
-    await assertFails(as(OWNER).doc('recipes/r1').set(validRecipe({ difficulty: 'impossible' })));
+    await assertFails(
+      as(OWNER)
+        .doc('recipes/r1')
+        .set(validRecipe({ difficulty: 'impossible' }))
+    );
   });
 
   it('requires a positive serving count and a non-negative cook count', async () => {
-    await assertFails(as(OWNER).doc('recipes/r1').set(validRecipe({ servings: 0 })));
-    await assertFails(as(OWNER).doc('recipes/r2').set(validRecipe({ timesCooked: -1 })));
+    await assertFails(
+      as(OWNER)
+        .doc('recipes/r1')
+        .set(validRecipe({ servings: 0 }))
+    );
+    await assertFails(
+      as(OWNER)
+        .doc('recipes/r2')
+        .set(validRecipe({ timesCooked: -1 }))
+    );
   });
 
   it('allows incrementing timesCooked', async () => {

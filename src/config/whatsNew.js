@@ -14,6 +14,17 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.08.14.3',
+    date: 'August 2026',
+    items: [
+      '⚠️ New Waste Alerts page: everything about to go off, in one place, worst first.',
+      '❄️ Move something to the freezer and it now actually keeps longer — one tap for “Freeze All”, or freeze half and cook the rest tonight.',
+      '🍳 See which recipes use up what is about to expire, and add one to your meal plan in a tap.',
+      '📅 Expiry dates are smarter: chicken gets two days in the fridge, rice gets two years in the pantry. Type your own number any time and we will leave it alone.',
+      '🔔 A daily morning alert tells you what needs eating. Turn on a text as well in Settings → Waste Alerts.',
+    ],
+  },
+  {
     version: '2026.08.14.2',
     date: 'August 2026',
     items: [

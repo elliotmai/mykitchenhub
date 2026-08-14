@@ -48,6 +48,11 @@ const NAV_ITEMS = [
     label: 'HelloFresh',
   },
   {
+    path: '/waste-alerts',
+    icon: AlertTriangle,
+    label: 'Waste Alerts',
+  },
+  {
     path: '/analytics',
     icon: BarChart3,
     label: 'Analytics',

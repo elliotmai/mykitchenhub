@@ -3,16 +3,18 @@
 
 import React, { useState } from 'react';
 import { Card, Form, Button, Row, Col, Alert, Spinner, Nav } from 'react-bootstrap';
-import { User, Lock, MapPin } from 'lucide-react';
+import { User, Lock, MapPin, Bell } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import useStorageLocations from '../hooks/useStorageLocations';
 import { StorageLocationsList } from '../components/StorageLocations';
+import { SmsAlertSettings } from '../components/WasteAlerts';
 
 // ─── Section constants ───────────────────────────────────────────────────────
 const SECTIONS = {
   PROFILE: 'profile',
   PASSWORD: 'password',
   LOCATIONS: 'locations',
+  ALERTS: 'alerts',
 };
 
 const Settings = () => {
@@ -133,6 +135,13 @@ const Settings = () => {
                       {locations.length}
                     </span>
                   )}
+                </Nav.Link>
+                <Nav.Link
+                  active={activeSection === SECTIONS.ALERTS}
+                  onClick={() => setActiveSection(SECTIONS.ALERTS)}
+                  className="d-flex align-items-center gap-2 rounded-2 px-3 py-2"
+                >
+                  <Bell size={16} /> Waste Alerts
                 </Nav.Link>
               </Nav>
             </Card.Body>
@@ -279,6 +288,26 @@ const Settings = () => {
                   onAdd={handleAddLocation}
                   onEdit={handleEditLocation}
                   onDelete={handleDeleteLocation}
+                />
+              </Card.Body>
+            </Card>
+          )}
+
+          {/* ── Waste Alerts ────────────────────────────────────────────── */}
+          {activeSection === SECTIONS.ALERTS && (
+            <Card>
+              <Card.Header className="bg-white border-bottom-0 pt-4 pb-2">
+                <h5 className="mb-0 d-flex align-items-center gap-2">
+                  <Bell size={18} /> Waste Alerts
+                </h5>
+                <small className="text-muted">
+                  A daily nudge about food that is about to go off.
+                </small>
+              </Card.Header>
+              <Card.Body>
+                <SmsAlertSettings
+                  preferences={userProfile?.preferences}
+                  onSave={updateUserProfile}
                 />
               </Card.Body>
             </Card>

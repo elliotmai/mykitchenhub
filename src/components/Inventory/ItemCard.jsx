@@ -4,50 +4,12 @@
 
 import React from 'react';
 import { Card, Badge, Button } from 'react-bootstrap';
-import { Pencil, Trash2, Calendar } from 'lucide-react';
-import { getExpirationStatus, getExpirationLabel } from '../../hooks/useInventory';
-
-// ---------------------------------------------------------------------------
-// Expiration styling map (matches design-system CSS tokens)
-// ---------------------------------------------------------------------------
-const EXPIRATION_STYLES = {
-  expired: {
-    cardClass: 'expiration-critical',
-    badgeStyle: {
-      background: 'var(--mkh-expiring-critical)',
-      color: 'var(--mkh-danger-text)',
-      border: '1px solid var(--mkh-danger-text)',
-    },
-    label: 'Expired',
-  },
-  critical: {
-    cardClass: 'expiration-critical',
-    badgeStyle: {
-      background: 'var(--mkh-expiring-critical)',
-      color: 'var(--mkh-danger-text)',
-      border: '1px solid var(--mkh-danger-text)',
-    },
-    label: 'Critical',
-  },
-  warning: {
-    cardClass: 'expiration-warning',
-    badgeStyle: {
-      background: 'var(--mkh-expiring-warning)',
-      color: 'var(--mkh-warning-text)',
-      border: '1px solid var(--mkh-warning-text)',
-    },
-    label: 'Soon',
-  },
-  safe: {
-    cardClass: 'expiration-safe',
-    badgeStyle: {
-      background: 'var(--mkh-expiring-safe)',
-      color: 'var(--mkh-success-text)',
-      border: '1px solid var(--mkh-success-text)',
-    },
-    label: 'Fresh',
-  },
-};
+import { Pencil, Trash2, Calendar, AlertTriangle } from 'lucide-react';
+import {
+  getExpirationLabel,
+  getExpirationLevel,
+  getExpirationBadgeStyle,
+} from '../../hooks/useInventory';
 
 const LOCATION_TYPE_ICONS = {
   fridge: '🧊',
@@ -64,14 +26,18 @@ const LOCATION_TYPE_ICONS = {
  * @param {function} onDelete     - (item) => void — open delete confirm
  */
 const ItemCard = ({ item, location, onEdit, onDelete }) => {
-  const status = getExpirationStatus(item.expiresAt);
-  const expStyle = EXPIRATION_STYLES[status] ?? EXPIRATION_STYLES.safe;
+  const level = getExpirationLevel(item.expiresAt);
+  const badgeStyle = getExpirationBadgeStyle(item.expiresAt);
   const locationIcon = location?.icon ?? LOCATION_TYPE_ICONS[item.locationType] ?? '📦';
   const locationLabel = location?.label ?? item.locationType ?? 'Unknown';
 
+  // Only the two levels a cook has to act on today get a written warning —
+  // a warning on every card is a warning on none.
+  const showWarning = level.status === 'expired' || level.status === 'critical';
+
   return (
     <Card
-      className={`h-100 shadow-sm ${expStyle.cardClass}`}
+      className={`h-100 shadow-sm ${level.cardClass}`}
       style={{
         borderRadius: 'var(--mkh-radius-lg)',
         border: '1px solid var(--mkh-border)',
@@ -95,7 +61,7 @@ const ItemCard = ({ item, location, onEdit, onDelete }) => {
           </span>
           <Badge
             style={{
-              ...expStyle.badgeStyle,
+              ...badgeStyle,
               borderRadius: 'var(--mkh-radius-full)',
               fontWeight: 'var(--mkh-font-weight-medium)',
               fontSize: 'var(--mkh-font-size-tiny)',
@@ -103,7 +69,7 @@ const ItemCard = ({ item, location, onEdit, onDelete }) => {
               flexShrink: 0,
             }}
           >
-            {expStyle.label}
+            {level.label}
           </Badge>
         </div>
 
@@ -140,6 +106,22 @@ const ItemCard = ({ item, location, onEdit, onDelete }) => {
           <Calendar size={12} />
           <span>{getExpirationLabel(item.expiresAt)}</span>
         </div>
+
+        {/* Expiration warning — what to do about it, not just that it's red */}
+        {showWarning && level.warning ? (
+          <div
+            className="d-flex align-items-start gap-1"
+            data-testid="expiration-warning"
+            style={{
+              fontSize: 'var(--mkh-font-size-tiny)',
+              color: level.foreground,
+              fontWeight: 'var(--mkh-font-weight-medium)',
+            }}
+          >
+            <AlertTriangle size={12} style={{ flexShrink: 0, marginTop: '0.1rem' }} />
+            <span>{level.warning}</span>
+          </div>
+        ) : null}
 
         {/* Notes (if present) */}
         {item.notes ? (

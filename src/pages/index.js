@@ -8,4 +8,5 @@ export { default as Recipes } from './Recipes';
 export { default as MealPlan } from './MealPlan';
 export { default as HelloFresh } from './HelloFresh';
 export { default as Analytics } from './Analytics';
+export { default as WasteAlerts } from './WasteAlerts';
 export { default as Settings } from './Settings';
