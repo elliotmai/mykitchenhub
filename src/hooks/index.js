@@ -3,3 +3,4 @@
 
 export { default as useAuth, useAuth as useAuthHook, AuthProvider } from './useAuth';
 export { default as useCSVImport } from './useCSVImport';
+export { default as useMealPlan } from './useMealPlan';
