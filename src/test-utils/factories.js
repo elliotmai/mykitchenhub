@@ -107,6 +107,44 @@ export const makeItemsAcrossExpirationStates = () => [
   makeItem({ name: 'Rice', expiresAt: daysFromNow(90) }), // safe
 ];
 
+/** One entry of an item's `purchaseHistory[]`. */
+export const makePurchase = (overrides = {}) => ({
+  addedAt: daysFromNow(-7),
+  quantity: 1,
+  unit: 'gal',
+  price: 4.29,
+  store: 'Costco',
+  ...overrides,
+});
+
+/**
+ * An item with a purchase history, for the shopping analytics.
+ *
+ * `totalTimesPurchased` is kept consistent with the history length unless a
+ * test deliberately overrides it.
+ */
+export const makeItemWithPurchases = (purchases = [], overrides = {}) =>
+  makeItem({
+    purchaseHistory: purchases,
+    totalTimesPurchased: purchases.length,
+    ...overrides,
+  });
+
+// ---------------------------------------------------------------------------
+// users/{userId}/mealPlans/{planId}
+// ---------------------------------------------------------------------------
+export const makeMealPlan = (overrides = {}) => ({
+  id: nextId('plan'),
+  weekOf: daysFromNow(0),
+  meals: [
+    { day: 'monday', recipeId: 'recipe-1', recipeName: 'Sheet Pan Salmon', servings: 2 },
+    { day: 'wednesday', recipeId: 'recipe-2', recipeName: 'Chicken Stir Fry', servings: 2 },
+  ],
+  createdAt: daysFromNow(-1),
+  source: 'ai-generated',
+  ...overrides,
+});
+
 // ---------------------------------------------------------------------------
 // users/{userId}/importHistory/{importId}
 // ---------------------------------------------------------------------------
