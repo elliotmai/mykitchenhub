@@ -42,40 +42,50 @@ test.describe('dashboard', () => {
     expect(await statNumber(page, 1)).toBeGreaterThanOrEqual(2);
   });
 
-  test('reports zero for collections that do not exist yet', async ({ authedPage: page }) => {
+  test('reports zero for a collection that has nothing in it', async ({ authedPage: page }) => {
     await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
 
-    // Recipes and meal plans are owned by other roadmap phases and are unseeded.
-    // Neither read may fail: a missing collection must count as zero.
-    await expect(statValues(page).nth(3)).toHaveText('0', { timeout: 20_000 });
-    await expect(page.getByText('No meals planned for this week yet.')).toBeVisible();
+    // Nothing in the suite writes recipes, so the library is reliably empty —
+    // and an empty collection has to read as zero, not as a failed page.
+    await expect(statValues(page).nth(2)).toHaveText('0', { timeout: 20_000 });
   });
 
   test('lists the food that needs rescuing, worst first', async ({ authedPage: page }) => {
     await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
 
     const alerts = page.locator('.urgent-alert');
-    await expect(alerts).toHaveCount(2, { timeout: 20_000 });
+    // The seed guarantees two: Old Yogurt expired two days ago, Fresh Salmon is
+    // due tomorrow. Other specs add their own items, so this is a floor.
+    await expect(alerts.nth(1)).toBeVisible({ timeout: 20_000 });
 
-    // Old Yogurt expired two days ago; Fresh Salmon is due tomorrow.
-    await expect(alerts.nth(0)).toContainText('Old Yogurt');
-    await expect(alerts.nth(0)).toContainText('Expired');
-    await expect(alerts.nth(1)).toContainText('Fresh Salmon');
-    await expect(alerts.nth(1)).toContainText('Use today');
+    // Whatever else is on the list, already-expired sorts above due-today.
+    // innerText is what the reader sees, and the badge is uppercased in CSS.
+    const statuses = (await page.locator('.urgent-alert__status').allInnerTexts()).map((s) =>
+      s.trim().toLowerCase()
+    );
+
+    expect(statuses.length).toBeGreaterThanOrEqual(2);
+    expect(statuses[0]).toBe('expired');
+    expect(statuses).toEqual(
+      [...statuses].sort((a, b) => (a === b ? 0 : a === 'expired' ? -1 : 1))
+    );
   });
 
-  test('offers to plan the week when nothing is scheduled', async ({ authedPage: page }) => {
+  test('names the week it is previewing', async ({ authedPage: page }) => {
     await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
 
     // Scoped to the preview card: the quick-action list also links to
     // /meal-plan, under the longer label "Plan this week's meals".
     const preview = page.locator('.meal-plan-preview');
     await expect(preview).toBeVisible({ timeout: 20_000 });
-    await expect(preview).toContainText('No meals planned for this week yet.');
-    await expect(preview.getByRole('link', { name: 'Plan this week', exact: true })).toBeVisible();
 
     // The card names the week it is describing, e.g. "Aug 10 – Aug 16".
     await expect(preview).toContainText(/[A-Z][a-z]{2} \d{1,2} – [A-Z][a-z]{2} \d{1,2}/);
+
+    // Meal-plan specs schedule into the same account, so the week may be empty
+    // or full by the time this runs. Both states offer a way through to the
+    // plan; the empty state itself is covered by the component's unit tests.
+    await expect(preview.getByRole('link', { name: /plan/i })).toBeVisible();
   });
 
   test('quick actions reach the pages they promise', async ({ authedPage: page }) => {
