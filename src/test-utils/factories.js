@@ -146,6 +146,73 @@ export const makeRecipe = (overrides = {}) => ({
 });
 
 // ---------------------------------------------------------------------------
+// users/{userId}/mealPlanEntries/{entryId}
+//
+// One scheduled meal. HelloFresh auto-scheduling and the waste-prevention
+// "Add to Meal Plan" button write this same shape — only `source` differs.
+// ---------------------------------------------------------------------------
+
+/** A `YYYY-MM-DD` day key `n` days from today — the format meal plans use. */
+export const dayKey = (n = 0) => {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return toDayKey(d);
+};
+
+/** `YYYY-MM-DD` for a Date, in local time (never UTC-shifted). */
+export const toDayKey = (date) => {
+  const pad = (v) => String(v).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+};
+
+export const makeMealPlanEntry = (overrides = {}) => {
+  const recipeName = overrides.recipeName ?? 'Sheet Pan Salmon';
+  return {
+    id: nextId('entry'),
+    date: dayKey(0),
+    mealType: 'dinner',
+    recipeId: 'recipe-1',
+    recipeName,
+    servings: 2,
+    status: 'planned',
+    source: 'manual',
+    createdAt: daysFromNow(-1),
+    cookedAt: null,
+    usesIngredients: [{ name: 'salmon', normalized: 'salmon', quantity: 2, unit: 'fillet' }],
+    batchGroup: null,
+    notes: '',
+    planId: null,
+    ...overrides,
+  };
+};
+
+/** A week's worth of dinners, one per day, starting today. */
+export const makeWeekOfEntries = () =>
+  Array.from({ length: 7 }, (_, i) =>
+    makeMealPlanEntry({ date: dayKey(i), recipeName: `Dinner ${i + 1}` })
+  );
+
+// ---------------------------------------------------------------------------
+// users/{userId}/mealPlans/{weekId}
+// ---------------------------------------------------------------------------
+export const makeMealPlan = (overrides = {}) => ({
+  id: dayKey(0),
+  weekStart: dayKey(0),
+  createdAt: daysFromNow(-1),
+  source: 'ai',
+  status: 'active',
+  generatedAt: daysFromNow(-1),
+  model: 'claude-opus-5',
+  degraded: false,
+  shoppingList: [
+    { name: 'salmon', normalized: 'salmon', quantity: 2, unit: 'fillet', haveInInventory: false },
+  ],
+  batchCooking: [],
+  notes: '',
+  ...overrides,
+});
+
+// ---------------------------------------------------------------------------
 // Firestore snapshot shims
 // ---------------------------------------------------------------------------
 

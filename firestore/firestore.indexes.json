@@ -57,6 +57,20 @@
       ]
     },
     {
+      "collectionGroup": "mealPlanEntries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "date",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "mealType",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "storageLocations",
       "queryScope": "COLLECTION",
       "fields": [

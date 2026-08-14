@@ -275,6 +275,139 @@ actually did to their kitchen after the fact
 
 ---
 
+### 6. `users/{userId}/mealPlanEntries` Subcollection
+
+**Purpose:** One scheduled meal. This is the collection every feature writes to when
+it puts a recipe on a day — the meal plan page, HelloFresh auto-scheduling (Phase 5),
+and the waste-prevention "Add to Meal Plan" button (Phase 6).
+
+Entries are flat and independent rather than nested inside a week document, so two
+features can schedule meals on the same day without a read-modify-write race.
+
+**Document Structure:**
+```javascript
+{
+  id: "auto-generated",                   // Firestore auto-ID
+  date: "2026-08-15",                     // YYYY-MM-DD, the day this meal is planned for
+  mealType: "dinner",                     // "breakfast" | "lunch" | "dinner" | "snack"
+
+  // What is being cooked
+  recipeId: "recipe-abc",                 // recipes/{recipeId}, or null for a free-text meal
+  recipeName: "Sheet Pan Salmon",         // denormalized so the day card renders without a join
+  servings: 2,                            // must be > 0
+
+  // Lifecycle
+  status: "planned",                      // "planned" | "cooked" | "skipped"
+  source: "manual",                       // see source types below
+  createdAt: Timestamp,                   // immutable after creation
+  cookedAt: Timestamp,                    // set when marked cooked, else null
+
+  // Inventory linkage — what "Mark as Cooked" decrements
+  usesIngredients: [{
+    name: "salmon",
+    normalized: "salmon",                 // matched against inventory `normalized`
+    quantity: 2,
+    unit: "fillet"
+  }],
+
+  // Batch cooking (7.3)
+  batchGroup: "roast-veg",                // slug shared by meals cooked together, or null
+  notes: "",                              // free text
+  planId: "2026-08-10"                    // mealPlans/{weekId} that produced it, or null
+}
+```
+
+**Source Types:**
+- `manual` - scheduled by the user on the meal plan page
+- `ai` - produced by the `generateMealPlan` Cloud Function
+- `hellofresh` - auto-scheduled from a HelloFresh delivery (Phase 5)
+- `waste-prevention` - added via one-click "Add to Meal Plan" (Phase 6)
+
+**Writing an entry from another feature:**
+```javascript
+await addDoc(collection(db, 'users', uid, 'mealPlanEntries'), {
+  date: '2026-08-15',                    // YYYY-MM-DD, never a Timestamp
+  mealType: 'dinner',
+  recipeId: recipe.id,
+  recipeName: recipe.name,
+  servings: 2,
+  status: 'planned',
+  source: 'hellofresh',                  // or 'waste-prevention'
+  createdAt: serverTimestamp(),
+  cookedAt: null,
+  usesIngredients: [],
+  batchGroup: null,
+  notes: '',
+  planId: null,
+});
+```
+
+**Indexes Required:**
+- Composite: `date` + `mealType` (for rendering a day in order)
+- Single: `status` (for cooked/planned filtering)
+
+**Security Rules:**
+- Users can CRUD their own entries
+- `date` and `weekStart` are `YYYY-MM-DD` strings, never Timestamps — the UI keys
+  days on them and a Timestamp would silently never match
+- `mealType` must be one of: "breakfast", "lunch", "dinner", "snack"
+- `status` must be one of: "planned", "cooked", "skipped"
+- `source` must be one of: "manual", "ai", "hellofresh", "waste-prevention"
+- `servings` must be > 0
+- `createdAt` cannot be rewritten; `date` may change (drag-and-drop rescheduling)
+
+---
+
+### 7. `users/{userId}/mealPlans` Subcollection
+
+**Purpose:** One week of planning context — the AI-generated shopping list and batch
+cooking tips. The scheduled meals themselves live in `mealPlanEntries`; this document
+holds only what belongs to the week as a whole.
+
+**Document Structure:**
+```javascript
+{
+  id: "2026-08-10",                       // the week's Monday, YYYY-MM-DD (document ID)
+  weekStart: "2026-08-10",                // same value, as a field, for querying
+  createdAt: Timestamp,                   // immutable after creation
+  source: "ai",                           // "ai" | "manual"
+  status: "active",                       // "draft" | "active" | "archived"
+
+  // 7.2 — AI generation metadata
+  generatedAt: Timestamp,                 // when the plan was produced, or null
+  model: "claude-opus-5",                 // model that produced it, or null
+  degraded: false,                        // true when built without an API key
+
+  // 7.2 — shopping list produced alongside the plan
+  shoppingList: [{
+    name: "salmon",
+    normalized: "salmon",
+    quantity: 2,
+    unit: "fillet",
+    haveInInventory: false
+  }],
+
+  // 7.3 — batch cooking analysis
+  batchCooking: [{
+    group: "roast-veg",                   // matches mealPlanEntries.batchGroup
+    title: "Roast all the vegetables at once",
+    detail: "Sunday's and Tuesday's dinners both roast at 400F — do one tray for both.",
+    entryDates: ["2026-08-10", "2026-08-12"]
+  }],
+
+  notes: ""
+}
+```
+
+**Security Rules:**
+- Users can CRUD their own plans
+- `weekStart` must be a `YYYY-MM-DD` string
+- `source` must be one of: "ai", "manual"
+- `status` must be one of: "draft", "active", "archived"
+- `createdAt` cannot be rewritten
+
+---
+
 ## Data Relationships
 
 ### User → Storage Locations (1:Many)
