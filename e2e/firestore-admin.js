@@ -66,6 +66,75 @@ const importHistoryRecords = async () => {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 };
 
+/** Add an inventory item straight to the emulator, bypassing the UI. */
+const seedInventoryItem = async ({ name, quantity = 3, unit = 'ea' }) => {
+  const uid = await testUserId();
+  const ref = await admin.firestore().collection(`users/${uid}/inventory`).add({
+    name,
+    normalized: name.toLowerCase(),
+    quantity,
+    unit,
+    locationId: 'loc-fridge',
+    locationType: 'fridge',
+    addedAt: admin.firestore.Timestamp.now(),
+    expiresAt: admin.firestore.Timestamp.now(),
+    shelfLifeDays: 7,
+    notes: '',
+    source: 'seed',
+    purchaseHistory: [],
+    totalTimesPurchased: 1,
+  });
+  return ref.id;
+};
+
+/** The stored inventory document by id, or undefined. */
+const inventoryItemById = async (id) => {
+  const uid = await testUserId();
+  const snap = await admin.firestore().doc(`users/${uid}/inventory/${id}`).get();
+  return snap.exists ? { id: snap.id, ...snap.data() } : undefined;
+};
+
+/** Every meal plan entry belonging to the seeded account. */
+const mealPlanEntries = async () => {
+  const uid = await testUserId();
+  const snap = await admin.firestore().collection(`users/${uid}/mealPlanEntries`).get();
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+/** The stored meal plan entry with this recipe name, or undefined. */
+const mealPlanEntry = async (recipeName) => {
+  const entries = await mealPlanEntries();
+  return entries.find((entry) => entry.recipeName === recipeName);
+};
+
+/** Schedule a meal straight in the emulator, for specs that start from one. */
+const seedMealPlanEntry = async ({
+  date,
+  recipeName,
+  mealType = 'dinner',
+  servings = 2,
+  source = 'manual',
+  usesIngredients = [],
+}) => {
+  const uid = await testUserId();
+  const ref = await admin.firestore().collection(`users/${uid}/mealPlanEntries`).add({
+    date,
+    mealType,
+    recipeId: null,
+    recipeName,
+    servings,
+    status: 'planned',
+    source,
+    createdAt: admin.firestore.Timestamp.now(),
+    cookedAt: null,
+    usesIngredients,
+    batchGroup: null,
+    notes: '',
+    planId: null,
+  });
+  return ref.id;
+};
+
 module.exports = {
   testUserId,
   inventoryItems,
@@ -73,4 +142,9 @@ module.exports = {
   inventoryItem,
   inventoryItemsNamed,
   importHistoryRecords,
+  inventoryItemById,
+  seedInventoryItem,
+  mealPlanEntries,
+  mealPlanEntry,
+  seedMealPlanEntry,
 };
