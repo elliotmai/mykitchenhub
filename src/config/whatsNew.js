@@ -14,6 +14,17 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.08.14.2',
+    date: 'August 2026',
+    items: [
+      '📅 Meal Plan is here: a week at a glance, with dinner on every day. Drag a meal to a different night, or pick a new day from the menu on the card.',
+      '✨ Tap “Generate plan” and the week gets planned around whatever is closest to going off in your fridge — allowing for your dietary needs, the things you don’t like, and the nights your HelloFresh box already covers.',
+      '🛒 The shopping list builds itself from the week’s meals, and quietly separates out what you already have.',
+      '🍳 Tick “Cooked” when dinner is done and the ingredients come straight out of your kitchen count — no more updating it by hand.',
+      '🥘 When two meals share prep or oven time, you’ll get a nudge to cook them together and save yourself a second session at the stove.',
+    ],
+  },
+  {
     version: '2026.08.14.1',
     date: 'August 2026',
     items: [
