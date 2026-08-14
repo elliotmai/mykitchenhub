@@ -176,6 +176,87 @@ actually did to their kitchen after the fact
 
 ---
 
+### 3a. `users/{userId}/deliveries` Subcollection
+
+**Purpose:** History of HelloFresh boxes received, and the audit trail for what
+each one added to the kitchen (roadmap 5.3)
+
+**Document Structure:**
+```javascript
+{
+  id: "auto-generated",                   // Firestore auto-ID
+  deliveredAt: Timestamp,                 // When the box arrived
+  weekOf: "2026-08-10",                   // Monday of the delivery week (YYYY-MM-DD)
+
+  // What was in the box
+  recipeIds: ["recipe-1", "recipe-2"],    // References to recipes documents
+  recipeNames: ["Sweet Chili Chicken"],   // Denormalised, so history renders without a join
+  mealCount: 3,                           // Number of meals in the box
+
+  // What it did to the kitchen
+  itemsAdded: 12,                         // Inventory documents created
+  locationId: "loc-fridge",               // Storage location the ingredients went to
+
+  status: "received",                     // "scheduled" | "received" | "cooked"
+  source: "hellofresh",                   // Always "hellofresh" for now
+  notes: "",                              // Free-text
+  createdAt: Timestamp
+}
+```
+
+**Indexes Required:**
+- Single: `deliveredAt` DESC (for the delivery history list)
+
+**Security Rules:**
+- Users can CRUD their own deliveries
+- `source` must be `"hellofresh"`
+- `status` must be one of: "scheduled", "received", "cooked"
+- `mealCount` and `itemsAdded` must be >= 0
+- `createdAt` is immutable after creation
+
+---
+
+### 3b. `users/{userId}/mealPlan` Subcollection
+
+**Purpose:** One document per scheduled meal. Written by the HelloFresh delivery
+workflow (roadmap 5.3, which auto-schedules a box's recipes on delivery days 1,
+3, and 5) and by the meal plan UI (roadmap phase 7).
+
+A flat per-meal collection rather than a per-week document, so a date range
+query returns exactly the meals in view and two writers scheduling different
+days never contend on the same document.
+
+**Document Structure:**
+```javascript
+{
+  id: "auto-generated",                   // Firestore auto-ID
+  date: "2026-08-12",                     // Day the meal is planned for (YYYY-MM-DD)
+  mealType: "dinner",                     // "breakfast" | "lunch" | "dinner" | "snack"
+
+  recipeId: "recipe-1",                   // Reference to a recipes document
+  recipeName: "Sweet Chili Chicken",      // Denormalised for rendering
+  servings: 2,                            // Portions planned
+
+  source: "hellofresh",                   // "manual" | "hellofresh" | "ai-generated"
+  status: "planned",                      // "planned" | "cooked" | "skipped"
+  deliveryId: "delivery-1",               // Set when auto-scheduled from a delivery
+  createdAt: Timestamp
+}
+```
+
+**Indexes Required:**
+- Composite: `date` ASC + `mealType` ASC (for the week view)
+
+**Security Rules:**
+- Users can CRUD their own meal plan entries
+- `mealType` must be one of: "breakfast", "lunch", "dinner", "snack"
+- `source` must be one of: "manual", "hellofresh", "ai-generated"
+- `status` must be one of: "planned", "cooked", "skipped"
+- `servings` must be > 0
+- `createdAt` is immutable after creation
+
+---
+
 ### 4. `recipes` Collection
 
 **Purpose:** Global recipe database from all sources
@@ -532,6 +613,12 @@ Collection: users/{userId}/inventory
 Collection: recipes
 - source ASC, createdAt DESC
 - tags ARRAY, createdAt DESC
+
+Collection: users/{userId}/deliveries
+- deliveredAt DESC
+
+Collection: users/{userId}/mealPlan
+- date ASC, mealType ASC
 ```
 
 ---

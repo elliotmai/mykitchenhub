@@ -78,6 +78,34 @@ const validImportRecord = (overrides = {}) => ({
   ...overrides,
 });
 
+const validDelivery = (overrides = {}) => ({
+  deliveredAt: new Date().toISOString(),
+  weekOf: '2026-08-10',
+  recipeIds: ['recipe-1', 'recipe-2', 'recipe-3'],
+  recipeNames: ['Sweet Chili Chicken', 'Sheet Pan Salmon', 'Veggie Tacos'],
+  mealCount: 3,
+  itemsAdded: 12,
+  locationId: 'loc-fridge',
+  status: 'received',
+  source: 'hellofresh',
+  notes: '',
+  createdAt: new Date().toISOString(),
+  ...overrides,
+});
+
+const validMealPlanEntry = (overrides = {}) => ({
+  date: '2026-08-12',
+  mealType: 'dinner',
+  recipeId: 'recipe-1',
+  recipeName: 'Sweet Chili Chicken',
+  servings: 2,
+  source: 'hellofresh',
+  status: 'planned',
+  deliveryId: 'delivery-1',
+  createdAt: new Date().toISOString(),
+  ...overrides,
+});
+
 const validRecipe = (overrides = {}) => ({
   name: 'Sheet Pan Salmon',
   ingredients: [{ name: 'salmon', quantity: 2, unit: 'fillet' }],
@@ -388,6 +416,197 @@ describe('import history', () => {
     await assertFails(as(INTRUDER).doc(importPath(OWNER)).get());
     await assertFails(as(INTRUDER).doc(importPath(OWNER, 'new')).set(validImportRecord()));
     await assertFails(anon().doc(importPath(OWNER)).get());
+  });
+});
+
+// users/{userId}/deliveries/{deliveryId}
+// ---------------------------------------------------------------------------
+
+describe('hellofresh deliveries', () => {
+  const path = (uid, id = 'delivery-1') => `users/${uid}/deliveries/${id}`;
+
+  it('accepts the document shape the Add Delivery workflow writes', async () => {
+    await assertSucceeds(as(OWNER).doc(path(OWNER)).set(validDelivery()));
+  });
+
+  it.each([
+    'deliveredAt',
+    'source',
+    'status',
+    'recipeIds',
+    'mealCount',
+    'itemsAdded',
+    'createdAt',
+  ])('requires %s', async (field) => {
+    const doc = validDelivery();
+    delete doc[field];
+    await assertFails(as(OWNER).doc(path(OWNER)).set(doc));
+  });
+
+  it.each(['scheduled', 'received', 'cooked'])('accepts status "%s"', async (status) => {
+    await assertSucceeds(as(OWNER).doc(path(OWNER, `d-${status}`)).set(validDelivery({ status })));
+  });
+
+  it('rejects an unrecognised status', async () => {
+    await assertFails(as(OWNER).doc(path(OWNER)).set(validDelivery({ status: 'in-transit' })));
+  });
+
+  it('only accepts hellofresh as the source', async () => {
+    await assertFails(as(OWNER).doc(path(OWNER)).set(validDelivery({ source: 'manual' })));
+  });
+
+  it('rejects negative counts', async () => {
+    await assertFails(as(OWNER).doc(path(OWNER)).set(validDelivery({ mealCount: -1 })));
+    await assertFails(as(OWNER).doc(path(OWNER, 'd2')).set(validDelivery({ itemsAdded: -1 })));
+  });
+
+  it('allows an empty box — a delivery logged before its recipes were imported', async () => {
+    await assertSucceeds(
+      as(OWNER).doc(path(OWNER)).set(validDelivery({ mealCount: 0, itemsAdded: 0, recipeIds: [] }))
+    );
+  });
+
+  it('lets an owner mark a delivery cooked', async () => {
+    const delivery = validDelivery();
+    await seed((db) => db.doc(path(OWNER)).set(delivery));
+
+    await assertSucceeds(
+      as(OWNER).doc(path(OWNER)).update({ createdAt: delivery.createdAt, status: 'cooked' })
+    );
+  });
+
+  it('refuses to let the logged date be rewritten', async () => {
+    await seed((db) => db.doc(path(OWNER)).set(validDelivery()));
+
+    await assertFails(
+      as(OWNER).doc(path(OWNER)).update({ createdAt: '1999-01-01', status: 'cooked' })
+    );
+  });
+
+  it("keeps one user out of another user's delivery history", async () => {
+    await seed((db) => db.doc(path(OWNER)).set(validDelivery()));
+
+    await assertFails(as(INTRUDER).doc(path(OWNER)).get());
+    await assertFails(as(INTRUDER).doc(path(OWNER, 'new')).set(validDelivery()));
+    await assertFails(as(INTRUDER).doc(path(OWNER)).delete());
+  });
+
+  it('keeps a signed-out visitor out entirely', async () => {
+    await seed((db) => db.doc(path(OWNER)).set(validDelivery()));
+    await assertFails(anon().doc(path(OWNER)).get());
+  });
+
+  it('lets an owner delete a delivery logged by mistake', async () => {
+    await seed((db) => db.doc(path(OWNER)).set(validDelivery()));
+    await assertSucceeds(as(OWNER).doc(path(OWNER)).delete());
+  });
+});
+
+// ---------------------------------------------------------------------------
+// users/{userId}/mealPlan/{entryId}
+// ---------------------------------------------------------------------------
+
+describe('meal plan entries', () => {
+  const path = (uid, id = 'meal-1') => `users/${uid}/mealPlan/${id}`;
+
+  it('accepts the document shape the delivery workflow schedules', async () => {
+    await assertSucceeds(as(OWNER).doc(path(OWNER)).set(validMealPlanEntry()));
+  });
+
+  it.each([
+    'date',
+    'mealType',
+    'recipeId',
+    'recipeName',
+    'servings',
+    'source',
+    'status',
+    'createdAt',
+  ])('requires %s', async (field) => {
+    const doc = validMealPlanEntry();
+    delete doc[field];
+    await assertFails(as(OWNER).doc(path(OWNER)).set(doc));
+  });
+
+  it.each(['breakfast', 'lunch', 'dinner', 'snack'])(
+    'accepts meal type "%s"',
+    async (mealType) => {
+      await assertSucceeds(
+        as(OWNER).doc(path(OWNER, `m-${mealType}`)).set(validMealPlanEntry({ mealType }))
+      );
+    }
+  );
+
+  it('rejects an unrecognised meal type', async () => {
+    await assertFails(as(OWNER).doc(path(OWNER)).set(validMealPlanEntry({ mealType: 'brunch' })));
+  });
+
+  it.each(['manual', 'hellofresh', 'ai-generated'])('accepts source "%s"', async (source) => {
+    await assertSucceeds(
+      as(OWNER).doc(path(OWNER, `m-${source}`)).set(validMealPlanEntry({ source }))
+    );
+  });
+
+  it('rejects an unrecognised source', async () => {
+    await assertFails(as(OWNER).doc(path(OWNER)).set(validMealPlanEntry({ source: 'seed' })));
+  });
+
+  it.each(['planned', 'cooked', 'skipped'])('accepts status "%s"', async (status) => {
+    await assertSucceeds(
+      as(OWNER).doc(path(OWNER, `m-${status}`)).set(validMealPlanEntry({ status }))
+    );
+  });
+
+  it('rejects an unrecognised status', async () => {
+    await assertFails(as(OWNER).doc(path(OWNER)).set(validMealPlanEntry({ status: 'maybe' })));
+  });
+
+  it('requires a positive serving count', async () => {
+    await assertFails(as(OWNER).doc(path(OWNER)).set(validMealPlanEntry({ servings: 0 })));
+    await assertFails(as(OWNER).doc(path(OWNER, 'm2')).set(validMealPlanEntry({ servings: -2 })));
+  });
+
+  it('lets an owner move a meal to another day and mark it cooked', async () => {
+    const entry = validMealPlanEntry();
+    await seed((db) => db.doc(path(OWNER)).set(entry));
+
+    await assertSucceeds(
+      as(OWNER).doc(path(OWNER)).update({
+        createdAt: entry.createdAt,
+        servings: entry.servings,
+        date: '2026-08-14',
+        status: 'cooked',
+      })
+    );
+  });
+
+  it('refuses to let the created date be rewritten', async () => {
+    const entry = validMealPlanEntry();
+    await seed((db) => db.doc(path(OWNER)).set(entry));
+
+    await assertFails(
+      as(OWNER)
+        .doc(path(OWNER))
+        .update({ createdAt: '1999-01-01', servings: entry.servings, status: 'cooked' })
+    );
+  });
+
+  it("keeps one user out of another user's meal plan", async () => {
+    await seed((db) => db.doc(path(OWNER)).set(validMealPlanEntry()));
+
+    await assertFails(as(INTRUDER).doc(path(OWNER)).get());
+    await assertFails(as(INTRUDER).doc(path(OWNER, 'new')).set(validMealPlanEntry()));
+    await assertFails(as(INTRUDER).doc(path(OWNER)).delete());
+  });
+
+  it('keeps a signed-out visitor out entirely', async () => {
+    await seed((db) => db.doc(path(OWNER)).set(validMealPlanEntry()));
+    await assertFails(anon().doc(path(OWNER)).get());
+  });
+
+  it('lets an owner remove a scheduled meal', async () => {
+    await seed((db) => db.doc(path(OWNER)).set(validMealPlanEntry()));
+    await assertSucceeds(as(OWNER).doc(path(OWNER)).delete());
   });
 });
 

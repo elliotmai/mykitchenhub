@@ -119,6 +119,35 @@ service cloud.firestore {
       }
 
       // ============================================
+      // DELIVERIES SUBCOLLECTION
+      // One HelloFresh box, and what it did to the kitchen. The meals it
+      // schedules are ordinary mealPlanEntries documents (source:
+      // 'hellofresh') — this collection is only the delivery record.
+      // ============================================
+
+      match /deliveries/{deliveryId} {
+        // Users can read their own delivery history
+        allow read: if isOwner(userId);
+
+        // Users can log a delivery
+        allow create: if isOwner(userId)
+          && hasRequiredFields(['deliveredAt', 'source', 'status', 'recipeIds',
+                                'mealCount', 'itemsAdded', 'createdAt'])
+          && request.resource.data.source == 'hellofresh'
+          && request.resource.data.status in ['scheduled', 'received', 'cooked']
+          && request.resource.data.mealCount >= 0
+          && request.resource.data.itemsAdded >= 0;
+
+        // Users can update a delivery (e.g. mark it cooked)
+        allow update: if isOwner(userId)
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.status in ['scheduled', 'received', 'cooked'];
+
+        // Users can delete a delivery they logged by mistake
+        allow delete: if isOwner(userId);
+      }
+
+      // ============================================
       // MEAL PLAN ENTRIES SUBCOLLECTION
       // One scheduled meal. Written by the meal plan page, by HelloFresh
       // auto-scheduling, and by the waste-prevention "Add to Meal Plan"

@@ -145,6 +145,70 @@ export const makeRecipe = (overrides = {}) => ({
   ...overrides,
 });
 
+/**
+ * A recipe in exactly the shape `firestore.rules` requires on create:
+ * name, ingredients, instructions, source, createdAt, tags, servings,
+ * difficulty, timesCooked.
+ *
+ * Separate from `makeRecipe` above, which predates that contract.
+ */
+export const makeHelloFreshRecipe = (overrides = {}) => ({
+  id: nextId('hf-recipe'),
+  name: 'Sweet Chili Chicken',
+  ingredients: [
+    { name: 'Chicken Breast', quantity: 2, unit: 'unit', normalized: 'chicken breast' },
+    { name: 'Tomato Paste', quantity: 28, unit: 'g', normalized: 'tomato paste' },
+  ],
+  instructions: ['Preheat the oven to 425F.', 'Roast the chicken for 20 minutes.'],
+  source: 'hellofresh',
+  createdAt: daysFromNow(-2),
+  tags: ['hellofresh', 'chicken'],
+  prepTime: 10,
+  cookTime: 25,
+  servings: 2,
+  difficulty: 'medium',
+  timesCooked: 0,
+  imageUrl: null,
+  sourceUrl: 'https://www.hellofresh.com/recipes/sweet-chili-chicken-123',
+  ...overrides,
+});
+
+// ---------------------------------------------------------------------------
+// users/{userId}/deliveries/{deliveryId}
+// ---------------------------------------------------------------------------
+export const makeDelivery = (overrides = {}) => ({
+  id: nextId('delivery'),
+  deliveredAt: daysFromNow(-1),
+  weekOf: '2026-08-10',
+  recipeIds: ['hf-recipe-1', 'hf-recipe-2', 'hf-recipe-3'],
+  recipeNames: ['Sweet Chili Chicken', 'Sheet Pan Salmon', 'Veggie Tacos'],
+  mealCount: 3,
+  itemsAdded: 12,
+  locationId: 'loc-fridge',
+  status: 'received',
+  source: 'hellofresh',
+  notes: '',
+  createdAt: daysFromNow(-1),
+  ...overrides,
+});
+
+// ---------------------------------------------------------------------------
+// users/{userId}/mealPlan/{entryId}
+// ---------------------------------------------------------------------------
+export const makeMealPlanEntry = (overrides = {}) => ({
+  id: nextId('meal'),
+  date: '2026-08-12',
+  mealType: 'dinner',
+  recipeId: 'hf-recipe-1',
+  recipeName: 'Sweet Chili Chicken',
+  servings: 2,
+  source: 'hellofresh',
+  status: 'planned',
+  deliveryId: 'delivery-1',
+  createdAt: daysFromNow(-1),
+  ...overrides,
+});
+
 // ---------------------------------------------------------------------------
 // users/{userId}/mealPlanEntries/{entryId}
 //
