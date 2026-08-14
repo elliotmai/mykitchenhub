@@ -97,6 +97,17 @@ export const lookupShelfLife = (ingredientName, locationType) => {
   return entry[locationType];
 };
 
+/** Every ingredient the table knows, alphabetically. */
+export const listIngredients = () => Object.keys(INGREDIENT_SHELF_LIFE).sort();
+
+/** Ingredients whose name contains `searchTerm`. */
+export const findIngredients = (searchTerm) => {
+  const term = String(searchTerm ?? '')
+    .toLowerCase()
+    .trim();
+  return listIngredients().filter((ingredient) => ingredient.includes(term));
+};
+
 /**
  * Custom hook for ingredient metadata
  */
@@ -120,14 +131,8 @@ export function useIngredientMetadata() {
     return expirationDate;
   };
 
-  const getAllIngredients = () => {
-    return Object.keys(ingredientShelfLife).sort();
-  };
-
-  const searchIngredients = (searchTerm) => {
-    const term = searchTerm.toLowerCase().trim();
-    return getAllIngredients().filter((ingredient) => ingredient.includes(term));
-  };
+  const getAllIngredients = listIngredients;
+  const searchIngredients = findIngredients;
 
   const getDaysUntilExpiration = (expirationDate) => {
     if (!expirationDate) return null;
@@ -182,11 +187,12 @@ export function useIngredientMetadata() {
  * Hook for autocomplete suggestions
  */
 export function useIngredientAutocomplete(searchTerm) {
-  const { searchIngredients } = useIngredientMetadata();
-
+  // `findIngredients` is a module-level pure function, so the search term is
+  // genuinely the only dependency — no stale-closure hazard, and no lint
+  // warning to suppress. (CRA builds with CI=true treat warnings as errors.)
   const suggestions = useMemo(() => {
     if (!searchTerm || searchTerm.length < 2) return [];
-    return searchIngredients(searchTerm).slice(0, 10); // Limit to 10 suggestions
+    return findIngredients(searchTerm).slice(0, 10); // Limit to 10 suggestions
   }, [searchTerm]);
 
   return suggestions;
