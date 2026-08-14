@@ -76,3 +76,70 @@ describe('BatchCookingTips', () => {
     expect(screen.getByText('Roast everything at once')).toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Regressions
+// ---------------------------------------------------------------------------
+
+describe('what the kitchen already has', () => {
+  it('says how much of a partly-stocked item is in stock', () => {
+    render(<ShoppingList items={[item({ quantity: 5, unit: 'cup', onHand: 2 })]} />);
+
+    // Buying five cups when two are already in the jar is two cups wasted.
+    expect(screen.getByText(/2 cup in stock/)).toBeInTheDocument();
+  });
+
+  it('stays quiet when the kitchen has none of it', () => {
+    render(<ShoppingList items={[item({ quantity: 5, unit: 'cup', onHand: 0 })]} />);
+    expect(screen.queryByText(/in stock/)).not.toBeInTheDocument();
+  });
+
+  it('flags stock recorded in a unit the recipe does not use', () => {
+    render(
+      <ShoppingList
+        items={[
+          item({
+            quantity: 1,
+            unit: 'fillet',
+            onHand: 0,
+            otherUnits: [{ quantity: 4, unit: 'gal' }],
+          }),
+        ]}
+      />
+    );
+
+    // Four gallons of salmon do not cover a fillet, but the cook should still
+    // know the salmon is in there before buying more.
+    expect(screen.getByText(/4 gal in stock — different measure/)).toBeInTheDocument();
+  });
+
+  it('keeps the same ingredient in two units as two lines', () => {
+    render(
+      <ShoppingList
+        items={[
+          item({ key: 'flour|cup', name: 'Flour', normalized: 'flour', quantity: 2, unit: 'cup' }),
+          item({ key: 'flour|g', name: 'Flour', normalized: 'flour', quantity: 200, unit: 'g' }),
+        ]}
+      />
+    );
+
+    expect(screen.getByText('2 cup')).toBeInTheDocument();
+    expect(screen.getByText('200 g')).toBeInTheDocument();
+  });
+});
+
+describe('BatchCookingTips keys', () => {
+  it('renders two stored tips that share a group', () => {
+    render(
+      <BatchCookingTips
+        tips={[
+          { key: 'ai-0', group: '', title: 'Roast it all', detail: 'One tray.' },
+          { key: 'ai-1', group: '', title: 'Chop it all', detail: 'One board.' },
+        ]}
+      />
+    );
+
+    expect(screen.getByText('Roast it all')).toBeInTheDocument();
+    expect(screen.getByText('Chop it all')).toBeInTheDocument();
+  });
+});

@@ -5,12 +5,28 @@ import React from 'react';
 import { Badge, Card } from 'react-bootstrap';
 import { Check, ShoppingCart } from 'lucide-react';
 
-/** "1 of 3 cups already in your kitchen" — only when some, but not all, is. */
-export const partialStockLabel = (item) => {
+/**
+ * What the kitchen already has of something still on the list.
+ *
+ * Two cases worth telling the cook about: a partly-stocked item (buy the
+ * difference, not the whole amount), and stock recorded in a unit the recipe
+ * does not use — which cannot be counted against it, but is still there.
+ */
+export const stockNote = (item) => {
+  const notes = [];
+
   const onHand = Number(item?.onHand || 0);
-  if (onHand <= 0 || onHand >= Number(item?.quantity || 0)) return null;
-  const rounded = Math.round(onHand * 100) / 100;
-  return `${rounded}${item.unit ? ` ${item.unit}` : ''} already in your kitchen`;
+  const needed = Number(item?.quantity || 0);
+  if (onHand > 0 && onHand < needed) {
+    notes.push(`${Math.round(onHand * 100) / 100}${item.unit ? ` ${item.unit}` : ''} in stock`);
+  }
+
+  (item?.otherUnits || []).forEach(({ quantity, unit }) => {
+    if (!quantity) return;
+    notes.push(`${Math.round(quantity * 100) / 100} ${unit} in stock — different measure`);
+  });
+
+  return notes.length ? notes.join(' · ') : null;
 };
 
 /**
@@ -47,7 +63,7 @@ const ShoppingList = ({ items = [] }) => {
             ) : (
               <ul className="list-unstyled mb-0 d-flex flex-column gap-1">
                 {toBuy.map((item) => {
-                  const partial = partialStockLabel(item);
+                  const note = stockNote(item);
                   return (
                     <li
                       key={item.key ?? `${item.normalized} ${item.unit}`}
@@ -59,14 +75,14 @@ const ShoppingList = ({ items = [] }) => {
                           {item.quantity} {item.unit}
                         </span>
                       </div>
-                      {partial && (
+                      {note && (
                         <div
                           style={{
                             fontSize: 'var(--mkh-font-size-tiny)',
                             color: 'var(--mkh-text-muted)',
                           }}
                         >
-                          {partial}
+                          {note}
                         </div>
                       )}
                     </li>

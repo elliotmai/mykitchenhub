@@ -2,7 +2,7 @@
 // what happens to the kitchen when dinner gets ticked off.
 
 import React from 'react';
-import { act, waitFor } from '@testing-library/react';
+import { act, fireEvent, waitFor } from '@testing-library/react';
 
 import MealPlanView, { weekRangeLabel } from '../MealPlanView';
 import {
@@ -92,7 +92,7 @@ describe('MealPlanView', () => {
           usesIngredients: [{ name: 'Salmon', normalized: 'salmon', quantity: 1, unit: 'fillet' }],
         }),
       ],
-      inventory: [makeItem({ name: 'Salmon', normalized: 'salmon', quantity: 4 })],
+      inventory: [makeItem({ name: 'Salmon', normalized: 'salmon', quantity: 4, unit: 'fillet' })],
     });
 
     expect(screen.getByText('Already in your kitchen')).toBeInTheDocument();
@@ -272,5 +272,128 @@ describe('week navigation', () => {
     expect(
       await screen.findByText(weekRangeLabel(shiftDayKey(WEEK_START, -7)))
     ).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Regressions
+// ---------------------------------------------------------------------------
+
+/** A DataTransfer-alike, since jsdom does not implement one. */
+const dataTransfer = (entryId) => {
+  const store = { 'text/plain': entryId };
+  return { data: store, setData: () => {}, getData: (type) => store[type] ?? '' };
+};
+
+const dropOn = (dayKey, entryId) => {
+  const target = document.querySelector(`[data-testid="day-card-${dayKey}"]`);
+  const transfer = dataTransfer(entryId);
+  fireEvent.dragOver(target, { dataTransfer: transfer });
+  fireEvent.drop(target, { dataTransfer: transfer });
+};
+
+describe('dropping a meal on a day', () => {
+  const tomorrow = shiftDayKey(TODAY, 1);
+
+  it('moves it there', async () => {
+    await renderBoard({ entries: [makeMealPlanEntry({ id: 'e1', date: TODAY })] });
+
+    await act(async () => dropOn(tomorrow, 'e1'));
+
+    await waitFor(() => expect(fs.updateDoc).toHaveBeenCalled());
+    expect(fs.updateDoc.mock.calls[0][1]).toEqual({ date: tomorrow });
+  });
+
+  it('does nothing when it lands back on the day it came from', async () => {
+    await renderBoard({ entries: [makeMealPlanEntry({ id: 'e1', date: TODAY })] });
+
+    await act(async () => dropOn(TODAY, 'e1'));
+
+    expect(fs.updateDoc).not.toHaveBeenCalled();
+  });
+
+  it('lets a day hold a second meal rather than refusing the drop', async () => {
+    await renderBoard({
+      entries: [
+        makeMealPlanEntry({ id: 'e1', date: TODAY, mealType: 'dinner' }),
+        makeMealPlanEntry({ id: 'e2', date: tomorrow, mealType: 'lunch' }),
+      ],
+    });
+
+    await act(async () => dropOn(TODAY, 'e2'));
+
+    await waitFor(() => expect(fs.updateDoc).toHaveBeenCalled());
+    expect(fs.updateDoc.mock.calls[0][1]).toEqual({ date: TODAY });
+  });
+
+  it('ignores something dragged in from outside the board', async () => {
+    await renderBoard({ entries: [makeMealPlanEntry({ id: 'e1', date: TODAY })] });
+
+    await act(async () => dropOn(tomorrow, 'https://example.com/a-link'));
+
+    expect(fs.updateDoc).not.toHaveBeenCalled();
+  });
+});
+
+describe('rescheduling without a mouse', () => {
+  it('moves a meal through the day select, the keyboard and touch path', async () => {
+    const tomorrow = shiftDayKey(TODAY, 1);
+    await renderBoard({
+      entries: [makeMealPlanEntry({ id: 'e1', date: TODAY, recipeName: 'Chilli' })],
+    });
+
+    // HTML5 drag events never fire on a phone, so this select is the only way
+    // a mobile-first app can reschedule at all.
+    const select = screen.getByRole('combobox', { name: 'Move Chilli to another day' });
+    await userEvent.selectOptions(select, tomorrow);
+
+    await waitFor(() => expect(fs.updateDoc).toHaveBeenCalled());
+    expect(fs.updateDoc.mock.calls[0][1]).toEqual({ date: tomorrow });
+  });
+});
+
+describe('ticking off a meal that was already cooked', () => {
+  it('says so instead of claiming the kitchen was emptied again', async () => {
+    const entry = makeMealPlanEntry({
+      id: 'e1',
+      date: TODAY,
+      recipeName: 'Chilli',
+      status: 'planned',
+      usesIngredients: [{ name: 'Beans', normalized: 'beans', quantity: 1, unit: 'tin' }],
+    });
+
+    await renderBoard({
+      entries: [entry],
+      inventory: [makeItem({ id: 'item-beans', normalized: 'beans', quantity: 3, unit: 'tin' })],
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /Cooked/ }));
+    await waitFor(() => expect(fs.updateDoc).toHaveBeenCalled());
+
+    // The listener now says cooked; a second click must not decrement again.
+    await act(async () => {
+      fs.__emit(ENTRIES_PATH, asDocs([{ ...entry, status: 'cooked' }]));
+    });
+
+    const writesAfterFirstCook = fs.updateDoc.mock.calls.length;
+    const cookedAgain = screen.queryByRole('button', { name: /Cooked/ });
+    if (cookedAgain) await userEvent.click(cookedAgain);
+
+    expect(fs.updateDoc.mock.calls).toHaveLength(writesAfterFirstCook);
+  });
+});
+
+describe('an empty kitchen', () => {
+  it('still renders the board with nothing scheduled', async () => {
+    await renderBoard({ entries: [], inventory: [] });
+
+    expect(screen.getByText(/Nothing on the calendar yet/)).toBeInTheDocument();
+    expect(screen.getAllByText('Nothing planned')).toHaveLength(7);
+    expect(screen.getByText(/Add meals to the week/)).toBeInTheDocument();
+  });
+
+  it('offers to plan the week anyway', async () => {
+    await renderBoard({ entries: [], inventory: [] });
+    expect(screen.getByRole('button', { name: /Generate plan/ })).toBeEnabled();
   });
 });

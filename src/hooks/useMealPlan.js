@@ -122,26 +122,41 @@ const indexStock = (inventoryItems) => {
 
   inventoryItems.forEach((item) => {
     const name = normalize(item.normalized || item.name);
+    const unit = normalize(item.unit);
     const quantity = Number(item.quantity || 0);
     const add = (map, key) => map.set(key, (map.get(key) ?? 0) + quantity);
 
-    add(byNameAndUnit, shoppingKey(name, item.unit));
-    add(byName, name);
-    if (!normalize(item.unit)) add(unitlessByName, name);
+    add(byNameAndUnit, shoppingKey(name, unit));
+    if (!byName.has(name)) byName.set(name, []);
+    byName.get(name).push({ quantity, unit: item.unit || '' });
+    if (!unit) add(unitlessByName, name);
   });
 
   /**
-   * How much of this ingredient the kitchen has, in the unit asked for.
+   * What the kitchen has of this ingredient, split by whether it can be counted
+   * against the recipe.
    *
-   * A jar measured in bags does not cover a recipe measured in grams. An item
-   * stored with no unit at all is a different case — that is a gap in the
-   * record, not a different substance, so it still counts.
+   * `onHand` is stock measured the same way the recipe asks for — four gallons
+   * of salmon do not cover one fillet, so that goes in `otherUnits` instead.
+   * An item stored with no unit at all is a third case: that is a gap in the
+   * record rather than a different substance, so it counts toward `onHand`.
    */
   return (name, unit) => {
-    if (!normalize(unit)) return byName.get(normalize(name)) ?? 0;
-    return (
-      (byNameAndUnit.get(shoppingKey(name, unit)) ?? 0) + (unitlessByName.get(normalize(name)) ?? 0)
+    const key = normalize(name);
+    const held = byName.get(key) || [];
+    const wanted = normalize(unit);
+
+    if (!wanted) {
+      return { onHand: held.reduce((sum, entry) => sum + entry.quantity, 0), otherUnits: [] };
+    }
+
+    const onHand =
+      (byNameAndUnit.get(shoppingKey(key, wanted)) ?? 0) + (unitlessByName.get(key) ?? 0);
+    const otherUnits = held.filter(
+      (entry) => normalize(entry.unit) && normalize(entry.unit) !== wanted
     );
+
+    return { onHand, otherUnits };
   };
 };
 
@@ -181,11 +196,12 @@ export const buildShoppingList = (entries = [], inventoryItems = []) => {
 
   return [...needed.values()]
     .map((item) => {
-      const onHand = onHandFor(item.normalized, item.unit);
+      const { onHand, otherUnits } = onHandFor(item.normalized, item.unit);
       return {
         ...item,
         quantity: Math.round(item.quantity * 100) / 100,
         onHand,
+        otherUnits,
         haveInInventory: onHand >= item.quantity && item.quantity > 0,
       };
     })
