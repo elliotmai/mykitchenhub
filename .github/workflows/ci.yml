@@ -9,7 +9,9 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    # Feature branches run the full gate too, so a section can be verified
+    # green *before* it is merged rather than after.
+    branches: [main, 'claude/**']
   workflow_dispatch:
 
 concurrency:
