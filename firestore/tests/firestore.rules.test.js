@@ -66,6 +66,18 @@ const validItem = (overrides = {}) => ({
   ...overrides,
 });
 
+const validImportRecord = (overrides = {}) => ({
+  fileName: 'kitchen.csv',
+  importedAt: new Date().toISOString(),
+  itemsImported: 42,
+  itemsSkipped: 3,
+  status: 'completed',
+  source: 'csv-import',
+  errorCount: 3,
+  errors: [{ row: 7, message: 'Missing quantity.' }],
+  ...overrides,
+});
+
 const validRecipe = (overrides = {}) => ({
   name: 'Sheet Pan Salmon',
   ingredients: [{ name: 'salmon', quantity: 2, unit: 'fillet' }],
@@ -277,6 +289,72 @@ describe('inventory items', () => {
   it('lets an owner delete their own item', async () => {
     await seed((db) => db.doc(itemPath(OWNER)).set(validItem()));
     await assertSucceeds(as(OWNER).doc(itemPath(OWNER)).delete());
+  });
+});
+
+// ---------------------------------------------------------------------------
+// users/{userId}/importHistory/{importId}
+// ---------------------------------------------------------------------------
+
+describe('import history', () => {
+  const importPath = (uid, id = 'import-1') => `users/${uid}/importHistory/${id}`;
+
+  it('accepts the record the CSV importer writes', async () => {
+    await assertSucceeds(as(OWNER).doc(importPath(OWNER)).set(validImportRecord()));
+  });
+
+  it('requires the documented fields', async () => {
+    const { itemsImported, ...withoutCount } = validImportRecord();
+    await assertFails(as(OWNER).doc(importPath(OWNER)).set(withoutCount));
+    await assertFails(as(OWNER).doc(importPath(OWNER)).set({ fileName: 'kitchen.csv' }));
+  });
+
+  it.each(['completed', 'partial', 'failed'])('accepts status "%s"', async (status) => {
+    await assertSucceeds(
+      as(OWNER).doc(importPath(OWNER, `import-${status}`)).set(validImportRecord({ status }))
+    );
+  });
+
+  it('rejects an unrecognised status or source', async () => {
+    await assertFails(as(OWNER).doc(importPath(OWNER)).set(validImportRecord({ status: 'ok' })));
+    await assertFails(as(OWNER).doc(importPath(OWNER)).set(validImportRecord({ source: 'manual' })));
+  });
+
+  it('rejects negative counts', async () => {
+    await assertFails(
+      as(OWNER).doc(importPath(OWNER)).set(validImportRecord({ itemsImported: -1 }))
+    );
+    await assertFails(
+      as(OWNER).doc(importPath(OWNER)).set(validImportRecord({ itemsSkipped: -1 }))
+    );
+  });
+
+  it('accepts a failed import that added nothing', async () => {
+    await assertSucceeds(
+      as(OWNER)
+        .doc(importPath(OWNER))
+        .set(validImportRecord({ status: 'failed', itemsImported: 0, itemsSkipped: 12 }))
+    );
+  });
+
+  it('never lets a past import be rewritten', async () => {
+    await seed((db) => db.doc(importPath(OWNER)).set(validImportRecord()));
+    await assertFails(as(OWNER).doc(importPath(OWNER)).update({ itemsImported: 999 }));
+  });
+
+  it('lets an owner read and clear their own history', async () => {
+    await seed((db) => db.doc(importPath(OWNER)).set(validImportRecord()));
+
+    await assertSucceeds(as(OWNER).doc(importPath(OWNER)).get());
+    await assertSucceeds(as(OWNER).doc(importPath(OWNER)).delete());
+  });
+
+  it("keeps one user out of another user's import history", async () => {
+    await seed((db) => db.doc(importPath(OWNER)).set(validImportRecord()));
+
+    await assertFails(as(INTRUDER).doc(importPath(OWNER)).get());
+    await assertFails(as(INTRUDER).doc(importPath(OWNER, 'new')).set(validImportRecord()));
+    await assertFails(anon().doc(importPath(OWNER)).get());
   });
 });
 

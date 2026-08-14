@@ -91,6 +91,32 @@ service cloud.firestore {
         // Users can delete their inventory items
         allow delete: if isOwner(userId);
       }
+
+      // ============================================
+      // IMPORT HISTORY SUBCOLLECTION
+      // ============================================
+
+      // One record per bulk import (CSV today), written by the importer in the
+      // app and by the importInventoryFromCSV Cloud Function.
+      match /importHistory/{importId} {
+        // Users can read their own import log
+        allow read: if isOwner(userId);
+
+        // Users can append to their own import log
+        allow create: if isOwner(userId)
+          && hasRequiredFields(['fileName', 'importedAt', 'itemsImported',
+                                'itemsSkipped', 'status', 'source'])
+          && request.resource.data.source in ['csv-import', 'hellofresh']
+          && request.resource.data.status in ['completed', 'partial', 'failed']
+          && request.resource.data.itemsImported >= 0
+          && request.resource.data.itemsSkipped >= 0;
+
+        // A log is a record of what happened — it is never rewritten
+        allow update: if false;
+
+        // Users can clear their own history
+        allow delete: if isOwner(userId);
+      }
     }
     
     // ============================================

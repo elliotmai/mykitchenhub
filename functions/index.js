@@ -536,51 +536,18 @@ function extractUnit(amountStr) {
 // ============================================================================
 
 /**
- * HTTP function to import inventory items from CSV file
- * 
+ * HTTP function to import inventory items from a CSV file
+ *
  * Expected request body:
  * {
  *   userId: "user-firebase-uid",
- *   csvData: "item,quantity,unit,location\nMilk,1,gallon,Fridge\n..."
+ *   csvData: "name,quantity,unit,location\nMilk,1,gallon,Main Fridge\n...",
+ *   fileName: "kitchen.csv"
  * }
+ *
+ * Implementation lives in src/csvImport/importInventoryFromCSV.js.
  */
-exports.importInventoryFromCSV = functions.https.onRequest(async (req, res) => {
-  try {
-    console.log('Starting CSV inventory import...');
-    
-    // TODO: Implement in Phase 3
-    // 1. Authenticate request
-    // 2. Parse CSV data
-    // 3. Validate item data
-    // 4. Create inventory items in Firestore
-    // 5. Return summary of imported items
-    
-    const { userId, csvData } = req.body;
-    
-    if (!userId || !csvData) {
-      return res.status(400).json({
-        error: 'Missing required fields: userId, csvData'
-      });
-    }
-
-    // Placeholder response
-    res.status(200).json({
-      status: 'success',
-      message: 'CSV import function ready (stub)',
-      itemsImported: 0,
-      itemsSkipped: 0,
-      errors: [],
-      timestamp: new Date().toISOString()
-    });
-    
-  } catch (error) {
-    console.error('Error in importInventoryFromCSV:', error);
-    res.status(500).json({
-      error: 'Internal server error',
-      message: error.message
-    });
-  }
-});
+exports.importInventoryFromCSV = require('./src/csvImport/importInventoryFromCSV').importInventoryFromCSV;
 
 // ============================================================================
 // FUNCTION 3: Import HelloFresh Recipe from Photo (OCR)

@@ -53,4 +53,24 @@ const inventoryItem = async (name) => {
   return items.find((item) => item.name === name);
 };
 
-module.exports = { testUserId, inventoryItems, inventoryHasItem, inventoryItem };
+/** Items whose name starts with `prefix` — bulk imports are named that way. */
+const inventoryItemsNamed = async (prefix) => {
+  const items = await inventoryItems();
+  return items.filter((item) => String(item.name || '').startsWith(prefix));
+};
+
+/** Every bulk-import record belonging to the seeded account. */
+const importHistoryRecords = async () => {
+  const uid = await testUserId();
+  const snap = await admin.firestore().collection(`users/${uid}/importHistory`).get();
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+module.exports = {
+  testUserId,
+  inventoryItems,
+  inventoryHasItem,
+  inventoryItem,
+  inventoryItemsNamed,
+  importHistoryRecords,
+};
