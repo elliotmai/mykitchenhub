@@ -3,11 +3,12 @@
 
 import React from 'react';
 import { Heart } from 'lucide-react';
+import { APP_VERSION, ROADMAP_STEP, ROADMAP_STEP_NAME } from '../../config/version';
 import './Footer.css';
 
 /**
  * Footer Component
- * 
+ *
  * Simple footer with:
  * - Copyright notice
  * - Version number
@@ -23,7 +24,13 @@ const Footer = () => {
           Made with <Heart size={14} className="app-footer__heart" /> for better meal planning
         </p>
         <p className="app-footer__copyright">
-          © {currentYear} MyKitchenHub • v1.0.0
+          © {currentYear} MyKitchenHub •{' '}
+          <span
+            className="app-footer__version"
+            title={`Roadmap step ${ROADMAP_STEP} — ${ROADMAP_STEP_NAME}`}
+          >
+            v{APP_VERSION}
+          </span>
         </p>
         <a
           className="app-footer__feedback"

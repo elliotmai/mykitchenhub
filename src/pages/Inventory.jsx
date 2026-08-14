@@ -6,28 +6,30 @@
 import React, { useState } from 'react';
 import { Alert } from 'react-bootstrap';
 
-import useInventory         from '../hooks/useInventory';
-import useStorageLocations  from '../hooks/useStorageLocations';
-import InventoryList        from '../components/Inventory/InventoryList';
-import AddItemModal         from '../components/Inventory/AddItemModal';
-import ConfirmModal         from '../components/Common/ConfirmModal';
+import useInventory from '../hooks/useInventory';
+import useStorageLocations from '../hooks/useStorageLocations';
+import InventoryList from '../components/Inventory/InventoryList';
+import AddItemModal from '../components/Inventory/AddItemModal';
+import ConfirmModal from '../components/Common/ConfirmModal';
 
 const Inventory = () => {
   const {
-    items, loading: itemsLoading, error: itemsError,
-    addItem, updateItem, deleteItem,
+    items,
+    loading: itemsLoading,
+    error: itemsError,
+    addItem,
+    updateItem,
+    deleteItem,
   } = useInventory();
 
-  const {
-    locations, loading: locationsLoading,
-  } = useStorageLocations();
+  const { locations, loading: locationsLoading } = useStorageLocations();
 
   // ── Modal state ──────────────────────────────────────────────────────────
-  const [showAddModal,  setShowAddModal]  = useState(false);
-  const [editItem,      setEditItem]      = useState(null);   // item being edited
-  const [deleteTarget,  setDeleteTarget]  = useState(null);   // item pending deletion
-  const [deleting,      setDeleting]      = useState(false);
-  const [deleteError,   setDeleteError]   = useState('');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editItem, setEditItem] = useState(null); // item being edited
+  const [deleteTarget, setDeleteTarget] = useState(null); // item pending deletion
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   const loading = itemsLoading || locationsLoading;
 
@@ -70,19 +72,15 @@ const Inventory = () => {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="inventory-page">
-
       {/* Global error banner */}
       {itemsError && (
-        <Alert variant="danger" className="mb-3">{itemsError}</Alert>
+        <Alert variant="danger" className="mb-3">
+          {itemsError}
+        </Alert>
       )}
 
       {deleteError && (
-        <Alert
-          variant="warning"
-          dismissible
-          onClose={() => setDeleteError('')}
-          className="mb-3"
-        >
+        <Alert variant="warning" dismissible onClose={() => setDeleteError('')} className="mb-3">
           {deleteError}
         </Alert>
       )}
@@ -121,7 +119,6 @@ const Inventory = () => {
         }
         confirmText="Delete"
       />
-
     </div>
   );
 };

@@ -9,15 +9,15 @@ const STORAGE_KEY = 'mykitchenhub.whatsNewSeen';
 // Compare versions like "2026.07.26" and "2026.07.26.2" numerically per segment,
 // so same-day increments (.1, .2, … .10) order correctly.
 function cmpVersion(a, b) {
-  const pa = String(a).split(".").map(Number);
-  const pb = String(b).split(".").map(Number);
+  const pa = String(a).split('.').map(Number);
+  const pb = String(b).split('.').map(Number);
   for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const x = pa[i] || 0, y = pb[i] || 0;
+    const x = pa[i] || 0,
+      y = pb[i] || 0;
     if (x !== y) return x - y;
   }
   return 0;
 }
-
 
 /**
  * WhatsNew Component
@@ -63,12 +63,7 @@ const WhatsNew = () => {
   const stacked = entries.length > 1;
 
   return (
-    <Modal
-      show
-      onHide={dismiss}
-      centered
-      className="whats-new-modal"
-    >
+    <Modal show onHide={dismiss} centered className="whats-new-modal">
       <Modal.Header closeButton className="whats-new__header">
         <Modal.Title className="whats-new__title">
           <span className="whats-new__icon">
@@ -79,15 +74,11 @@ const WhatsNew = () => {
       </Modal.Header>
 
       <Modal.Body className="whats-new__body">
-        {!stacked && latest.date && (
-          <p className="whats-new__date">{latest.date}</p>
-        )}
+        {!stacked && latest.date && <p className="whats-new__date">{latest.date}</p>}
 
         {entries.map((entry) => (
           <div key={entry.version} className="whats-new__entry">
-            {stacked && entry.date && (
-              <p className="whats-new__entry-date">{entry.date}</p>
-            )}
+            {stacked && entry.date && <p className="whats-new__entry-date">{entry.date}</p>}
             <ul className="whats-new__list">
               {entry.items.map((item, i) => (
                 <li key={i} className="whats-new__item">

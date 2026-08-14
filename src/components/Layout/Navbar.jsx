@@ -22,13 +22,13 @@ import '../../pwa-safe-area.css';
 
 /**
  * Navbar Component
- * 
+ *
  * Top navigation bar with:
  * - Logo and app name
  * - Mobile sidebar toggle
  * - Notifications indicator
  * - User menu with profile and logout
- * 
+ *
  * @param {function} onToggleSidebar - Callback to toggle mobile sidebar
  * @param {number} alertCount - Number of active alerts to display
  */
@@ -103,40 +103,22 @@ const Navbar = ({ onToggleSidebar, alertCount = 0 }) => {
           >
             <Bell size={20} />
             {alertCount > 0 && (
-              <Badge
-                pill
-                bg="danger"
-                className="app-navbar__badge"
-              >
+              <Badge pill bg="danger" className="app-navbar__badge">
                 {alertCount > 9 ? '9+' : alertCount}
               </Badge>
             )}
           </button>
 
           {/* User Menu */}
-          <Dropdown
-            show={showDropdown}
-            onToggle={(show) => setShowDropdown(show)}
-            align="end"
-          >
-            <Dropdown.Toggle
-              as="button"
-              className="app-navbar__user-btn"
-              id="user-dropdown"
-            >
-              <div className="app-navbar__avatar">
-                {getInitials()}
-              </div>
-              <span className="app-navbar__user-name d-none d-md-inline">
-                {getDisplayName()}
-              </span>
+          <Dropdown show={showDropdown} onToggle={(show) => setShowDropdown(show)} align="end">
+            <Dropdown.Toggle as="button" className="app-navbar__user-btn" id="user-dropdown">
+              <div className="app-navbar__avatar">{getInitials()}</div>
+              <span className="app-navbar__user-name d-none d-md-inline">{getDisplayName()}</span>
             </Dropdown.Toggle>
 
             <Dropdown.Menu className="app-navbar__dropdown">
               <div className="app-navbar__dropdown-header">
-                <div className="app-navbar__dropdown-avatar">
-                  {getInitials()}
-                </div>
+                <div className="app-navbar__dropdown-avatar">{getInitials()}</div>
                 <div className="app-navbar__dropdown-info">
                   <div className="app-navbar__dropdown-name">{getDisplayName()}</div>
                   <div className="app-navbar__dropdown-email">{user?.email}</div>
@@ -145,20 +127,12 @@ const Navbar = ({ onToggleSidebar, alertCount = 0 }) => {
 
               <Dropdown.Divider />
 
-              <Dropdown.Item
-                as={Link}
-                to="/settings"
-                className="app-navbar__dropdown-item"
-              >
+              <Dropdown.Item as={Link} to="/settings" className="app-navbar__dropdown-item">
                 <User size={16} />
                 Profile
               </Dropdown.Item>
 
-              <Dropdown.Item
-                as={Link}
-                to="/settings"
-                className="app-navbar__dropdown-item"
-              >
+              <Dropdown.Item as={Link} to="/settings" className="app-navbar__dropdown-item">
                 <Settings size={16} />
                 Settings
               </Dropdown.Item>

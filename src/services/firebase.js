@@ -28,11 +28,11 @@ const requiredConfigKeys = [
   'appId',
 ];
 
-const missingKeys = requiredConfigKeys.filter(key => !firebaseConfig[key]);
+const missingKeys = requiredConfigKeys.filter((key) => !firebaseConfig[key]);
 if (missingKeys.length > 0) {
   console.error(
     `Missing Firebase config values: ${missingKeys.join(', ')}. ` +
-    'Make sure your .env file is set up correctly.'
+      'Make sure your .env file is set up correctly.'
   );
 }
 
@@ -45,8 +45,12 @@ export const db = getFirestore(app);
 export const storage = getStorage(app);
 export const functions = getFunctions(app);
 
-// Connect to emulators in development (optional - for local testing)
-if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_USE_EMULATORS === 'true') {
+// Connect to emulators when explicitly opted in.
+//
+// This is deliberately not gated on NODE_ENV: the end-to-end suite runs a
+// production build against the emulators, and a NODE_ENV check would silently
+// point that build at the real project.
+if (process.env.REACT_APP_USE_EMULATORS === 'true') {
   console.log('🔧 Connecting to Firebase emulators...');
   connectAuthEmulator(auth, 'http://localhost:9099');
   connectFirestoreEmulator(db, 'localhost', 8080);

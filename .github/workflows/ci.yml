@@ -1,0 +1,189 @@
+name: CI
+
+# Full validation for every pull request and every push to main.
+#
+# Jobs run in parallel; the `ci` job at the bottom is the single required check
+# to protect main with. If you add a job, add it to `ci.needs` too — otherwise
+# a failure in it will not block a merge.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # ---------------------------------------------------------------------------
+  quality:
+    name: Lint & format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: ESLint
+        run: npm run lint
+      - name: Prettier
+        run: npm run format:check
+
+  # ---------------------------------------------------------------------------
+  unit:
+    name: Frontend unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Jest + coverage
+        run: npm run test:ci
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: coverage/
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  functions:
+    name: Cloud Functions tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      - name: Install
+        run: npm ci --prefix functions
+      - name: Jest
+        run: npm test --prefix functions
+
+  # ---------------------------------------------------------------------------
+  rules:
+    name: Firestore security rules
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: firestore/package-lock.json
+      # The Firestore emulator is a Java process.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install
+        run: npm ci --prefix firestore
+      - name: Run rules tests against the emulator
+        run: npm run test:rules --prefix firestore
+
+  # ---------------------------------------------------------------------------
+  build:
+    name: Production build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Build
+        env:
+          # Real values when available so the build matches what Netlify ships;
+          # placeholders keep the compile check working without secrets.
+          REACT_APP_FIREBASE_API_KEY: ${{ secrets.REACT_APP_FIREBASE_API_KEY || 'ci-placeholder-key' }}
+          REACT_APP_FIREBASE_AUTH_DOMAIN: ${{ secrets.REACT_APP_FIREBASE_AUTH_DOMAIN || 'ci.firebaseapp.com' }}
+          REACT_APP_FIREBASE_PROJECT_ID: ${{ secrets.REACT_APP_FIREBASE_PROJECT_ID || 'ci-project' }}
+          REACT_APP_FIREBASE_STORAGE_BUCKET: ${{ secrets.REACT_APP_FIREBASE_STORAGE_BUCKET || 'ci-project.appspot.com' }}
+          REACT_APP_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || '000000000000' }}
+          REACT_APP_FIREBASE_APP_ID: ${{ secrets.REACT_APP_FIREBASE_APP_ID || '1:0:web:0' }}
+          REACT_APP_FIREBASE_FUNCTIONS_URL: ${{ secrets.REACT_APP_FIREBASE_FUNCTIONS_URL || 'https://ci.example.com' }}
+          CI: 'true'
+        run: npm run build
+      - name: Check the service worker was emitted
+        # craco's InjectManifest plugin produces this; a silent regression to
+        # plain react-scripts would ship a PWA whose registration 404s.
+        run: test -f build/service-worker.js || (echo "::error::build/service-worker.js missing — PWA offline support would be broken" && exit 1)
+      - name: Report bundle size
+        run: du -sh build && du -sh build/static/js
+
+  # ---------------------------------------------------------------------------
+  e2e:
+    name: End-to-end
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci
+      - name: Install firebase-tools
+        run: npm ci --prefix firestore
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+      # test:e2e builds first — serving a stale build/ is the classic way to
+      # get a confusing E2E failure.
+      - name: Run end-to-end suite
+        run: npm run test:e2e
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Scan for committed credentials
+        run: node .github/scripts/check-secrets.mjs
+
+  # ---------------------------------------------------------------------------
+  # Single required status check. Fails if any job above failed or was skipped.
+  ci:
+    name: CI
+    runs-on: ubuntu-latest
+    needs: [quality, unit, functions, rules, build, e2e, secrets]
+    if: always()
+    steps:
+      - name: Verify every job succeeded
+        run: |
+          results='${{ join(needs.*.result, ' ') }}'
+          echo "Job results: $results"
+          for result in $results; do
+            if [ "$result" != "success" ]; then
+              echo "::error::A required CI job did not succeed ($result)"
+              exit 1
+            fi
+          done
+          echo "All CI jobs passed."

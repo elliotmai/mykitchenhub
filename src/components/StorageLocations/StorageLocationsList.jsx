@@ -16,10 +16,10 @@ import AddLocationModal from './AddLocationModal';
  * @param {function} onDelete        - (locationId) => Promise<{ success, error }>
  */
 const StorageLocationsList = ({ locations, loading, onAdd, onEdit, onDelete }) => {
-  const [showAddModal, setShowAddModal]     = useState(false);
-  const [editTarget, setEditTarget]         = useState(null); // location object being edited
-  const [deletingId, setDeletingId]         = useState(null);
-  const [deleteError, setDeleteError]       = useState('');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editTarget, setEditTarget] = useState(null); // location object being edited
+  const [deletingId, setDeletingId] = useState(null);
+  const [deleteError, setDeleteError] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   // --- Handlers ---
@@ -60,7 +60,12 @@ const StorageLocationsList = ({ locations, loading, onAdd, onEdit, onDelete }) =
   return (
     <div>
       {deleteError && (
-        <Alert variant="warning" dismissible onClose={() => setDeleteError('')} className="py-2 mb-3">
+        <Alert
+          variant="warning"
+          dismissible
+          onClose={() => setDeleteError('')}
+          className="py-2 mb-3"
+        >
           {deleteError}
         </Alert>
       )}

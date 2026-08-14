@@ -4,21 +4,13 @@
 import React from 'react';
 // eslint-disable-next-line
 import { Container, Row, Col, Card, Button } from 'react-bootstrap';
-import {
-  Package,
-  BookOpen,
-  Calendar,
-  AlertTriangle,
-  Plus,
-  TrendingUp,
-  Clock
-} from 'lucide-react';
+import { Package, BookOpen, Calendar, AlertTriangle, Plus, TrendingUp, Clock } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
 /**
  * Dashboard Page
- * 
+ *
  * Main overview showing:
  * - Quick stats (inventory count, recipes, expiring items)
  * - Urgent alerts
@@ -44,9 +36,7 @@ const Dashboard = () => {
         <h1 className="h3 mb-1">
           {getGreeting()}, {displayName}! 👋
         </h1>
-        <p className="text-muted mb-0">
-          Here's what's happening in your kitchen today.
-        </p>
+        <p className="text-muted mb-0">Here's what's happening in your kitchen today.</p>
       </div>
 
       {/* Quick Stats */}

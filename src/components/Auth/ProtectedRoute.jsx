@@ -9,18 +9,18 @@ import { PageLoader } from '../Common';
 
 /**
  * ProtectedRoute Component
- * 
+ *
  * Wraps routes that require authentication.
  * Redirects to login if user is not authenticated.
  * Shows loading state while checking auth status.
- * 
+ *
  * Usage:
  * <Route path="/dashboard" element={
  *   <ProtectedRoute>
  *     <Dashboard />
  *   </ProtectedRoute>
  * } />
- * 
+ *
  * @param {ReactNode} children - The protected content to render
  * @param {string} redirectTo - Path to redirect if not authenticated (default: '/login')
  */
@@ -45,10 +45,10 @@ const ProtectedRoute = ({ children, redirectTo = '/login' }) => {
 
 /**
  * PublicOnlyRoute Component
- * 
+ *
  * Wraps routes that should only be accessible to unauthenticated users.
  * Redirects to dashboard if user is already authenticated.
- * 
+ *
  * Usage:
  * <Route path="/login" element={
  *   <PublicOnlyRoute>

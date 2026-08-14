@@ -10,8 +10,8 @@ import { StorageLocationsList } from '../components/StorageLocations';
 
 // ─── Section constants ───────────────────────────────────────────────────────
 const SECTIONS = {
-  PROFILE:   'profile',
-  PASSWORD:  'password',
+  PROFILE: 'profile',
+  PASSWORD: 'password',
   LOCATIONS: 'locations',
 };
 
@@ -33,15 +33,15 @@ const Settings = () => {
   const [phoneNumber, setPhoneNumber] = useState(userProfile?.preferences?.phoneNumber || '');
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileSuccess, setProfileSuccess] = useState('');
-  const [profileError,   setProfileError]   = useState('');
+  const [profileError, setProfileError] = useState('');
 
   // ─── Password form state ─────────────────────────────────────────────────
   const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword,     setNewPassword]      = useState('');
-  const [confirmPassword, setConfirmPassword]  = useState('');
-  const [pwLoading, setPwLoading]   = useState(false);
-  const [pwSuccess, setPwSuccess]   = useState('');
-  const [pwError,   setPwError]     = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [pwLoading, setPwLoading] = useState(false);
+  const [pwSuccess, setPwSuccess] = useState('');
+  const [pwError, setPwError] = useState('');
 
   // ─── Profile submit ──────────────────────────────────────────────────────
   const handleProfileUpdate = async (e) => {
@@ -64,8 +64,14 @@ const Settings = () => {
   const handlePasswordUpdate = async (e) => {
     e.preventDefault();
 
-    if (newPassword !== confirmPassword) { setPwError('Passwords do not match'); return; }
-    if (newPassword.length < 6)          { setPwError('Password must be at least 6 characters'); return; }
+    if (newPassword !== confirmPassword) {
+      setPwError('Passwords do not match');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPwError('Password must be at least 6 characters');
+      return;
+    }
 
     setPwLoading(true);
     setPwError('');
@@ -76,7 +82,9 @@ const Settings = () => {
     setPwLoading(false);
     if (result.success) {
       setPwSuccess('Password updated successfully!');
-      setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
     } else {
       setPwError(result.error);
     }
@@ -121,10 +129,7 @@ const Settings = () => {
                 >
                   <MapPin size={16} /> Storage Locations
                   {locations.length > 0 && (
-                    <span
-                      className="ms-auto badge bg-secondary"
-                      style={{ fontSize: '0.7rem' }}
-                    >
+                    <span className="ms-auto badge bg-secondary" style={{ fontSize: '0.7rem' }}>
                       {locations.length}
                     </span>
                   )}
@@ -136,7 +141,6 @@ const Settings = () => {
 
         {/* Content panel */}
         <Col md={9}>
-
           {/* ── Profile ─────────────────────────────────────────────────── */}
           {activeSection === SECTIONS.PROFILE && (
             <Card>
@@ -147,8 +151,16 @@ const Settings = () => {
                 <small className="text-muted">Signed in as {user?.email}</small>
               </Card.Header>
               <Card.Body>
-                {profileSuccess && <Alert variant="success" className="py-2">{profileSuccess}</Alert>}
-                {profileError   && <Alert variant="danger"  className="py-2">{profileError}</Alert>}
+                {profileSuccess && (
+                  <Alert variant="success" className="py-2">
+                    {profileSuccess}
+                  </Alert>
+                )}
+                {profileError && (
+                  <Alert variant="danger" className="py-2">
+                    {profileError}
+                  </Alert>
+                )}
 
                 <Form onSubmit={handleProfileUpdate}>
                   <Form.Group className="mb-3">
@@ -161,7 +173,9 @@ const Settings = () => {
                     />
                   </Form.Group>
                   <Form.Group className="mb-4">
-                    <Form.Label>Phone Number <span className="text-muted">(for SMS alerts)</span></Form.Label>
+                    <Form.Label>
+                      Phone Number <span className="text-muted">(for SMS alerts)</span>
+                    </Form.Label>
                     <Form.Control
                       type="tel"
                       value={phoneNumber}
@@ -170,7 +184,14 @@ const Settings = () => {
                     />
                   </Form.Group>
                   <Button type="submit" variant="primary" disabled={profileLoading}>
-                    {profileLoading ? <><Spinner size="sm" className="me-2" />Saving…</> : 'Save Changes'}
+                    {profileLoading ? (
+                      <>
+                        <Spinner size="sm" className="me-2" />
+                        Saving…
+                      </>
+                    ) : (
+                      'Save Changes'
+                    )}
                   </Button>
                 </Form>
               </Card.Body>
@@ -186,8 +207,16 @@ const Settings = () => {
                 </h5>
               </Card.Header>
               <Card.Body>
-                {pwSuccess && <Alert variant="success" className="py-2">{pwSuccess}</Alert>}
-                {pwError   && <Alert variant="danger"  className="py-2">{pwError}</Alert>}
+                {pwSuccess && (
+                  <Alert variant="success" className="py-2">
+                    {pwSuccess}
+                  </Alert>
+                )}
+                {pwError && (
+                  <Alert variant="danger" className="py-2">
+                    {pwError}
+                  </Alert>
+                )}
 
                 <Form onSubmit={handlePasswordUpdate}>
                   <Form.Group className="mb-3">
@@ -218,7 +247,14 @@ const Settings = () => {
                     />
                   </Form.Group>
                   <Button type="submit" variant="primary" disabled={pwLoading}>
-                    {pwLoading ? <><Spinner size="sm" className="me-2" />Updating…</> : 'Update Password'}
+                    {pwLoading ? (
+                      <>
+                        <Spinner size="sm" className="me-2" />
+                        Updating…
+                      </>
+                    ) : (
+                      'Update Password'
+                    )}
                   </Button>
                 </Form>
               </Card.Body>
@@ -247,7 +283,6 @@ const Settings = () => {
               </Card.Body>
             </Card>
           )}
-
         </Col>
       </Row>
     </div>

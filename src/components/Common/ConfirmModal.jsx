@@ -6,10 +6,10 @@ import './ConfirmModal.css';
 
 /**
  * ConfirmModal Component
- * 
+ *
  * A reusable confirmation dialog for destructive actions, important decisions,
  * or any action that requires user confirmation.
- * 
+ *
  * @param {boolean} show - Controls modal visibility
  * @param {function} onHide - Called when modal should close
  * @param {function} onConfirm - Called when user confirms action
@@ -42,7 +42,7 @@ const ConfirmModal = ({
     warning: <AlertTriangle size={24} />,
     info: <Info size={24} />,
     success: <CheckCircle size={24} />,
-    question: <HelpCircle size={24} />
+    question: <HelpCircle size={24} />,
   };
 
   const variantButtonMap = {
@@ -50,7 +50,7 @@ const ConfirmModal = ({
     warning: 'warning',
     info: 'info',
     success: 'success',
-    question: 'primary'
+    question: 'primary',
   };
 
   const handleConfirm = () => {
@@ -119,7 +119,7 @@ const ConfirmModal = ({
 
 /**
  * DeleteConfirmModal
- * 
+ *
  * A pre-configured ConfirmModal specifically for delete actions.
  */
 export const DeleteConfirmModal = ({
@@ -137,8 +137,7 @@ export const DeleteConfirmModal = ({
     title="Delete Item"
     message={
       <>
-        Are you sure you want to delete <strong>{itemName}</strong>? 
-        This action cannot be undone.
+        Are you sure you want to delete <strong>{itemName}</strong>? This action cannot be undone.
       </>
     }
     confirmText="Delete"
@@ -151,16 +150,10 @@ export const DeleteConfirmModal = ({
 
 /**
  * UnsavedChangesModal
- * 
+ *
  * A pre-configured ConfirmModal for unsaved changes warnings.
  */
-export const UnsavedChangesModal = ({
-  show,
-  onHide,
-  onConfirm,
-  loading = false,
-  ...props
-}) => (
+export const UnsavedChangesModal = ({ show, onHide, onConfirm, loading = false, ...props }) => (
   <ConfirmModal
     show={show}
     onHide={onHide}
@@ -177,7 +170,7 @@ export const UnsavedChangesModal = ({
 
 /**
  * ActionConfirmModal
- * 
+ *
  * A general-purpose confirmation for important actions.
  */
 export const ActionConfirmModal = ({

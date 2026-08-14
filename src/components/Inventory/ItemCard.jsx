@@ -13,22 +13,38 @@ import { getExpirationStatus, getExpirationLabel } from '../../hooks/useInventor
 const EXPIRATION_STYLES = {
   expired: {
     cardClass: 'expiration-critical',
-    badgeStyle: { background: 'var(--mkh-expiring-critical)', color: 'var(--mkh-danger-text)', border: '1px solid var(--mkh-danger-text)' },
+    badgeStyle: {
+      background: 'var(--mkh-expiring-critical)',
+      color: 'var(--mkh-danger-text)',
+      border: '1px solid var(--mkh-danger-text)',
+    },
     label: 'Expired',
   },
   critical: {
     cardClass: 'expiration-critical',
-    badgeStyle: { background: 'var(--mkh-expiring-critical)', color: 'var(--mkh-danger-text)', border: '1px solid var(--mkh-danger-text)' },
+    badgeStyle: {
+      background: 'var(--mkh-expiring-critical)',
+      color: 'var(--mkh-danger-text)',
+      border: '1px solid var(--mkh-danger-text)',
+    },
     label: 'Critical',
   },
   warning: {
     cardClass: 'expiration-warning',
-    badgeStyle: { background: 'var(--mkh-expiring-warning)', color: 'var(--mkh-warning-text)', border: '1px solid var(--mkh-warning-text)' },
+    badgeStyle: {
+      background: 'var(--mkh-expiring-warning)',
+      color: 'var(--mkh-warning-text)',
+      border: '1px solid var(--mkh-warning-text)',
+    },
     label: 'Soon',
   },
   safe: {
     cardClass: 'expiration-safe',
-    badgeStyle: { background: 'var(--mkh-expiring-safe)', color: 'var(--mkh-success-text)', border: '1px solid var(--mkh-success-text)' },
+    badgeStyle: {
+      background: 'var(--mkh-expiring-safe)',
+      color: 'var(--mkh-success-text)',
+      border: '1px solid var(--mkh-success-text)',
+    },
     label: 'Fresh',
   },
 };
@@ -64,7 +80,6 @@ const ItemCard = ({ item, location, onEdit, onDelete }) => {
       }}
     >
       <Card.Body className="p-3 d-flex flex-column gap-2">
-
         {/* Top row: name + status badge */}
         <div className="d-flex justify-content-between align-items-start gap-2">
           <span
@@ -99,12 +114,13 @@ const ItemCard = ({ item, location, onEdit, onDelete }) => {
             color: 'var(--mkh-text-secondary)',
           }}
         >
-          <span className="fw-semibold" style={{ color: 'var(--mkh-text-primary)', fontSize: '1.1rem' }}>
+          <span
+            className="fw-semibold"
+            style={{ color: 'var(--mkh-text-primary)', fontSize: '1.1rem' }}
+          >
             {item.quantity}
           </span>
-          {item.unit && (
-            <span className="ms-1">{item.unit}</span>
-          )}
+          {item.unit && <span className="ms-1">{item.unit}</span>}
         </div>
 
         {/* Location row */}
@@ -169,7 +185,6 @@ const ItemCard = ({ item, location, onEdit, onDelete }) => {
             <Trash2 size={12} />
           </Button>
         </div>
-
       </Card.Body>
     </Card>
   );

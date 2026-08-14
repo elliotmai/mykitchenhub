@@ -5,15 +5,15 @@ import './ErrorBoundary.css';
 
 /**
  * ErrorBoundary Component
- * 
- * A React error boundary that catches JavaScript errors anywhere in the 
+ *
+ * A React error boundary that catches JavaScript errors anywhere in the
  * child component tree and displays a fallback UI instead of crashing.
- * 
+ *
  * Usage:
  * <ErrorBoundary>
  *   <YourComponent />
  * </ErrorBoundary>
- * 
+ *
  * Or with custom fallback:
  * <ErrorBoundary fallback={<CustomErrorUI />}>
  *   <YourComponent />
@@ -22,10 +22,10 @@ import './ErrorBoundary.css';
 class ErrorBoundary extends Component {
   constructor(props) {
     super(props);
-    this.state = { 
-      hasError: false, 
-      error: null, 
-      errorInfo: null 
+    this.state = {
+      hasError: false,
+      error: null,
+      errorInfo: null,
     };
   }
 
@@ -37,7 +37,7 @@ class ErrorBoundary extends Component {
   componentDidCatch(error, errorInfo) {
     // Log the error to console in development
     console.error('ErrorBoundary caught an error:', error, errorInfo);
-    
+
     this.setState({ errorInfo });
 
     // You can also log the error to an error reporting service here
@@ -73,14 +73,12 @@ class ErrorBoundary extends Component {
               <div className="error-boundary__icon">
                 <AlertTriangle size={48} />
               </div>
-              
-              <h2 className="error-boundary__title">
-                Something went wrong
-              </h2>
-              
+
+              <h2 className="error-boundary__title">Something went wrong</h2>
+
               <p className="error-boundary__message">
-                We're sorry, but something unexpected happened. 
-                Please try refreshing the page or go back to the home page.
+                We're sorry, but something unexpected happened. Please try refreshing the page or go
+                back to the home page.
               </p>
 
               {showDetails && error && (
@@ -94,17 +92,17 @@ class ErrorBoundary extends Component {
               )}
 
               <div className="error-boundary__actions">
-                <Button 
-                  variant="primary" 
+                <Button
+                  variant="primary"
                   onClick={this.handleRetry}
                   className="error-boundary__btn"
                 >
                   <RefreshCw size={18} />
                   Try Again
                 </Button>
-                
-                <Button 
-                  variant="outline-primary" 
+
+                <Button
+                  variant="outline-primary"
                   onClick={this.handleGoHome}
                   className="error-boundary__btn"
                 >
@@ -124,9 +122,9 @@ class ErrorBoundary extends Component {
 
 /**
  * withErrorBoundary HOC
- * 
+ *
  * A higher-order component that wraps a component with an ErrorBoundary.
- * 
+ *
  * Usage:
  * export default withErrorBoundary(MyComponent);
  */
@@ -144,14 +142,14 @@ export const withErrorBoundary = (WrappedComponent, errorBoundaryProps = {}) => 
 
 /**
  * ErrorFallback Component
- * 
+ *
  * A simple functional component for use as a custom fallback.
  * Can be used with the fallback prop of ErrorBoundary.
  */
-export const ErrorFallback = ({ 
-  title = 'Something went wrong', 
+export const ErrorFallback = ({
+  title = 'Something went wrong',
   message = 'Please try again later.',
-  onRetry 
+  onRetry,
 }) => (
   <div className="error-fallback">
     <AlertTriangle size={32} className="error-fallback__icon" />

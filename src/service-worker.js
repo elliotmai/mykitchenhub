@@ -9,9 +9,9 @@ import { BackgroundSyncPlugin } from 'workbox-background-sync';
 
 // Skip waiting immediately when requested - this is key for updates!
 self.addEventListener('message', (event) => {
-    if (event.data && event.data.type === 'SKIP_WAITING') {
-        self.skipWaiting();
-    }
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 // Take control of all clients immediately when activated
@@ -25,114 +25,111 @@ precacheAndRoute(self.__WB_MANIFEST);
 // App Shell - serve index.html for navigation requests
 const fileExtensionRegexp = new RegExp('/[^/?]+\\.[^/]+$');
 registerRoute(
-    ({ request, url }) => {
-        if (request.mode !== 'navigate') return false;
-        if (url.pathname.startsWith('/_')) return false;
-        if (url.pathname.match(fileExtensionRegexp)) return false;
-        return true;
-    },
-    createHandlerBoundToURL(process.env.PUBLIC_URL + '/index.html')
+  ({ request, url }) => {
+    if (request.mode !== 'navigate') return false;
+    if (url.pathname.startsWith('/_')) return false;
+    if (url.pathname.match(fileExtensionRegexp)) return false;
+    return true;
+  },
+  createHandlerBoundToURL(process.env.PUBLIC_URL + '/index.html')
 );
 
 // Static Assets - Cache First (CSS, JS, images)
 registerRoute(
-    ({ request }) =>
-        request.destination === 'style' ||
-        request.destination === 'script' ||
-        request.destination === 'image',
-    new CacheFirst({
-        cacheName: 'static-assets-v1',
-        plugins: [
-            new CacheableResponsePlugin({ statuses: [0, 200] }),
-            new ExpirationPlugin({
-                maxEntries: 100,
-                maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
-            }),
-        ],
-    })
+  ({ request }) =>
+    request.destination === 'style' ||
+    request.destination === 'script' ||
+    request.destination === 'image',
+  new CacheFirst({
+    cacheName: 'static-assets-v1',
+    plugins: [
+      new CacheableResponsePlugin({ statuses: [0, 200] }),
+      new ExpirationPlugin({
+        maxEntries: 100,
+        maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
+      }),
+    ],
+  })
 );
 
 // Google Fonts - Cache First
 registerRoute(
-    ({ url }) =>
-        url.origin === 'https://fonts.googleapis.com' ||
-        url.origin === 'https://fonts.gstatic.com',
-    new CacheFirst({
-        cacheName: 'google-fonts-v1',
-        plugins: [
-            new CacheableResponsePlugin({ statuses: [0, 200] }),
-            new ExpirationPlugin({
-                maxEntries: 30,
-                maxAgeSeconds: 365 * 24 * 60 * 60, // 1 year
-            }),
-        ],
-    })
+  ({ url }) =>
+    url.origin === 'https://fonts.googleapis.com' || url.origin === 'https://fonts.gstatic.com',
+  new CacheFirst({
+    cacheName: 'google-fonts-v1',
+    plugins: [
+      new CacheableResponsePlugin({ statuses: [0, 200] }),
+      new ExpirationPlugin({
+        maxEntries: 30,
+        maxAgeSeconds: 365 * 24 * 60 * 60, // 1 year
+      }),
+    ],
+  })
 );
 
 // API Requests - Network First with fallback to cache
 registerRoute(
-    ({ url }) => url.pathname.startsWith('/api/'),
-    new NetworkFirst({
-        cacheName: 'api-cache-v1',
-        networkTimeoutSeconds: 10,
-        plugins: [
-            new CacheableResponsePlugin({ statuses: [0, 200] }),
-            new ExpirationPlugin({
-                maxEntries: 50,
-                maxAgeSeconds: 5 * 60, // 5 minutes
-            }),
-        ],
-    })
+  ({ url }) => url.pathname.startsWith('/api/'),
+  new NetworkFirst({
+    cacheName: 'api-cache-v1',
+    networkTimeoutSeconds: 10,
+    plugins: [
+      new CacheableResponsePlugin({ statuses: [0, 200] }),
+      new ExpirationPlugin({
+        maxEntries: 50,
+        maxAgeSeconds: 5 * 60, // 5 minutes
+      }),
+    ],
+  })
 );
 
 // Firebase/Firestore - Network First
 registerRoute(
-    ({ url }) =>
-        url.origin.includes('firebaseio.com') ||
-        url.origin.includes('googleapis.com') ||
-        url.origin.includes('firestore.googleapis.com'),
-    new NetworkFirst({
-        cacheName: 'firebase-cache-v1',
-        networkTimeoutSeconds: 10,
-        plugins: [
-            new CacheableResponsePlugin({ statuses: [0, 200] }),
-            new ExpirationPlugin({
-                maxEntries: 100,
-                maxAgeSeconds: 60, // 1 minute
-            }),
-        ],
-    })
+  ({ url }) =>
+    url.origin.includes('firebaseio.com') ||
+    url.origin.includes('googleapis.com') ||
+    url.origin.includes('firestore.googleapis.com'),
+  new NetworkFirst({
+    cacheName: 'firebase-cache-v1',
+    networkTimeoutSeconds: 10,
+    plugins: [
+      new CacheableResponsePlugin({ statuses: [0, 200] }),
+      new ExpirationPlugin({
+        maxEntries: 100,
+        maxAgeSeconds: 60, // 1 minute
+      }),
+    ],
+  })
 );
 
 // Recipe Images - Stale While Revalidate
 registerRoute(
-    ({ url }) =>
-        url.pathname.includes('/recipes/') ||
-        url.origin.includes('spoonacular.com'),
-    new StaleWhileRevalidate({
-        cacheName: 'recipe-images-v1',
-        plugins: [
-            new CacheableResponsePlugin({ statuses: [0, 200] }),
-            new ExpirationPlugin({
-                maxEntries: 200,
-                maxAgeSeconds: 7 * 24 * 60 * 60, // 7 days
-            }),
-        ],
-    })
+  ({ url }) => url.pathname.includes('/recipes/') || url.origin.includes('spoonacular.com'),
+  new StaleWhileRevalidate({
+    cacheName: 'recipe-images-v1',
+    plugins: [
+      new CacheableResponsePlugin({ statuses: [0, 200] }),
+      new ExpirationPlugin({
+        maxEntries: 200,
+        maxAgeSeconds: 7 * 24 * 60 * 60, // 7 days
+      }),
+    ],
+  })
 );
 
 // Background Sync for offline form submissions
 const bgSyncPlugin = new BackgroundSyncPlugin('offlineQueue', {
-    maxRetentionTime: 24 * 60, // Retry for 24 hours
+  maxRetentionTime: 24 * 60, // Retry for 24 hours
 });
 
 registerRoute(
-    ({ url }) => url.pathname.startsWith('/api/inventory'),
-    new NetworkFirst({
-        cacheName: 'inventory-mutations-v1',
-        plugins: [bgSyncPlugin],
-    }),
-    'POST'
+  ({ url }) => url.pathname.startsWith('/api/inventory'),
+  new NetworkFirst({
+    cacheName: 'inventory-mutations-v1',
+    plugins: [bgSyncPlugin],
+  }),
+  'POST'
 );
 
 // Offline fallback page
@@ -140,47 +137,50 @@ const OFFLINE_PAGE = '/offline.html';
 
 // Cache offline page during installation
 self.addEventListener('install', (event) => {
-    console.log('Service worker installing...');
-    event.waitUntil(
-        caches.open('offline-fallback-v1').then((cache) => {
-            return cache.add(OFFLINE_PAGE);
-        })
-    );
+  console.log('Service worker installing...');
+  event.waitUntil(
+    caches.open('offline-fallback-v1').then((cache) => {
+      return cache.add(OFFLINE_PAGE);
+    })
+  );
 });
 
 // Clean up old caches during activation
 self.addEventListener('activate', (event) => {
-    console.log('Service worker activating...');
-    event.waitUntil(
-        caches.keys().then((cacheNames) => {
-            return Promise.all(
-                cacheNames
-                    .filter((cacheName) => {
-                        // Delete old versions of our caches
-                        return cacheName.startsWith('static-assets-') && cacheName !== 'static-assets-v1' ||
-                            cacheName.startsWith('google-fonts-') && cacheName !== 'google-fonts-v1' ||
-                            cacheName.startsWith('api-cache-') && cacheName !== 'api-cache-v1' ||
-                            cacheName.startsWith('firebase-cache-') && cacheName !== 'firebase-cache-v1' ||
-                            cacheName.startsWith('recipe-images-') && cacheName !== 'recipe-images-v1' ||
-                            cacheName.startsWith('inventory-mutations-') && cacheName !== 'inventory-mutations-v1' ||
-                            cacheName.startsWith('offline-fallback-') && cacheName !== 'offline-fallback-v1';
-                    })
-                    .map((cacheName) => {
-                        console.log('Deleting old cache:', cacheName);
-                        return caches.delete(cacheName);
-                    })
+  console.log('Service worker activating...');
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames
+          .filter((cacheName) => {
+            // Delete old versions of our caches
+            return (
+              (cacheName.startsWith('static-assets-') && cacheName !== 'static-assets-v1') ||
+              (cacheName.startsWith('google-fonts-') && cacheName !== 'google-fonts-v1') ||
+              (cacheName.startsWith('api-cache-') && cacheName !== 'api-cache-v1') ||
+              (cacheName.startsWith('firebase-cache-') && cacheName !== 'firebase-cache-v1') ||
+              (cacheName.startsWith('recipe-images-') && cacheName !== 'recipe-images-v1') ||
+              (cacheName.startsWith('inventory-mutations-') &&
+                cacheName !== 'inventory-mutations-v1') ||
+              (cacheName.startsWith('offline-fallback-') && cacheName !== 'offline-fallback-v1')
             );
-        })
-    );
+          })
+          .map((cacheName) => {
+            console.log('Deleting old cache:', cacheName);
+            return caches.delete(cacheName);
+          })
+      );
+    })
+  );
 });
 
 // Show offline page when network fails for navigation requests
 self.addEventListener('fetch', (event) => {
-    if (event.request.mode === 'navigate') {
-        event.respondWith(
-            fetch(event.request).catch(() => {
-                return caches.match(OFFLINE_PAGE);
-            })
-        );
-    }
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(() => {
+        return caches.match(OFFLINE_PAGE);
+      })
+    );
+  }
 });

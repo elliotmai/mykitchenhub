@@ -41,9 +41,9 @@ const LocationDropdownSelector = ({
   }, {});
 
   const TYPE_LABELS = {
-    fridge:  '🧊 Fridges',
+    fridge: '🧊 Fridges',
     freezer: '❄️  Freezers',
-    pantry:  '🏺 Pantries',
+    pantry: '🏺 Pantries',
   };
 
   const handleChange = (e) => {
