@@ -23,7 +23,7 @@ test.describe("what's new popup", () => {
     await page.getByRole('button', { name: 'Got it' }).click();
     await expect(dialog).not.toBeVisible();
 
-    await page.reload();
+    await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(dialog).not.toBeVisible();
   });
 

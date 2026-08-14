@@ -32,9 +32,34 @@ const addItem = async (page, name, quantity = '1') => {
   await expect(modal).not.toBeVisible();
 };
 
+/**
+ * Re-reads the inventory in a brand new tab, which loads its own data from
+ * Firestore rather than showing the writing tab's local state.
+ *
+ * A second tab rather than `page.reload()`: reloading immediately after a write
+ * stalls indefinitely, because the service worker serves the navigation from
+ * precache while the Firestore connection from the outgoing document is still
+ * settling, and the new document never reaches DOMContentLoaded.
+ */
+const expectFreshClientToSee = async (page, itemName, shouldBeVisible) => {
+  const fresh = await page.context().newPage();
+  try {
+    await fresh.goto('/inventory', { waitUntil: 'domcontentloaded' });
+    await expect(fresh.getByRole('heading', { name: 'Inventory' })).toBeVisible();
+
+    if (shouldBeVisible) {
+      await expect(fresh.getByText(itemName)).toBeVisible();
+    } else {
+      await expect(fresh.getByText(itemName)).not.toBeVisible();
+    }
+  } finally {
+    await fresh.close();
+  }
+};
+
 test.describe('inventory', () => {
   test.beforeEach(async ({ authedPage }) => {
-    await authedPage.goto('/inventory');
+    await authedPage.goto('/inventory', { waitUntil: 'domcontentloaded' });
     await expect(authedPage.getByRole('heading', { name: 'Inventory' })).toBeVisible();
   });
 
@@ -61,18 +86,16 @@ test.describe('inventory', () => {
     await expect(page.getByText('Basmati Rice')).not.toBeVisible();
   });
 
-  test('adds an item that persists through a reload', async ({ authedPage: page }) => {
+  test('adds an item that persists for a fresh client', async ({ authedPage: page }) => {
     // Unique per run: specs share one seeded account and run in parallel.
     const itemName = `Test Butter ${Date.now()}`;
 
     await addItem(page, itemName, '2');
 
     await expect(page.getByText(itemName)).toBeVisible();
-
-    // A write that passes client validation but violates a security rule only
-    // shows up after a round trip, so reload before believing it.
-    await page.reload();
-    await expect(page.getByText(itemName)).toBeVisible();
+    // A write that passes client validation but violates a security rule still
+    // renders locally, so confirm from a client that never saw the local write.
+    await expectFreshClientToSee(page, itemName, true);
   });
 
   test('deletes an item after confirmation', async ({ authedPage: page }) => {
@@ -89,7 +112,6 @@ test.describe('inventory', () => {
     await confirm.getByRole('button', { name: /^delete$/i }).click();
 
     await expect(page.getByText(itemName)).not.toBeVisible();
-    await page.reload();
-    await expect(page.getByText(itemName)).not.toBeVisible();
+    await expectFreshClientToSee(page, itemName, false);
   });
 });

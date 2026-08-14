@@ -8,7 +8,7 @@ run on every pull request and every push to `main` (`.github/workflows/ci.yml`).
 | Frontend unit/component | `npm run test:ci` | Hooks and components behave, in isolation, with Firebase mocked |
 | Cloud Functions | `npm run test:functions` | Backend logic and reference data are correct |
 | Firestore rules | `npm run test:rules` | The deployed database will actually allow/deny what we think |
-| End-to-end | `npm run build:e2e && npm run test:e2e` | A real production build works against real emulators |
+| End-to-end | `npm run test:e2e` | A real production build works against real emulators |
 
 `npm run validate` runs lint + format + unit tests + build — the fast local
 pre-push check.
@@ -121,8 +121,8 @@ fixture — and if the fixture then fails, the rules need updating too.**
 ## End-to-end tests
 
 ```bash
-npm run build:e2e     # production build pointed at the emulators
-npm run test:e2e      # starts auth+firestore emulators, runs Playwright
+npm run test:e2e        # builds, starts auth+firestore emulators, runs Playwright
+npm run test:e2e:only   # skips the build — only when build/ is already current
 ```
 
 Playwright drives a real production build (`serve -s build`) against real
@@ -141,19 +141,25 @@ test('does the thing', async ({ authedPage: page }) => {
 });
 ```
 
-Build first — `test:e2e` serves `build/`, it does not rebuild. A stale build is
-the usual cause of a confusing E2E failure.
-
 ### Writing a spec that means something
 
-Reload before believing a write succeeded. A write that passes client validation
-but violates a security rule looks fine until the round trip:
+Confirm a write from a client that never saw it. A write that passes client
+validation but violates a security rule still renders locally, so the local view
+proves nothing — open a second page and read it back:
 
 ```js
-await expect(page.getByText(itemName)).toBeVisible();
-await page.reload();
-await expect(page.getByText(itemName)).toBeVisible();   // this is the real assertion
+await expect(page.getByText(itemName)).toBeVisible();   // local state, weak
+await expectFreshClientToSee(page, itemName, true);     // round trip, real
 ```
+
+Use a second page rather than `page.reload()`. Reloading immediately after a
+write stalls indefinitely: the service worker serves the navigation from
+precache while the outgoing document's Firestore connection is still settling,
+and the new document never reaches DOMContentLoaded.
+
+Navigate with `{ waitUntil: 'domcontentloaded' }`. The default `load` waits on
+Firestore's long-lived connection, which adds ~15s per navigation and can hang
+outright.
 
 ---
 

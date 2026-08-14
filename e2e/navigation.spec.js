@@ -16,7 +16,7 @@ const ROUTES = [
 test.describe('navigation', () => {
   for (const [path, heading] of ROUTES) {
     test(`renders ${path}`, async ({ authedPage: page }) => {
-      await page.goto(path);
+      await page.goto(path, { waitUntil: 'domcontentloaded' });
 
       await expect(page.getByText(heading).first()).toBeVisible();
       // The shared layout — and therefore the version label — is always present.
@@ -25,7 +25,7 @@ test.describe('navigation', () => {
   }
 
   test('sends an unknown URL back to the dashboard', async ({ authedPage: page }) => {
-    await page.goto('/no-such-page');
+    await page.goto('/no-such-page', { waitUntil: 'domcontentloaded' });
 
     await expect(page).toHaveURL(/\/dashboard/);
   });
@@ -33,14 +33,14 @@ test.describe('navigation', () => {
   test('shows a version that matches the deployed build', async ({ authedPage: page }) => {
     const { APP_VERSION } = require('../src/config/version');
 
-    await page.goto('/dashboard');
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
 
     await expect(page.locator('.app-footer__version')).toHaveText(`v${APP_VERSION}`);
   });
 
   test('has no horizontal overflow on a phone viewport', async ({ authedPage: page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('/inventory');
+    await page.goto('/inventory', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Inventory' })).toBeVisible();
 
     const overflows = await page.evaluate(

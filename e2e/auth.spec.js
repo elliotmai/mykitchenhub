@@ -4,7 +4,7 @@ const { test, expect, login, TEST_USER } = require('./fixtures');
 
 test.describe('authentication', () => {
   test('sends a signed-out visitor to the login page', async ({ page }) => {
-    await page.goto('/dashboard');
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
 
     await expect(page).toHaveURL(/\/login/);
     await expect(page.getByRole('button', { name: 'Sign In' })).toBeVisible();
@@ -18,7 +18,7 @@ test.describe('authentication', () => {
   });
 
   test('rejects a wrong password with a readable message, not an error code', async ({ page }) => {
-    await page.goto('/login');
+    await page.goto('/login', { waitUntil: 'domcontentloaded' });
 
     await page.getByPlaceholder('you@example.com').fill(TEST_USER.email);
     await page.getByPlaceholder('••••••••').first().fill('definitely-not-the-password');
@@ -33,7 +33,7 @@ test.describe('authentication', () => {
   test('keeps the session across a reload', async ({ page }) => {
     await login(page);
 
-    await page.reload();
+    await page.reload({ waitUntil: 'domcontentloaded' });
 
     await expect(page).toHaveURL(/\/dashboard/);
     await expect(page.getByText(/good (morning|afternoon|evening)/i)).toBeVisible();
@@ -42,7 +42,7 @@ test.describe('authentication', () => {
   test('redirects an already signed-in user away from the login page', async ({ page }) => {
     await login(page);
 
-    await page.goto('/login');
+    await page.goto('/login', { waitUntil: 'domcontentloaded' });
 
     await expect(page).toHaveURL(/\/dashboard/);
   });

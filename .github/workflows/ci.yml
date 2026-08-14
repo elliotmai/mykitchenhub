@@ -144,8 +144,8 @@ jobs:
         run: npm ci --prefix firestore
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
-      - name: Build against the emulators
-        run: npm run build:e2e
+      # test:e2e builds first — serving a stale build/ is the classic way to
+      # get a confusing E2E failure.
       - name: Run end-to-end suite
         run: npm run test:e2e
       - name: Upload report on failure

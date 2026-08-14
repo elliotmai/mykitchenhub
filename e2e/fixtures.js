@@ -28,7 +28,7 @@ const suppressWhatsNewPopup = (page) =>
  * Form.Label elements are not associated with their inputs via htmlFor.
  */
 const login = async (page) => {
-  await page.goto('/login');
+  await page.goto('/login', { waitUntil: 'domcontentloaded' });
 
   await page.getByPlaceholder('you@example.com').fill(TEST_USER.email);
   await page.getByPlaceholder('••••••••').first().fill(TEST_USER.password);
