@@ -111,7 +111,11 @@ test.describe('inventory', () => {
     await addItem(page, itemName);
     await expect(page.getByText(itemName)).toBeVisible();
 
-    const card = page.locator('.card', { hasText: itemName });
+    // Scoped to the item card itself (ItemCard renders `.card.h-100`); a bare
+    // `.card` also matches any container wrapping the grid, and clicking the
+    // "last button" across several matches deletes the wrong row.
+    const card = page.locator('.card.h-100').filter({ hasText: itemName });
+    await expect(card).toHaveCount(1);
     await card.getByRole('button').last().click();
 
     const confirm = page.locator('.modal.show');

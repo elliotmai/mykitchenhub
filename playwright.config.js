@@ -32,7 +32,10 @@ module.exports = defineConfig({
 
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  timeout: 30_000,
+  // A spec signs in through the real login form against the auth emulator,
+  // which alone costs ~15s; with several workers sharing the emulator, 30s is
+  // not enough headroom.
+  timeout: 60_000,
   expect: { timeout: 10_000 },
 
   reporter: process.env.CI
