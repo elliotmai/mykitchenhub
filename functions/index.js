@@ -550,56 +550,19 @@ function extractUnit(amountStr) {
 exports.importInventoryFromCSV = require('./src/csvImport/importInventoryFromCSV').importInventoryFromCSV;
 
 // ============================================================================
-// FUNCTION 3: Import HelloFresh Recipe from Photo (OCR)
+// FUNCTION 3: Import HelloFresh Recipes (Phase 5.1 photo, 5.2 URL)
 // ============================================================================
 
-/**
- * HTTP function to extract recipe from HelloFresh card photo
- * Uses OCR/AI to parse recipe card image
- * 
- * Expected request body:
- * {
- *   userId: "user-firebase-uid",
- *   imageUrl: "https://storage.googleapis.com/.../hellofresh-card.jpg"
- * }
- */
-exports.importHelloFreshFromPhoto = functions.https.onRequest(async (req, res) => {
-  try {
-    console.log('Starting HelloFresh photo import...');
-    
-    // TODO: Implement in Phase 5
-    // 1. Authenticate request
-    // 2. Download image from storage
-    // 3. Send to OCR/Vision API (Google Cloud Vision or Claude)
-    // 4. Parse recipe data (title, ingredients, instructions)
-    // 5. Create recipe in Firestore
-    // 6. Return recipe ID
-    
-    const { userId, imageUrl } = req.body;
-    
-    if (!userId || !imageUrl) {
-      return res.status(400).json({
-        error: 'Missing required fields: userId, imageUrl'
-      });
-    }
+// Both parse only — the browser writes the reviewed recipe under the signed-in
+// user's own credentials. Implementation lives in src/hellofresh/.
 
-    // Placeholder response
-    res.status(200).json({
-      status: 'success',
-      message: 'HelloFresh photo import function ready (stub)',
-      recipeId: null,
-      recipeName: null,
-      timestamp: new Date().toISOString()
-    });
-    
-  } catch (error) {
-    console.error('Error in importHelloFreshFromPhoto:', error);
-    res.status(500).json({
-      error: 'Internal server error',
-      message: error.message
-    });
-  }
-});
+const {
+  importHelloFreshFromPhoto,
+  importHelloFreshFromUrl,
+} = require('./src/hellofresh/importHandlers');
+
+exports.importHelloFreshFromPhoto = importHelloFreshFromPhoto;
+exports.importHelloFreshFromUrl = importHelloFreshFromUrl;
 
 // ============================================================================
 // FUNCTION 4: Send Daily Waste Alerts (SMS)

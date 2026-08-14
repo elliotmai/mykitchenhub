@@ -54,6 +54,7 @@ const REQUIRED_EXPORTS = [
   'syncLegacyRecipes',
   'importInventoryFromCSV',
   'importHelloFreshFromPhoto',
+  'importHelloFreshFromUrl',
   'sendDailyWasteAlerts',
   'generateMealPlan',
   'onUserCreated',
