@@ -109,7 +109,6 @@ service cloud.firestore {
           && request.resource.data.source in ['manual', 'hellofresh', 'csv-import', 'seed']
           && request.resource.data.quantity >= 0;
 
-
         // Users can delete their inventory items
         allow delete: if isOwner(userId);
       }
