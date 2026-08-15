@@ -332,7 +332,7 @@ describe('addDelivery', () => {
     });
   });
 
-  it("fills in usesIngredients, so Mark as Cooked knows what to decrement", async () => {
+  it('fills in usesIngredients, so Mark as Cooked knows what to decrement', async () => {
     await add();
 
     const [meal] = writesTo(`users/${uid}/mealPlanEntries`);
