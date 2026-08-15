@@ -24,10 +24,24 @@ const makeFile = ({ name = 'photo.jpg', type = 'image/jpeg', size = 4 * 1024 * 1
  * Image that decodes to `width` x `height`.
  */
 const installCanvas = ({ width = 4000, height = 3000, outputSize = 300 * 1024 } = {}) => {
+  // `paintOrder` records the calls that put pixels on the surface, because for
+  // a transparent source *when* the white fill happens matters as much as
+  // whether it happens: filling after the draw would erase the photo.
+  const paintOrder = [];
+  const context = {
+    fillStyle: '',
+    fillRect: jest.fn(function fillRect(...args) {
+      paintOrder.push({ call: 'fillRect', fillStyle: this.fillStyle, args });
+    }),
+    drawImage: jest.fn(() => paintOrder.push({ call: 'drawImage' })),
+  };
+
   const canvas = {
     width: 0,
     height: 0,
-    getContext: () => ({ drawImage: jest.fn() }),
+    paintOrder,
+    context,
+    getContext: () => context,
     // Blob.size is a getter-only accessor, so it has to be redefined rather
     // than assigned — assigning throws, which the module would then swallow.
     toBlob: (cb) => {
@@ -158,5 +172,82 @@ describe('compressImage', () => {
 
     const original = makeFile();
     await expect(compressImage(original)).resolves.toBe(original);
+  });
+
+  // -------------------------------------------------------------------------
+  // Transparency
+  //
+  // JPEG cannot store an alpha channel, so whatever is behind a transparent
+  // pixel at encode time is what gets stored. A fresh canvas is transparent
+  // *black*, which meant a PNG with any cut-out in it came back with the
+  // cut-out filled in black.
+  // -------------------------------------------------------------------------
+  it('lays white under a transparent PNG, so a cut-out does not encode as black', async () => {
+    const canvas = installCanvas({ width: 1200, height: 800, outputSize: 100 * 1024 });
+
+    await compressImage(makeFile({ name: 'logo.png', type: 'image/png' }));
+
+    const [first] = canvas.paintOrder;
+    expect(first.call).toBe('fillRect');
+    expect(first.fillStyle).toBe('#ffffff');
+    // The whole surface, not a corner of it.
+    expect(first.args).toEqual([0, 0, canvas.width, canvas.height]);
+  });
+
+  it('paints that white before the photo, not over the top of it', async () => {
+    const canvas = installCanvas({ outputSize: 100 * 1024 });
+
+    await compressImage(makeFile({ type: 'image/png' }));
+
+    expect(canvas.paintOrder.map((p) => p.call)).toEqual(['fillRect', 'drawImage']);
+  });
+
+  it('covers the scaled surface, not the original photo size', async () => {
+    const canvas = installCanvas({ width: 4000, height: 2000, outputSize: 100 * 1024 });
+
+    await compressImage(makeFile({ type: 'image/png' }));
+
+    // 4000x2000 scaled to the 1600px cap.
+    expect(canvas.paintOrder[0].args).toEqual([0, 0, 1600, 800]);
+  });
+
+  // -------------------------------------------------------------------------
+  // The edges of "is this even a photo"
+  // -------------------------------------------------------------------------
+  it('hands back a file that is not really an image, rather than a broken one', async () => {
+    // A PDF the picker let through as image/jpeg: big enough to be worth
+    // compressing, but nothing a canvas can decode.
+    installCanvas();
+    Object.defineProperty(global.Image.prototype, 'src', {
+      configurable: true,
+      set() {
+        setTimeout(() => this.onerror?.(new Error('not an image')), 0);
+      },
+    });
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const notAPhoto = makeFile({ name: 'invoice.pdf.jpg', size: 2 * 1024 * 1024 });
+
+    expect(await compressImage(notAPhoto)).toBe(notAPhoto);
+  });
+
+  it('leaves a tiny photo untouched rather than re-encoding it larger', async () => {
+    const canvas = installCanvas();
+    const tiny = makeFile({ size: 4 * 1024 });
+
+    expect(await compressImage(tiny)).toBe(tiny);
+    // Never even decoded — the size floor short-circuits before the canvas.
+    expect(canvas.paintOrder).toEqual([]);
+  });
+
+  it('survives a photo whose longest edge rounds below one pixel', async () => {
+    // A 1x1 tracking pixel padded to 2MB. Scaling must never produce a
+    // zero-width canvas, which throws on drawImage in a real browser.
+    const canvas = installCanvas({ width: 1, height: 1, outputSize: 100 * 1024 });
+
+    await compressImage(makeFile({ size: 2 * 1024 * 1024 }));
+
+    expect(canvas.width).toBeGreaterThanOrEqual(1);
+    expect(canvas.height).toBeGreaterThanOrEqual(1);
   });
 });

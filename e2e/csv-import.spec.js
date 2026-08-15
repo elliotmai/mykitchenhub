@@ -207,20 +207,15 @@ test.describe('CSV import', () => {
     stored.forEach((item) => expect(item.shelfLifeDays).toBeGreaterThan(0));
   });
 
-  test('keeps the preview inside the screen on a phone', async ({ authedPage: page }, testInfo) => {
-    test.skip(!testInfo.project.name.includes('mobile'), 'viewport check is mobile-only');
-
-    const rows = Array.from(
-      { length: 40 },
-      (_, i) => `Wide Item Name Number ${i},${i + 1},ea,Pantry`
-    );
-    const modal = await chooseCSV(page, [HEADER, ...rows].join('\n'), 'phone.csv');
-
-    await expect(modal.getByText('40 ready to import')).toBeVisible();
-
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth
-    );
-    expect(overflow).toBeLessThanOrEqual(1);
-  });
+  // The phone-viewport check that used to live here has moved to
+  // e2e/mobile.spec.js, under the same name.
+  //
+  // It asked to run only on a project whose name contains "mobile", and this
+  // file is not one of the four the mobile project loads (see `testMatch` in
+  // playwright.config.js) — so it skipped itself on desktop, was never
+  // collected on mobile, and had not run at all since the mobile project was
+  // narrowed. A spec that runs nowhere reads exactly like a spec that passes.
+  //
+  // mobile.spec.js is the file that project is pointed at, and it now measures
+  // the preview's tap targets and its skipped-rows table as well.
 });

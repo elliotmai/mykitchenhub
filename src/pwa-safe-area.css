@@ -99,7 +99,12 @@
 /* --------------------------------------------------------------------------
    Offline Indicator (fixed at bottom)
    -------------------------------------------------------------------------- */
-@media all and (display-mode: standalone) {
+/* Scoped to above the sidebar breakpoint. Below it the bottom tab bar is on
+   screen, and OfflineIndicator.css already lifts the banner clear of both the
+   bar and the home indicator in one calc — this `!important` would drop it
+   straight back on top of the navigation, on the installed PWA that is the
+   main way the app is used on a phone. */
+@media all and (display-mode: standalone) and (min-width: 992px) {
   .offline-indicator,
   [class*='offline'] > div:last-child {
     bottom: env(safe-area-inset-bottom, 0px) !important;
