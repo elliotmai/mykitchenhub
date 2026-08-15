@@ -121,7 +121,10 @@ test.describe('freezer actions', () => {
     await expect(page.getByRole('heading', { name: 'Waste Alerts' })).toBeVisible();
 
     const card = page.getByTestId('freezer-suggestion').filter({ hasText: itemName });
-    await expect(card).toHaveCount(1);
+    // The card only appears once both live listeners — inventory and storage
+    // locations — have delivered, so it needs more headroom than the default
+    // 10s expect timeout allows under the suite's parallelism.
+    await expect(card).toHaveCount(1, { timeout: 25_000 });
 
     const before = await inventoryItem(itemName);
     await card.getByRole('button', { name: 'Freeze All' }).click();
@@ -147,7 +150,10 @@ test.describe('freezer actions', () => {
     await expect(page.getByRole('heading', { name: 'Waste Alerts' })).toBeVisible();
 
     const card = page.getByTestId('freezer-suggestion').filter({ hasText: itemName });
-    await expect(card).toHaveCount(1);
+    // The card only appears once both live listeners — inventory and storage
+    // locations — have delivered, so it needs more headroom than the default
+    // 10s expect timeout allows under the suite's parallelism.
+    await expect(card).toHaveCount(1, { timeout: 25_000 });
     await card.getByRole('button', { name: 'Freeze Half' }).click();
 
     const uid = await testUserId();
