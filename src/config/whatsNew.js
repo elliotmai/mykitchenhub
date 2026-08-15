@@ -14,6 +14,16 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.08.15.5',
+    date: 'August 2026',
+    items: [
+      '📶 The row of buttons along the bottom of your phone no longer disappears when the signal drops. The “you’re offline” message used to sit right on top of it — so the moment you needed the app to keep working, you could not get around it.',
+      '🖼️ A photo with a see-through background no longer comes out with a black one when you add it to a recipe.',
+      '🙈 If something does go wrong, the message you see can no longer accidentally carry a web address or a long string of letters and numbers from behind the scenes.',
+      '🔁 Signing up on a patchy connection is safer. If your kitchen was set up but the app could not read it back straight away, it no longer tells you signing up failed when everything is in fact ready and waiting.',
+    ],
+  },
+  {
     version: '2026.08.15.4',
     date: 'August 2026',
     items: [

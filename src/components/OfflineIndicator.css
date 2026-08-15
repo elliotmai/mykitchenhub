@@ -1,0 +1,36 @@
+/* ==========================================================================
+   Offline / reconnected banner
+
+   Pinned to the bottom of the window, above the page but below a modal.
+
+   This lived in an inline `style` object until the bottom tab bar arrived in
+   roadmap 9.1. Inline styles beat every stylesheet, so there was no way for
+   the bar to move the banner out of its own way — and the two are pinned to
+   the same edge, with the banner on top (1050 against the bar's 1030). A
+   full-width warning roughly the height of the bar, drawn directly over it,
+   hid all five tabs.
+
+   That collision showed up at the worst possible moment: losing signal is
+   exactly when a cook is standing in the kitchen with the app open, and a PWA
+   that precaches its shell is meant to keep working. Instead the navigation
+   vanished for as long as the signal was gone.
+   ========================================================================== */
+
+.offline-indicator {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  /* Unchanged from the inline value it replaces: above the page, below a
+     modal, so a dialog's buttons are never blocked by it. */
+  z-index: var(--mkh-z-modal);
+}
+
+/* Below the sidebar breakpoint the bottom tab bar exists, so the banner stacks
+   on top of it rather than over it. Kept in step with the 56px min-height in
+   MobileNav.css and the padding that reserves room for it there. */
+@media (max-width: 991.98px) {
+  .offline-indicator {
+    bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  }
+}

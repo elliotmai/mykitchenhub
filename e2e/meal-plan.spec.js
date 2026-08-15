@@ -25,20 +25,6 @@ const shiftDayKey = (key, days) => {
 
 const TODAY = toDayKey(new Date());
 
-/**
- * The Monday the board opens on — `startOfWeek` in src/hooks/useMealPlan.js
- * uses `(getDay() + 6) % 7`, so weeks run Monday to Sunday.
- *
- * Any spec that needs a day with a *next* day on the board uses this rather
- * than today: today is Sunday one run in seven, and Sunday has no next day.
- */
-const weekMonday = () => {
-  const now = new Date();
-  return toDayKey(
-    new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7))
-  );
-};
-
 /** Poll Firestore until the entry exists, then hand it back. */
 const storedEntry = async (recipeName) => {
   await expect
@@ -48,6 +34,21 @@ const storedEntry = async (recipeName) => {
     })
     .toBe(true);
   return mealPlanEntry(recipeName);
+};
+
+/**
+ * The seven `YYYY-MM-DD` keys the board is currently showing, in order.
+ *
+ * Derived from the rendered day cards rather than from the clock, so a spec
+ * that needs "a day with another day after it" can have one on any weekday.
+ */
+const boardDayKeys = async (page) => {
+  await expect(page.locator('[data-testid^="day-card-"]')).toHaveCount(7);
+  return page
+    .locator('[data-testid^="day-card-"]')
+    .evaluateAll((cards) =>
+      cards.map((card) => card.getAttribute('data-testid').replace('day-card-', ''))
+    );
 };
 
 /** Poll Firestore until the week document exists, then hand it back. */
@@ -245,29 +246,38 @@ test.describe('meal plan', () => {
   test('moves a meal to another day', async ({ authedPage: page }) => {
     const recipeName = `E2E Movable ${Date.now()}`;
 
-    // Monday and Tuesday of the week the board already shows, rather than
-    // today and tomorrow. Today is Sunday one run in seven, and Sunday is the
-    // last card on the board — so this spec used to skip itself one day in
-    // seven, silently, which is the same as not having it on those days.
-    // Monday always has a Tuesday next to it.
-    const monday = weekMonday();
-    const tuesday = shiftDayKey(monday, 1);
+    // Seeded on the *first* day the board is showing, not on today.
+    //
+    // This used to seed on TODAY and move to TODAY + 1, which has no day card
+    // to move to when today is the Sunday the week ends on — so the test called
+    // test.skip and quietly sat out one day in seven. A run that goes green
+    // without exercising the thing it names is worse than a red one.
+    //
+    // Reading the days off the board rather than computing them keeps that
+    // fixed without pinning a clock: whatever week is on screen, the first
+    // card always has a next one, and the assertion is the same every day.
+    const dayKeys = await boardDayKeys(page);
+    expect(dayKeys).toHaveLength(7);
+    const [from, to] = dayKeys;
 
-    await seedMealPlanEntry({ date: monday, recipeName });
+    await seedMealPlanEntry({ date: from, recipeName });
     await page.reload({ waitUntil: 'domcontentloaded' });
 
     const meal = page.locator('[data-testid^="meal-entry-"]').filter({ hasText: recipeName });
     await expect(meal).toBeVisible();
 
-    // Both days are on the board every day of the week — no conditional skip.
-    await expect(page.getByTestId(`day-card-${monday}`)).toHaveCount(1);
-    await expect(page.getByTestId(`day-card-${tuesday}`)).toHaveCount(1);
-
-    await meal.getByRole('combobox').selectOption(tuesday);
+    await meal.getByRole('combobox').selectOption(to);
 
     await expect
       .poll(async () => (await mealPlanEntry(recipeName))?.date, { timeout: 10_000 })
-      .toBe(tuesday);
+      .toBe(to);
+
+    // And it is on the day it was moved to, not just stored against it.
+    await expect(
+      page
+        .getByTestId(`day-card-${to}`)
+        .locator('[data-testid^="meal-entry-"]', { hasText: recipeName })
+    ).toBeVisible();
   });
   test('regenerates a week it has already planned', async ({ authedPage: page }, testInfo) => {
     // The emulator runs the real firestore.rules, and `mealPlans` pins

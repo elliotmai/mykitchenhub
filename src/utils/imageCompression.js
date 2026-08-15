@@ -116,6 +116,16 @@ export const compressImage = async (
     canvas.width = Math.max(1, Math.round(img.width * scale));
     canvas.height = Math.max(1, Math.round(img.height * scale));
 
+    // JPEG has no alpha channel, and a fresh canvas starts out transparent
+    // black. Encoding a PNG that has any transparency in it therefore
+    // composites every clear pixel onto *black* — a recipe card photographed
+    // against a cut-out background, or a screenshot with rounded corners, came
+    // back with black where the transparency was. Painting the surface white
+    // first is what a cook expects to see, and costs nothing on an opaque
+    // photo, which covers the fill completely.
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+
     context.drawImage(img, 0, 0, canvas.width, canvas.height);
 
     const blob = await toBlob(canvas, 'image/jpeg', quality);

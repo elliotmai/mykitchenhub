@@ -9,6 +9,7 @@ import { useAuth, AuthProvider } from '../useAuth';
 import * as authMock from '../../test-utils/mocks/auth';
 import * as fs from '../../test-utils/mocks/firestore';
 import { makeUserProfile } from '../../test-utils/factories';
+import { DEFAULT_ATTEMPTS } from '../../utils/retry';
 
 const wrapper = ({ children }) => <AuthProvider>{children}</AuthProvider>;
 
@@ -243,6 +244,126 @@ describe('signup', () => {
         expect(profile.data).toHaveProperty(field);
       });
       expect(profile.data.preferences).not.toHaveProperty('helloFresh');
+    });
+
+    it('answers an error response rather than retrying it', async () => {
+      // Only the `fetch` is inside withRetry. A response that arrives and says
+      // the setup failed is an answer, not a dropped connection — asking the
+      // same question twice would get the same reply and just delay the
+      // fallback that is going to run anyway.
+      await signUpAndCollectWrites();
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('provisions the kitchen exactly once — five writes, not fifteen', async () => {
+      const writes = await signUpAndCollectWrites();
+
+      expect(writes).toHaveLength(5);
+      expect(writes.filter((w) => /^users\/[^/]+$/.test(w.path))).toHaveLength(1);
+      expect(writes.filter((w) => w.path.includes('/storageLocations/'))).toHaveLength(4);
+    });
+
+    it('falls back once, not once per attempt, after a dropped connection', async () => {
+      // A network-level rejection is what withRetry does retry. Three attempts
+      // all fail, and the fallback that follows must still run a single time.
+      global.fetch = jest.fn(async () => {
+        throw Object.assign(new Error('network'), { code: 'unavailable' });
+      });
+      jest.spyOn(console, 'error').mockImplementation(() => {});
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      authMock.__setUser(null);
+      const { result } = renderAuth();
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      await act(async () => {
+        await result.current.signup('new@example.com', 'hunter2', 'New Cook');
+      });
+
+      expect(global.fetch).toHaveBeenCalledTimes(DEFAULT_ATTEMPTS);
+      expect(fs.setDoc).toHaveBeenCalledTimes(5);
+    });
+
+    it('writes nothing locally when a retried attempt gets through', async () => {
+      // The first attempt drops, the second lands. The kitchen was provisioned
+      // by the function, so the browser must not write a second copy over it.
+      let attempt = 0;
+      global.fetch = jest.fn(async () => {
+        attempt += 1;
+        if (attempt === 1) throw Object.assign(new Error('network'), { code: 'unavailable' });
+        return { ok: true, json: async () => ({ success: true }) };
+      });
+      fs.getDoc.mockResolvedValue(fs.__doc('uid', makeUserProfile()));
+
+      authMock.__setUser(null);
+      const { result } = renderAuth();
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      await act(async () => {
+        await result.current.signup('new@example.com', 'hunter2', 'New Cook');
+      });
+
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+      expect(fs.setDoc).not.toHaveBeenCalled();
+    });
+
+    it('gives each of the four shelves its own document id', async () => {
+      const writes = await signUpAndCollectWrites();
+      const paths = writes.map((w) => w.path).filter((p) => p.includes('/storageLocations/'));
+
+      // Two shelves are `type: 'pantry'`, so the id carries the order too.
+      // A collision would silently leave a new cook with three shelves.
+      expect(paths).toHaveLength(4);
+      expect(new Set(paths).size).toBe(4);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // When the Cloud Function worked and something *after* it did not
+  //
+  // The read-back used to sit inside the same try as the provisioning call, so
+  // a dropped connection while reading a profile that had just been created
+  // successfully sent signup into the fallback — which then rewrote the
+  // existing document with a fresh serverTimestamp(). firestore.rules pins
+  // `createdAt` on update, so that write is refused, and a cook whose account
+  // was provisioned perfectly is told signup failed. Trying again then says the
+  // email is taken, which is a dead end.
+  // ---------------------------------------------------------------------------
+  describe('when the function succeeds but the read-back does not', () => {
+    const signUp = async () => {
+      authMock.__setUser(null);
+      const { result } = renderAuth();
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      let response;
+      await act(async () => {
+        response = await result.current.signup('new@example.com', 'hunter2', 'New Cook');
+      });
+      return response;
+    };
+
+    it('does not overwrite a profile the Cloud Function already created', async () => {
+      jest.spyOn(console, 'error').mockImplementation(() => {});
+      // Provisioning succeeds (the default fetch mock); reading it back does not.
+      fs.getDoc.mockRejectedValue(Object.assign(new Error('offline'), { code: 'unavailable' }));
+
+      const response = await signUp();
+
+      // Not a single write — there was nothing that needed writing.
+      expect(fs.setDoc).not.toHaveBeenCalled();
+      // And the cook is signed up, because they are.
+      expect(response.success).toBe(true);
+    });
+
+    it('still provisions locally when the function reports success but wrote nothing', async () => {
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+      fs.getDoc.mockResolvedValue(fs.__doc('missing', undefined));
+
+      const response = await signUp();
+
+      const paths = fs.setDoc.mock.calls.map(([ref]) => fs.pathOf(ref));
+      expect(paths.some((p) => /^users\/[^/]+$/.test(p))).toBe(true);
+      expect(paths.filter((p) => p.includes('/storageLocations/'))).toHaveLength(4);
+      expect(response.success).toBe(true);
     });
   });
 

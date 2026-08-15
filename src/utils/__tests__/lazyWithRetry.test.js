@@ -69,6 +69,29 @@ describe('lazyWithRetry', () => {
     expect(reload).not.toHaveBeenCalled();
   });
 
+  it('keeps asking across a blip longer than one attempt, not just the first stumble', async () => {
+    // Three consecutive failures then success. A chunk request that fails is
+    // usually contention rather than absence, and the failures cluster: under
+    // load the whole burst lands inside the same bad window. The end-to-end
+    // suite caught this as an intermittent crash screen on a route that was
+    // fine, so the attempt count is pinned here rather than left to drift.
+    const factory = jest
+      .fn()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValue(chunkModule);
+
+    renderLazy(factory);
+
+    // The backoff really does sleep 300 + 600 + 1200ms, which is past
+    // findByText's one-second default. Waiting it out is the point of the test:
+    // that span is what a blip needs to be survivable.
+    expect(await screen.findByText('the page', {}, { timeout: 5_000 })).toBeInTheDocument();
+    expect(factory).toHaveBeenCalledTimes(4);
+    expect(reload).not.toHaveBeenCalled();
+  });
+
   it('reloads once for a chunk a new deploy renamed, rather than retrying a file that is gone', async () => {
     const factory = jest.fn().mockRejectedValue(staleChunkError());
 
@@ -89,9 +112,31 @@ describe('lazyWithRetry', () => {
     expect(reload).not.toHaveBeenCalled();
   });
 
-  it('re-arms the guard once the app has booted, so the next deploy gets its reload', () => {
+  it('re-arms the guard when a chunk actually arrives, so the next deploy gets its reload', async () => {
+    sessionStorage.setItem('mykitchenhub.chunkReload', '1');
+
+    renderLazy(async () => chunkModule);
+
+    expect(await screen.findByText('the page')).toBeInTheDocument();
+    expect(sessionStorage.getItem('mykitchenhub.chunkReload')).toBeNull();
+  });
+
+  it('can still be re-armed by hand', () => {
     sessionStorage.setItem('mykitchenhub.chunkReload', '1');
     clearChunkReloadGuard();
+    expect(sessionStorage.getItem('mykitchenhub.chunkReload')).toBeNull();
+  });
+
+  it('lets a working page clear the guard a broken one set', async () => {
+    // The other half of the same rule: once anything loads, the next deploy is
+    // entitled to its own single reload.
+    renderLazy(jest.fn().mockRejectedValue(staleChunkError()));
+    await waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+    expect(sessionStorage.getItem('mykitchenhub.chunkReload')).toBe('1');
+
+    renderLazy(async () => chunkModule);
+    expect(await screen.findByText('the page')).toBeInTheDocument();
+
     expect(sessionStorage.getItem('mykitchenhub.chunkReload')).toBeNull();
   });
 });

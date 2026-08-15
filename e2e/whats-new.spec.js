@@ -27,6 +27,37 @@ test.describe("what's new popup", () => {
     await expect(dialog).not.toBeVisible();
   });
 
+  test('keeps "Got it" tappable, whatever else is pinned to the bottom', async ({
+    authedPage: page,
+  }) => {
+    // The popup opens over every page and swallows clicks, so if anything were
+    // drawn on top of its dismiss button the app would be stuck until the entry
+    // aged out. On a phone the thing that could do that is the bottom tab bar,
+    // pinned to the same edge; on desktop it would be any other overlay.
+    //
+    // Deliberately not skipped on desktop. A test.skip that leaves a spec
+    // running in no project at all is how the CSV preview's phone check went
+    // unnoticed for a whole phase — and the assertion is worth making at both
+    // widths anyway.
+    const gotIt = page.getByRole('button', { name: 'Got it' });
+    await expect(gotIt).toBeVisible();
+
+    const box = await gotIt.boundingBox();
+    const hit = await page.evaluate(
+      ([x, y]) => {
+        const el = document.elementFromPoint(x, y);
+        return el?.closest('.mobile-nav') ? 'the bar' : (el?.textContent?.trim() ?? 'nothing');
+      },
+      [box.x + box.width / 2, box.y + box.height / 2]
+    );
+
+    expect(hit).toBe('Got it');
+
+    // And it really does dismiss, rather than merely being on top.
+    await gotIt.click();
+    await expect(page.locator('.whats-new-modal')).not.toBeVisible();
+  });
+
   test('records the version it showed, so only newer entries reappear', async ({
     authedPage: page,
   }) => {

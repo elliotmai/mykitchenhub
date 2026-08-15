@@ -321,6 +321,177 @@ describe('users collection', () => {
 });
 
 // ---------------------------------------------------------------------------
+// The client-side signup fallback — roadmap 9.4, against 10.2's rules
+//
+// When the onUserCreated Cloud Function cannot be reached, signup provisions
+// the kitchen from the browser instead (src/hooks/useAuth.js,
+// createUserProfile). That is the one write path a cook cannot retry for
+// themselves: if it is refused they are left holding an auth account with no
+// profile behind it, and signing up again just says the email is taken.
+//
+// Firestore is still in test mode, so a violating write from that path
+// succeeds in production today and starts failing the moment step 10.2 lands.
+// These fixtures mirror the payloads that code actually builds — field for
+// field, extras included, because the rules see the whole document. If the
+// hook changes, these change with it; if they then fail, the hook is writing
+// something production will refuse.
+// ---------------------------------------------------------------------------
+
+/** The user document the fallback writes. Mirrors `fallbackData` in useAuth.js. */
+const fallbackProfile = (overrides = {}) => ({
+  email: 'new@example.com',
+  displayName: 'new',
+  createdAt: new Date().toISOString(),
+  preferences: {
+    smsAlerts: { enabled: false, phoneNumber: '', time: '09:00' },
+    notifications: { expiringSoon: true, mealPlanReminders: true, lowInventory: false },
+    dietary: { restrictions: [], preferences: [], allergies: [] },
+  },
+  // Top level, not nested under preferences: the create rule lists `helloFresh`
+  // among the fields a user document must have.
+  helloFresh: { linked: false, deliveryDays: [1, 3, 5] },
+  stats: { totalRecipes: 0, totalItems: 0, wasteReduction: 0 },
+  ...overrides,
+});
+
+/** The four shelves the fallback writes. Mirrors `defaultLocations` in useAuth.js. */
+const FALLBACK_LOCATIONS = [
+  { label: 'Main Fridge', type: 'fridge', icon: '🧊', color: '#3498db', order: 1 },
+  { label: 'Freezer', type: 'freezer', icon: '❄️', color: '#9b59b6', order: 2 },
+  { label: 'Pantry', type: 'pantry', icon: '🏺', color: '#e67e22', order: 3 },
+  { label: 'Counter', type: 'pantry', icon: '🍞', color: '#f39c12', order: 4 },
+];
+
+const fallbackLocationDoc = (location) => ({
+  ...location,
+  isDefault: true,
+  itemCount: 0,
+  createdAt: new Date().toISOString(),
+});
+
+describe('signup fallback when the Cloud Function is unreachable', () => {
+  const NEW_COOK = 'user-brand-new';
+
+  it('lands a complete profile the rules accept', async () => {
+    await assertSucceeds(as(NEW_COOK).doc(`users/${NEW_COOK}`).set(fallbackProfile()));
+  });
+
+  it('lands all four default shelves', async () => {
+    for (const location of FALLBACK_LOCATIONS) {
+      const id = `${location.type}_${location.order}`;
+      await assertSucceeds(
+        as(NEW_COOK)
+          .doc(`users/${NEW_COOK}/storageLocations/${id}`)
+          .set(fallbackLocationDoc(location))
+      );
+    }
+  });
+
+  it('gives the four shelves four distinct ids, so none overwrites another', () => {
+    // Two of them are `type: 'pantry'`, so the id has to carry the order as
+    // well — `pantry_3` and `pantry_4`. A collision here would leave a new cook
+    // with three shelves and no error anywhere.
+    const ids = FALLBACK_LOCATIONS.map((l) => `${l.type}_${l.order}`);
+    expect(new Set(ids).size).toBe(FALLBACK_LOCATIONS.length);
+  });
+
+  it('leaves a kitchen that can be read back and put food into', async () => {
+    await assertSucceeds(as(NEW_COOK).doc(`users/${NEW_COOK}`).set(fallbackProfile()));
+    await assertSucceeds(
+      as(NEW_COOK)
+        .doc(`users/${NEW_COOK}/storageLocations/fridge_1`)
+        .set(fallbackLocationDoc(FALLBACK_LOCATIONS[0]))
+    );
+
+    await assertSucceeds(as(NEW_COOK).doc(`users/${NEW_COOK}`).get());
+    // The first thing a cook does with a new kitchen is put food in one of the
+    // shelves this path just created.
+    await assertSucceeds(
+      as(NEW_COOK)
+        .doc(`users/${NEW_COOK}/inventory/first-item`)
+        .set(validItem({ locationId: 'fridge_1', locationType: 'fridge' }))
+    );
+  });
+
+  // -------------------------------------------------------------------------
+  // The shapes this path used to write, which the tests above guard against
+  // coming back. Each one leaves a cook stranded under production rules.
+  // -------------------------------------------------------------------------
+
+  it('would have been refused with helloFresh nested under preferences', async () => {
+    const { helloFresh, ...rest } = fallbackProfile();
+    await assertFails(
+      as(NEW_COOK)
+        .doc(`users/${NEW_COOK}`)
+        .set({ ...rest, preferences: { ...rest.preferences, helloFresh } })
+    );
+  });
+
+  it('would have been refused with shelves keyed `name` instead of `label`', async () => {
+    const { label, ...rest } = fallbackLocationDoc(FALLBACK_LOCATIONS[0]);
+    await assertFails(
+      as(NEW_COOK)
+        .doc(`users/${NEW_COOK}/storageLocations/fridge_1`)
+        .set({ ...rest, name: label })
+    );
+  });
+
+  it('cannot provision a kitchen under somebody else’s id', async () => {
+    await assertFails(as(INTRUDER).doc(`users/${NEW_COOK}`).set(fallbackProfile()));
+    await assertFails(
+      as(INTRUDER)
+        .doc(`users/${NEW_COOK}/storageLocations/fridge_1`)
+        .set(fallbackLocationDoc(FALLBACK_LOCATIONS[0]))
+    );
+  });
+
+  // -------------------------------------------------------------------------
+  // Retrying it
+  //
+  // The fallback is reached only after withRetry has already tried the function
+  // three times, and its own writes can be re-run: a cook who taps "Sign up"
+  // again on a flaky connection walks the same path a second time. Re-sending
+  // the identical payload must not be refused, or a recoverable failure
+  // becomes a permanent one.
+  // -------------------------------------------------------------------------
+
+  it('can be re-run with the same payload without being refused', async () => {
+    const profile = fallbackProfile();
+    const shelf = fallbackLocationDoc(FALLBACK_LOCATIONS[0]);
+
+    await assertSucceeds(as(NEW_COOK).doc(`users/${NEW_COOK}`).set(profile));
+    await assertSucceeds(as(NEW_COOK).doc(`users/${NEW_COOK}`).set(profile));
+
+    await assertSucceeds(
+      as(NEW_COOK).doc(`users/${NEW_COOK}/storageLocations/fridge_1`).set(shelf)
+    );
+    await assertSucceeds(
+      as(NEW_COOK).doc(`users/${NEW_COOK}/storageLocations/fridge_1`).set(shelf)
+    );
+  });
+
+  it('is refused on a re-run that restamps createdAt — which is why it must not', async () => {
+    // The update rule pins createdAt and email. A second attempt that rebuilds
+    // the payload from scratch — a fresh serverTimestamp() rather than the one
+    // already stored — is a *different* document to the rules, and is refused
+    // even though the first attempt was allowed.
+    //
+    // This is the trap a retry falls into, and the reason createUserProfile
+    // must not rewrite a profile that already exists. See the
+    // "does not overwrite a profile the Cloud Function already created" case
+    // in src/hooks/__tests__/useAuth.test.jsx.
+    const profile = fallbackProfile();
+    await seed((db) => db.doc(`users/${NEW_COOK}`).set(profile));
+
+    await assertFails(
+      as(NEW_COOK)
+        .doc(`users/${NEW_COOK}`)
+        .set({ ...profile, createdAt: new Date(Date.now() + 60_000).toISOString() })
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
 // users/{userId}/storageLocations/{locationId}
 // ---------------------------------------------------------------------------
 
@@ -548,9 +719,7 @@ describe('inventory items', () => {
   it('accepts the quantity-only patch marking a meal cooked makes', async () => {
     await seed((db) => db.doc(itemPath(OWNER, 'cooked-from')).set(validItem({ quantity: 5 })));
 
-    await assertSucceeds(
-      as(OWNER).doc(itemPath(OWNER, 'cooked-from')).update({ quantity: 3 })
-    );
+    await assertSucceeds(as(OWNER).doc(itemPath(OWNER, 'cooked-from')).update({ quantity: 3 }));
   });
 
   it('accepts a decrement that empties the jar, but not one that goes past it', async () => {
@@ -1168,7 +1337,9 @@ describe('meal plan entries', () => {
     'accepts the write the schema documents for a %s meal, field for field',
     async (source) => {
       await assertSucceeds(
-        as(OWNER).doc(entryPath(OWNER, `doc-${source}`)).set(documentedForeignWrite(source))
+        as(OWNER)
+          .doc(entryPath(OWNER, `doc-${source}`))
+          .set(documentedForeignWrite(source))
       );
     }
   );
@@ -1190,9 +1361,7 @@ describe('meal plan entries', () => {
 
     // The reschedule patch is `{ date }` alone — no createdAt, which is exactly
     // what the rule pins.
-    await assertSucceeds(
-      as(OWNER).doc(entryPath(OWNER, 'wp-move')).update({ date: '2026-08-17' })
-    );
+    await assertSucceeds(as(OWNER).doc(entryPath(OWNER, 'wp-move')).update({ date: '2026-08-17' }));
   });
 
   it('lets a meal be skipped, which the schema allows and the board renders', async () => {
@@ -1307,7 +1476,10 @@ describe('meal plan weeks', () => {
     await assertFails(
       as(OWNER)
         .doc(planPath(OWNER, 'restamped'))
-        .set({ ...validMealPlan(), createdAt: new Date(Date.now() + 1000).toISOString() }, { merge: true })
+        .set(
+          { ...validMealPlan(), createdAt: new Date(Date.now() + 1000).toISOString() },
+          { merge: true }
+        )
     );
   });
 
@@ -1439,64 +1611,76 @@ describe('recipes', () => {
 
   it('rejects a recipe keyed on `title` instead of `name`', async () => {
     const { name, ...rest } = validRecipe();
-    await assertFails(as(OWNER).doc('recipes/r1').set({ ...rest, title: 'Sheet Pan Salmon' }));
+    await assertFails(
+      as(OWNER)
+        .doc('recipes/r1')
+        .set({ ...rest, title: 'Sheet Pan Salmon' })
+    );
   });
 
   it('accepts the document the Add Recipe form writes', async () => {
     await assertSucceeds(
-      as(OWNER).doc('recipes/from-the-form').set(
-        validRecipe({
-          ingredients: [{ name: 'salmon', quantity: 2, unit: 'fillet', normalized: 'salmon' }],
-          instructions: ['Heat the oven to 220C.', 'Roast for 15 minutes.'],
-          prepTime: 5,
-          cookTime: 15,
-          imageUrl: 'https://storage.test/recipes/r1/salmon.jpg',
-          createdBy: OWNER,
-        })
-      )
+      as(OWNER)
+        .doc('recipes/from-the-form')
+        .set(
+          validRecipe({
+            ingredients: [{ name: 'salmon', quantity: 2, unit: 'fillet', normalized: 'salmon' }],
+            instructions: ['Heat the oven to 220C.', 'Roast for 15 minutes.'],
+            prepTime: 5,
+            cookTime: 15,
+            imageUrl: 'https://storage.test/recipes/r1/salmon.jpg',
+            createdBy: OWNER,
+          })
+        )
     );
   });
 
   it('accepts the document the legacy sync writes', async () => {
     await assertSucceeds(
-      as(OWNER).doc('recipes/from-the-sync').set(
-        validRecipe({
-          source: 'legacy',
-          legacyId: 'lets-eat-abc123',
-          sourceId: 'spoonacular-12345',
-          tags: ['dinner', 'legacy', 'spoonacular-instructions'],
-          difficulty: 'medium',
-          prepTime: null,
-          cookTime: 25,
-        })
-      )
+      as(OWNER)
+        .doc('recipes/from-the-sync')
+        .set(
+          validRecipe({
+            source: 'legacy',
+            legacyId: 'lets-eat-abc123',
+            sourceId: 'spoonacular-12345',
+            tags: ['dinner', 'legacy', 'spoonacular-instructions'],
+            difficulty: 'medium',
+            prepTime: null,
+            cookTime: 25,
+          })
+        )
     );
   });
 
   it('accepts a recipe the sync could not write instructions for', async () => {
     await assertSucceeds(
-      as(OWNER).doc('recipes/needs-work').set(
-        validRecipe({
-          source: 'legacy',
-          tags: ['legacy', 'needs-instructions'],
-          instructions: ['Instructions were not available in the original recipe.'],
-        })
-      )
+      as(OWNER)
+        .doc('recipes/needs-work')
+        .set(
+          validRecipe({
+            source: 'legacy',
+            tags: ['legacy', 'needs-instructions'],
+            instructions: ['Instructions were not available in the original recipe.'],
+          })
+        )
     );
   });
 
   it('accepts the seeded recipes seedData writes', async () => {
     await assertSucceeds(
-      as(OWNER).doc('recipes/seeded').set(
-        validRecipe({
-          name: 'Classic Spaghetti Carbonara',
-          source: 'user-created',
-          description: 'Traditional Italian pasta dish',
-          createdBy: OWNER,
-          prepTime: 10,
-          cookTime: 20,
-        })
-      )
+      as(OWNER)
+        .doc('recipes/seeded')
+        .set(
+          validRecipe({
+            name: 'Classic Spaghetti Carbonara',
+            source: 'user-created',
+            description: 'Traditional Italian pasta dish',
+            createdBy: OWNER,
+            prepTime: 10,
+            cookTime: 20,
+          })
+        )
     );
   });
 
@@ -1514,11 +1698,13 @@ describe('recipes', () => {
     await seed((db) => db.doc('recipes/r1').set(recipe));
 
     await assertSucceeds(
-      as(OWNER).doc('recipes/r1').update({
-        servings: 6,
-        instructions: ['Roast at 400F for 20 minutes.'],
-        tags: ['dinner', 'weeknight'],
-      })
+      as(OWNER)
+        .doc('recipes/r1')
+        .update({
+          servings: 6,
+          instructions: ['Roast at 400F for 20 minutes.'],
+          tags: ['dinner', 'weeknight'],
+        })
     );
   });
 

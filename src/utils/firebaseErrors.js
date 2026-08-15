@@ -35,6 +35,21 @@ const bareCode = (code) => (code.includes('/') ? code.slice(code.indexOf('/') + 
  */
 const DEFAULT_ACTION = 'finish that';
 
+/**
+ * A message from one of the tables below, or undefined.
+ *
+ * Plain bracket access reaches Object.prototype, so an error carrying
+ * `code: 'constructor'` or `code: 'toString'` — or a bare code string of the
+ * same, since friendlyError accepts one — looked up a *function*, which is
+ * truthy, and was handed back as the sentence to show a cook. Own properties
+ * only, and only strings.
+ */
+const lookup = (table, key) => {
+  if (!Object.prototype.hasOwnProperty.call(table, key)) return undefined;
+  const message = table[key];
+  return typeof message === 'string' ? message : undefined;
+};
+
 // ---------------------------------------------------------------------------
 // Auth
 //
@@ -61,7 +76,7 @@ export const AUTH_ERROR_MESSAGES = {
 
 /** A sentence for a Firebase Auth error code. Never returns undefined. */
 export const authErrorMessage = (code) =>
-  AUTH_ERROR_MESSAGES[errorCode(code)] || 'An unexpected error occurred. Please try again.';
+  lookup(AUTH_ERROR_MESSAGES, errorCode(code)) || 'An unexpected error occurred. Please try again.';
 
 // ---------------------------------------------------------------------------
 // Cloud Storage
@@ -118,9 +133,11 @@ export const friendlyError = (err, { action = DEFAULT_ACTION, fallback } = {}) =
   const code = errorCode(err);
 
   if (code.startsWith('auth/')) return authErrorMessage(code);
-  if (STORAGE_MESSAGES[code]) return STORAGE_MESSAGES[code];
 
-  const shared = SHARED_MESSAGES[bareCode(code)];
+  const storage = lookup(STORAGE_MESSAGES, code);
+  if (storage) return storage;
+
+  const shared = lookup(SHARED_MESSAGES, bareCode(code));
   if (shared) return shared;
 
   // A callable Function that threw `HttpsError('recipe-not-found', 'why')`
@@ -140,10 +157,26 @@ export const friendlyError = (err, { action = DEFAULT_ACTION, fallback } = {}) =
  * The tells are a bracketed code, a `product/code` token, a stack-ish prefix, or
  * a Firestore document path — all of which mean nobody wrote it for a reader.
  */
-const looksInternal = (message) =>
-  /FirebaseError|\[code=|firestore|firebase|\bat\s+\w+\.\w+|users\/[A-Za-z0-9]+\/|Missing or insufficient/i.test(
-    message
-  );
+const looksInternal = (message) => INTERNAL_TELLS.some((tell) => tell.test(message));
+
+/**
+ * The tells, one per line so each can say what it is for.
+ *
+ * Erring towards the generic template: a curated sentence that trips one of
+ * these loses a little detail, while a raw one that slips through puts an
+ * account id or a backend URL in front of someone who wanted to add milk to
+ * the fridge.
+ */
+const INTERNAL_TELLS = [
+  /FirebaseError|\[code=|firestore|firebase/i, // SDK dumps and product names
+  /Missing or insufficient/i, // the rules rejection, verbatim
+  /users\/[A-Za-z0-9]+\//i, // a document path
+  /\bat\s+\S+\s*\(|\.js:\d+|\bat\s+\w+\.\w+/, // a stack frame, in any of its shapes
+  /https?:\/\//i, // a backend URL, emulator or not
+  /\b[A-Za-z0-9_-]{20,}\b/, // an opaque id: a uid is 28 characters, and no
+  // sentence written for a person contains a
+  // twenty-character unbroken token
+];
 
 // ---------------------------------------------------------------------------
 // Retryability

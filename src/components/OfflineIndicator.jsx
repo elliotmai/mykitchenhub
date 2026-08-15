@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Alert } from 'react-bootstrap';
 import { WifiOff, Wifi } from 'lucide-react';
+import './OfflineIndicator.css';
 
 const OfflineIndicator = () => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -30,15 +31,10 @@ const OfflineIndicator = () => {
   if (isOnline && !showReconnected) return null;
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        zIndex: 1050,
-      }}
-    >
+    // Positioned from OfflineIndicator.css rather than inline. An inline
+    // `bottom: 0` outranks every stylesheet, and on a phone the thing this
+    // banner was landing on top of is the navigation — see that file.
+    <div className="offline-indicator">
       {!isOnline && (
         <Alert
           variant="warning"

@@ -52,7 +52,19 @@ if (changelogStaged && existsSync(configPath)) {
     });
     next = `${today}.${maxN + 1}`;
   }
-  if (current && current !== next) {
+  // A suffix the author picked on purpose is left alone, provided it is dated
+  // today and does not collide with an entry that already shipped.
+  //
+  // Without this the hook forces the *sequential* suffix, which makes parallel
+  // branches fight: each one computes "next" against only the entries its own
+  // branch can see, so a branch deliberately assigned .5 gets rewritten down to
+  // .4 — and then collides the moment .4 lands from somewhere else. Two release
+  // entries sharing a version is not cosmetic: the popup shows entries newer
+  // than the last one a device saw, so the loser is never displayed to anyone.
+  const deliberate =
+    current && (current === today || current.startsWith(`${today}.`)) && !others.includes(current);
+
+  if (current && !deliberate && current !== next) {
     const one = /version:\s*(['"`])[\d.]+\1/;
     writeFileSync(configPath, src.replace(one, `version: '${next}'`));
     git(`add -- "${CONFIG_REL}"`);
