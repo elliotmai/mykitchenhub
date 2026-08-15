@@ -50,6 +50,10 @@ test.describe('analytics', () => {
     // only shows the eight most-bought items, so an item on one purchase can
     // honestly fall off the end of a shared account that other specs keep
     // adding to. Two purchases puts it above everything bought once.
+    //
+    // Two trips through the add-item modal is most of a 60s budget on its own.
+    test.setTimeout(120_000);
+
     await addPricedItem(page, { name, price: 6.5, store: 'Aldi' });
     await addPricedItem(page, { name, price: 5.5, store: 'Costco' });
 
