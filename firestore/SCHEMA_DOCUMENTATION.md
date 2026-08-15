@@ -176,10 +176,16 @@ actually did to their kitchen after the fact
 
 ---
 
-### 3a. `users/{userId}/deliveries` Subcollection
+### 3c. `users/{userId}/deliveries` Subcollection
 
 **Purpose:** History of HelloFresh boxes received, and the audit trail for what
 each one added to the kitchen (roadmap 5.3)
+
+**This is the delivery record only.** Logging a box also writes one `inventory`
+document per ingredient and one **`mealPlanEntries`** document per meal
+(`source: 'hellofresh'`, cook days 1/3/5) — see section 6. There is no separate
+meal plan collection for HelloFresh; a delivered meal is an ordinary meal plan
+entry, which is what puts it on the user's week.
 
 **Document Structure:**
 ```javascript
@@ -214,46 +220,9 @@ each one added to the kitchen (roadmap 5.3)
 - `mealCount` and `itemsAdded` must be >= 0
 - `createdAt` is immutable after creation
 
----
-
-### 3b. `users/{userId}/mealPlan` Subcollection
-
-**Purpose:** One document per scheduled meal. Written by the HelloFresh delivery
-workflow (roadmap 5.3, which auto-schedules a box's recipes on delivery days 1,
-3, and 5) and by the meal plan UI (roadmap phase 7).
-
-A flat per-meal collection rather than a per-week document, so a date range
-query returns exactly the meals in view and two writers scheduling different
-days never contend on the same document.
-
-**Document Structure:**
-```javascript
-{
-  id: "auto-generated",                   // Firestore auto-ID
-  date: "2026-08-12",                     // Day the meal is planned for (YYYY-MM-DD)
-  mealType: "dinner",                     // "breakfast" | "lunch" | "dinner" | "snack"
-
-  recipeId: "recipe-1",                   // Reference to a recipes document
-  recipeName: "Sweet Chili Chicken",      // Denormalised for rendering
-  servings: 2,                            // Portions planned
-
-  source: "hellofresh",                   // "manual" | "hellofresh" | "ai-generated"
-  status: "planned",                      // "planned" | "cooked" | "skipped"
-  deliveryId: "delivery-1",               // Set when auto-scheduled from a delivery
-  createdAt: Timestamp
-}
-```
-
-**Indexes Required:**
-- Composite: `date` ASC + `mealType` ASC (for the week view)
-
-**Security Rules:**
-- Users can CRUD their own meal plan entries
-- `mealType` must be one of: "breakfast", "lunch", "dinner", "snack"
-- `source` must be one of: "manual", "hellofresh", "ai-generated"
-- `status` must be one of: "planned", "cooked", "skipped"
-- `servings` must be > 0
-- `createdAt` is immutable after creation
+**Related:** the meals a delivery schedules live in
+`users/{userId}/mealPlanEntries` (section 6), each carrying a `deliveryId` back
+to the box it came in.
 
 ---
 
@@ -616,9 +585,6 @@ Collection: recipes
 
 Collection: users/{userId}/deliveries
 - deliveredAt DESC
-
-Collection: users/{userId}/mealPlan
-- date ASC, mealType ASC
 ```
 
 ---

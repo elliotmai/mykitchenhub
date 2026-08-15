@@ -193,23 +193,6 @@ export const makeDelivery = (overrides = {}) => ({
 });
 
 // ---------------------------------------------------------------------------
-// users/{userId}/mealPlan/{entryId}
-// ---------------------------------------------------------------------------
-export const makeMealPlanEntry = (overrides = {}) => ({
-  id: nextId('meal'),
-  date: '2026-08-12',
-  mealType: 'dinner',
-  recipeId: 'hf-recipe-1',
-  recipeName: 'Sweet Chili Chicken',
-  servings: 2,
-  source: 'hellofresh',
-  status: 'planned',
-  deliveryId: 'delivery-1',
-  createdAt: daysFromNow(-1),
-  ...overrides,
-});
-
-// ---------------------------------------------------------------------------
 // users/{userId}/mealPlanEntries/{entryId}
 //
 // One scheduled meal. HelloFresh auto-scheduling and the waste-prevention

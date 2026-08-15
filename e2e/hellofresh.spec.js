@@ -5,16 +5,29 @@
 // auth + firestore only), so the AI response is stubbed at the network
 // boundary with page.route — a real Claude Vision call would cost money and
 // would not be deterministic. Everything downstream of that stub is real:
-// the browser writes the recipe, the inventory items, and the meal plan under
-// the signed-in user's own credentials, so the security rules are exercised.
+// the browser writes the recipe, the inventory items, and the meal plan entries
+// under the signed-in user's own credentials, so the security rules are
+// exercised. The delivery spec then opens the meal plan page and checks the
+// scheduled meals are actually there — the seam between phase 5 and phase 7,
+// and the assertion that catches a delivery writing into a collection the meal
+// plan never reads.
 
 const { test, expect } = require('./fixtures');
 const {
   deliveries,
   hellofreshRecipes,
   inventoryItems,
-  mealPlanEntries,
+  mealPlanEntry,
 } = require('./firestore-admin');
+
+/** `YYYY-MM-DD` in local time — the format meal plan entries use. */
+const toDayKey = (date) => {
+  const pad = (v) => String(v).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+};
+
+/** Cook day 1 is delivery day, and the modal defaults the delivery to today. */
+const TODAY = toDayKey(new Date());
 
 const PHOTO_ROUTE = '**/importHelloFreshFromPhoto';
 const URL_ROUTE = '**/importHelloFreshFromUrl';
@@ -283,17 +296,30 @@ test.describe('hellofresh deliveries', () => {
     expect(item.addedAt).toBeTruthy();
     expect(item.locationId).toBeTruthy();
 
-    // The meal was scheduled, and the delivery recorded.
+    // The meal was scheduled into the collection the meal plan owns.
     await expect
-      .poll(async () => (await mealPlanEntries()).some((meal) => meal.recipeName === recipeName), {
+      .poll(async () => Boolean(await mealPlanEntry(recipeName)), {
+        message: `waiting for "${recipeName}" to be scheduled`,
         timeout: 10_000,
       })
       .toBe(true);
 
-    const meal = (await mealPlanEntries()).find((entry) => entry.recipeName === recipeName);
-    expect(meal).toMatchObject({ mealType: 'dinner', source: 'hellofresh', status: 'planned' });
+    const meal = await mealPlanEntry(recipeName);
+    expect(meal).toMatchObject({
+      date: TODAY,
+      mealType: 'dinner',
+      source: 'hellofresh',
+      status: 'planned',
+      cookedAt: null,
+      batchGroup: null,
+      planId: null,
+    });
     expect(meal.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(meal.servings).toBeGreaterThan(0);
+    // What "Mark as Cooked" on the meal plan page decrements.
+    expect(meal.usesIngredients).toEqual([
+      expect.objectContaining({ name: ingredientName, normalized: ingredientName.toLowerCase() }),
+    ]);
 
     const delivery = (await deliveries()).find((doc) =>
       (doc.recipeNames ?? []).includes(recipeName)
@@ -303,5 +329,16 @@ test.describe('hellofresh deliveries', () => {
 
     // And it shows up in the history on the page.
     await expect(page.getByText(recipeName).first()).toBeVisible();
+
+    // ── The seam ──────────────────────────────────────────────────────────
+    // Firestore holding the right document is only half of it. Open the meal
+    // plan page and confirm the delivered meal is actually on the user's week
+    // — this is what fails if phase 5 writes a collection phase 7 never reads.
+    await page.goto('/meal-plan', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { name: 'Meal Plan' })).toBeVisible();
+
+    const dayCard = page.getByTestId(`day-card-${TODAY}`);
+    await expect(dayCard).toBeVisible();
+    await expect(dayCard.getByText(recipeName)).toBeVisible();
   });
 });

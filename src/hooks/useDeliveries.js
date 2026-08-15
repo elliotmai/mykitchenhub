@@ -7,8 +7,10 @@
 //   3. the box's recipes are scheduled on cook days 1, 3, and 5,
 //   4. the user's HelloFresh schedule is updated so the next box is expected.
 //
-// Meal plan documents are written here, but nothing in this hook renders one —
-// the meal plan UI is roadmap phase 7 and owns that side.
+// The scheduled meals go into `users/{uid}/mealPlanEntries` — the collection
+// phase 7 owns and the meal plan page reads. Nothing here renders a meal; this
+// hook only writes entries in phase 7's documented shape, with
+// `source: 'hellofresh'`, so a delivery shows up on the user's week.
 
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -27,6 +29,8 @@ import { db } from '../services/firebase';
 import { useAuth } from './useAuth';
 import { useIngredientMetadata } from './useIngredientMetadata';
 import { SHELF_LIFE_DEFAULTS } from './useInventory';
+// Day keys are phase 7's format, so reuse its helper rather than a second one.
+import { toDayKey } from './useMealPlan';
 
 /**
  * Cook days within the delivery week. Day 1 is delivery day, then every other
@@ -46,13 +50,12 @@ export const WEEKDAYS = [
   'saturday',
 ];
 
-/** Local YYYY-MM-DD. `toISOString` would shift the date in western timezones. */
-export function toDateKey(date) {
-  const d = date instanceof Date ? date : new Date(date);
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${month}-${day}`;
-}
+/**
+ * Local YYYY-MM-DD — phase 7's day-key format, re-exported so this module's
+ * callers have one name for it. `toISOString` would shift the date west of
+ * Greenwich, which is why the shared helper exists.
+ */
+export const toDateKey = (date) => toDayKey(date instanceof Date ? date : new Date(date));
 
 export function addDays(date, days) {
   const d = new Date(date instanceof Date ? date.getTime() : new Date(date).getTime());
@@ -222,20 +225,39 @@ const useDeliveries = () => {
           })
         );
 
-        // Cook days 1, 3, 5. The meal plan UI (phase 7) renders these.
-        const mealPlanRef = collection(db, 'users', user.uid, 'mealPlan');
+        // Cook days 1, 3, 5, written into the collection the meal plan page
+        // reads. `usesIngredients` is what its "Mark as Cooked" decrements, so
+        // cooking a delivered meal takes the box's own ingredients back out of
+        // the fridge.
+        const mealPlanEntriesRef = collection(db, 'users', user.uid, 'mealPlanEntries');
         await Promise.all(
           recipes.map((recipe, index) =>
-            addDoc(mealPlanRef, {
+            addDoc(mealPlanEntriesRef, {
               date: toDateKey(addDays(deliveryDate, cookDayOffset(index))),
               mealType: 'dinner',
-              recipeId: recipe.id,
+              recipeId: recipe.id ?? null,
               recipeName: recipe.name ?? '',
               servings: Number(recipe.servings) > 0 ? Number(recipe.servings) : 2,
-              source: 'hellofresh',
               status: 'planned',
-              deliveryId: deliveryRef.id,
+              source: 'hellofresh',
               createdAt: serverTimestamp(),
+              cookedAt: null,
+              usesIngredients: (recipe.ingredients ?? [])
+                .filter((ingredient) => ingredient?.name)
+                .map((ingredient) => ({
+                  name: ingredient.name,
+                  normalized: String(ingredient.normalized ?? ingredient.name)
+                    .toLowerCase()
+                    .trim(),
+                  quantity: Number(ingredient.quantity) > 0 ? Number(ingredient.quantity) : 1,
+                  unit: ingredient.unit ?? '',
+                })),
+              batchGroup: null,
+              notes: '',
+              planId: null,
+              // Not part of phase 7's shape, but harmless extra provenance:
+              // it links a scheduled meal back to the box it came in.
+              deliveryId: deliveryRef.id,
             })
           )
         );

@@ -93,19 +93,6 @@ const validDelivery = (overrides = {}) => ({
   ...overrides,
 });
 
-const validMealPlanEntry = (overrides = {}) => ({
-  date: '2026-08-12',
-  mealType: 'dinner',
-  recipeId: 'recipe-1',
-  recipeName: 'Sweet Chili Chicken',
-  servings: 2,
-  source: 'hellofresh',
-  status: 'planned',
-  deliveryId: 'delivery-1',
-  createdAt: new Date().toISOString(),
-  ...overrides,
-});
-
 const validRecipe = (overrides = {}) => ({
   name: 'Sheet Pan Salmon',
   ingredients: [{ name: 'salmon', quantity: 2, unit: 'fillet' }],
@@ -498,114 +485,6 @@ describe('hellofresh deliveries', () => {
 
   it('lets an owner delete a delivery logged by mistake', async () => {
     await seed((db) => db.doc(path(OWNER)).set(validDelivery()));
-    await assertSucceeds(as(OWNER).doc(path(OWNER)).delete());
-  });
-});
-
-// ---------------------------------------------------------------------------
-// users/{userId}/mealPlan/{entryId}
-// ---------------------------------------------------------------------------
-
-describe('meal plan entries', () => {
-  const path = (uid, id = 'meal-1') => `users/${uid}/mealPlan/${id}`;
-
-  it('accepts the document shape the delivery workflow schedules', async () => {
-    await assertSucceeds(as(OWNER).doc(path(OWNER)).set(validMealPlanEntry()));
-  });
-
-  it.each([
-    'date',
-    'mealType',
-    'recipeId',
-    'recipeName',
-    'servings',
-    'source',
-    'status',
-    'createdAt',
-  ])('requires %s', async (field) => {
-    const doc = validMealPlanEntry();
-    delete doc[field];
-    await assertFails(as(OWNER).doc(path(OWNER)).set(doc));
-  });
-
-  it.each(['breakfast', 'lunch', 'dinner', 'snack'])(
-    'accepts meal type "%s"',
-    async (mealType) => {
-      await assertSucceeds(
-        as(OWNER).doc(path(OWNER, `m-${mealType}`)).set(validMealPlanEntry({ mealType }))
-      );
-    }
-  );
-
-  it('rejects an unrecognised meal type', async () => {
-    await assertFails(as(OWNER).doc(path(OWNER)).set(validMealPlanEntry({ mealType: 'brunch' })));
-  });
-
-  it.each(['manual', 'hellofresh', 'ai-generated'])('accepts source "%s"', async (source) => {
-    await assertSucceeds(
-      as(OWNER).doc(path(OWNER, `m-${source}`)).set(validMealPlanEntry({ source }))
-    );
-  });
-
-  it('rejects an unrecognised source', async () => {
-    await assertFails(as(OWNER).doc(path(OWNER)).set(validMealPlanEntry({ source: 'seed' })));
-  });
-
-  it.each(['planned', 'cooked', 'skipped'])('accepts status "%s"', async (status) => {
-    await assertSucceeds(
-      as(OWNER).doc(path(OWNER, `m-${status}`)).set(validMealPlanEntry({ status }))
-    );
-  });
-
-  it('rejects an unrecognised status', async () => {
-    await assertFails(as(OWNER).doc(path(OWNER)).set(validMealPlanEntry({ status: 'maybe' })));
-  });
-
-  it('requires a positive serving count', async () => {
-    await assertFails(as(OWNER).doc(path(OWNER)).set(validMealPlanEntry({ servings: 0 })));
-    await assertFails(as(OWNER).doc(path(OWNER, 'm2')).set(validMealPlanEntry({ servings: -2 })));
-  });
-
-  it('lets an owner move a meal to another day and mark it cooked', async () => {
-    const entry = validMealPlanEntry();
-    await seed((db) => db.doc(path(OWNER)).set(entry));
-
-    await assertSucceeds(
-      as(OWNER).doc(path(OWNER)).update({
-        createdAt: entry.createdAt,
-        servings: entry.servings,
-        date: '2026-08-14',
-        status: 'cooked',
-      })
-    );
-  });
-
-  it('refuses to let the created date be rewritten', async () => {
-    const entry = validMealPlanEntry();
-    await seed((db) => db.doc(path(OWNER)).set(entry));
-
-    await assertFails(
-      as(OWNER)
-        .doc(path(OWNER))
-        .update({ createdAt: '1999-01-01', servings: entry.servings, status: 'cooked' })
-    );
-  });
-
-  it("keeps one user out of another user's meal plan", async () => {
-    await seed((db) => db.doc(path(OWNER)).set(validMealPlanEntry()));
-
-    await assertFails(as(INTRUDER).doc(path(OWNER)).get());
-    await assertFails(as(INTRUDER).doc(path(OWNER, 'new')).set(validMealPlanEntry()));
-    await assertFails(as(INTRUDER).doc(path(OWNER)).delete());
-  });
-
-  it('keeps a signed-out visitor out entirely', async () => {
-    await seed((db) => db.doc(path(OWNER)).set(validMealPlanEntry()));
-    await assertFails(anon().doc(path(OWNER)).get());
-  });
-
-  it('lets an owner remove a scheduled meal', async () => {
-    await seed((db) => db.doc(path(OWNER)).set(validMealPlanEntry()));
     await assertSucceeds(as(OWNER).doc(path(OWNER)).delete());
   });
 });

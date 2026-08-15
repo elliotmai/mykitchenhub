@@ -252,7 +252,7 @@ describe('logging a delivery', () => {
     const paths = fs.addDoc.mock.calls.map(([ref]) => fs.pathOf(ref));
     expect(paths).toContain(`users/${uid()}/deliveries`);
     expect(paths).toContain(`users/${uid()}/inventory`);
-    expect(paths).toContain(`users/${uid()}/mealPlan`);
+    expect(paths).toContain(`users/${uid()}/mealPlanEntries`);
     // And the schedule is remembered for the next box.
     expect(fs.pathOf(fs.updateDoc.mock.calls[0][0])).toBe(`users/${uid()}`);
   });

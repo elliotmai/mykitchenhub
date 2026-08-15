@@ -21,6 +21,7 @@ import {
   asDocs,
   makeDelivery,
   makeHelloFreshRecipe,
+  makeMealPlanEntry,
   makeUserProfile,
 } from '../../test-utils/factories';
 
@@ -294,7 +295,7 @@ describe('addDelivery', () => {
   it('schedules the meals on cook days 1, 3, and 5', async () => {
     await add();
 
-    const meals = writesTo(`users/${uid}/mealPlan`);
+    const meals = writesTo(`users/${uid}/mealPlanEntries`);
     expect(meals.map((meal) => meal.date)).toEqual(['2026-08-14', '2026-08-16', '2026-08-18']);
     expect(meals.map((meal) => meal.recipeName)).toEqual([
       'Sweet Chili Chicken',
@@ -303,26 +304,57 @@ describe('addDelivery', () => {
     ]);
   });
 
-  it('writes meal plan entries in the shape the rules require', async () => {
+  it('writes entries the meal plan page can actually read', async () => {
     await add();
 
-    writesTo(`users/${uid}/mealPlan`).forEach((meal) => {
+    // Every key phase 7's factory produces, so a delivered meal renders on the
+    // week exactly like one scheduled by hand.
+    const reference = makeMealPlanEntry();
+    const ignored = new Set(['id']);
+    const expectedKeys = Object.keys(reference).filter((key) => !ignored.has(key));
+
+    writesTo(`users/${uid}/mealPlanEntries`).forEach((meal) => {
+      expectedKeys.forEach((key) => expect(meal).toHaveProperty(key));
+
       expect(meal).toMatchObject({
         mealType: 'dinner',
         source: 'hellofresh',
         status: 'planned',
+        cookedAt: null,
+        batchGroup: null,
+        planId: null,
       });
       expect(meal.recipeId).toBeTruthy();
       expect(meal.servings).toBeGreaterThan(0);
       expect(meal.createdAt).toEqual({ __sentinel: 'serverTimestamp' });
+      // The rules match `date` against this exact pattern.
       expect(meal.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     });
+  });
+
+  it("fills in usesIngredients, so Mark as Cooked knows what to decrement", async () => {
+    await add();
+
+    const [meal] = writesTo(`users/${uid}/mealPlanEntries`);
+
+    expect(meal.usesIngredients).toEqual([
+      { name: 'Chicken Breast', normalized: 'chicken breast', quantity: 2, unit: 'unit' },
+      { name: 'Garlic', normalized: 'garlic', quantity: 2, unit: 'clove' },
+    ]);
+  });
+
+  it('never schedules into the collection nothing reads', async () => {
+    await add();
+
+    // The regression this guards: writing users/{uid}/mealPlan means a
+    // delivery silently fails to appear on the user's week.
+    expect(writesTo(`users/${uid}/mealPlan`)).toEqual([]);
   });
 
   it('links every scheduled meal and stored item back to the delivery', async () => {
     await add();
 
-    const meals = writesTo(`users/${uid}/mealPlan`);
+    const meals = writesTo(`users/${uid}/mealPlanEntries`);
     const items = writesTo(`users/${uid}/inventory`);
     const deliveryIds = new Set([...meals, ...items].map((doc) => doc.deliveryId));
 
@@ -365,7 +397,7 @@ describe('addDelivery', () => {
 
     expect(outcome.success).toBe(true);
     expect(writesTo(`users/${uid}/inventory`)).toHaveLength(0);
-    expect(writesTo(`users/${uid}/mealPlan`)).toHaveLength(0);
+    expect(writesTo(`users/${uid}/mealPlanEntries`)).toHaveLength(0);
     expect(writesTo(`users/${uid}/deliveries`)[0].mealCount).toBe(0);
   });
 
