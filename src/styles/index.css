@@ -23,6 +23,9 @@
    -------------------------------------------------------------------------- */
 @import './design-system.css';
 
+/* Minimum tap sizes on phones and tablets — kept honest by e2e/mobile.spec.js. */
+@import './touch-targets.css';
+
 /* --------------------------------------------------------------------------
    3. Typography — roadmap 9.2
    

@@ -87,7 +87,7 @@ const AppRoutes = () => {
         <Route
           element={
             <ProtectedRoute>
-              <AppLayout alertCount={0} />
+              <AppLayout />
             </ProtectedRoute>
           }
         >
