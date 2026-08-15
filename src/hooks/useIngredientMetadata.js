@@ -60,6 +60,18 @@ const ingredientShelfLife = {
   // Add more as needed...
 };
 
+// These two are pure lookups over the table above — nothing about them depends
+// on a render. Defining them at module scope gives them a stable identity, so
+// `useIngredientAutocomplete` can memoize on the search term alone.
+const getAllIngredients = () => {
+  return Object.keys(ingredientShelfLife).sort();
+};
+
+const searchIngredients = (searchTerm) => {
+  const term = searchTerm.toLowerCase().trim();
+  return getAllIngredients().filter((ingredient) => ingredient.includes(term));
+};
+
 /**
  * Custom hook for ingredient metadata
  */
@@ -91,15 +103,6 @@ export function useIngredientMetadata() {
     const expirationDate = new Date(purchaseDate);
     expirationDate.setDate(expirationDate.getDate() + shelfLifeDays);
     return expirationDate;
-  };
-
-  const getAllIngredients = () => {
-    return Object.keys(ingredientShelfLife).sort();
-  };
-
-  const searchIngredients = (searchTerm) => {
-    const term = searchTerm.toLowerCase().trim();
-    return getAllIngredients().filter((ingredient) => ingredient.includes(term));
   };
 
   const getDaysUntilExpiration = (expirationDate) => {
@@ -155,8 +158,8 @@ export function useIngredientMetadata() {
  * Hook for autocomplete suggestions
  */
 export function useIngredientAutocomplete(searchTerm) {
-  const { searchIngredients } = useIngredientMetadata();
-
+  // `searchIngredients` is the module-level function, so the memo genuinely
+  // depends on the search term alone.
   const suggestions = useMemo(() => {
     if (!searchTerm || searchTerm.length < 2) return [];
     return searchIngredients(searchTerm).slice(0, 10); // Limit to 10 suggestions
