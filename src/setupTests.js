@@ -37,6 +37,7 @@ jest.mock('firebase/auth', () => require('./test-utils/mocks/auth'));
 jest.mock('firebase/firestore', () => require('./test-utils/mocks/firestore'));
 jest.mock('firebase/storage', () => require('./test-utils/mocks/storage'));
 jest.mock('firebase/functions', () => require('./test-utils/mocks/functions'));
+jest.mock('firebase/analytics', () => require('./test-utils/mocks/analytics'));
 
 // ---------------------------------------------------------------------------
 // jsdom polyfills
@@ -119,4 +120,5 @@ beforeEach(() => {
   require('./test-utils/mocks/firestore').__reset();
   require('./test-utils/mocks/storage').__reset();
   require('./test-utils/mocks/functions').__reset();
+  require('./test-utils/mocks/analytics').__reset();
 });

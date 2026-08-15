@@ -97,7 +97,13 @@ rather than guessing a day.
 **Security Rules:**
 - Users can CRUD their own storage locations
 - Cannot delete locations where `isDefault: true`
-- `type` must be one of: "fridge", "freezer", "pantry"
+- `isDefault` is immutable — without that, the delete guard above is bypassable
+  in two writes. There is no supported way to promote or demote a default
+  location from the client; the edit form only sends `label`, `type`, `icon`
+  and `color`.
+- `type` must be one of: "fridge", "freezer", "pantry", on create **and** update
+- The full required field set is re-checked on update, so an edit cannot leave
+  the document without the `label` the UI renders
 
 ---
 
@@ -165,8 +171,15 @@ their stored value matches what the lookup would produce.
 **Security Rules:**
 - Users can CRUD their own inventory items
 - `quantity` must be > 0 on create, >= 0 on update
-- `locationType` must be one of: "fridge", "freezer", "pantry"
-- `source` must be one of: "manual", "hellofresh", "csv-import", "seed"
+- `locationType` must be one of: "fridge", "freezer", "pantry", on create **and**
+  update — freezing an item goes through the update rule, so the enum has to
+  hold there too
+- `source` must be one of: "manual", "hellofresh", "csv-import", "seed", on
+  create **and** update
+- The full required field set is re-checked on update: `request.resource` is the
+  resulting document, so without this an edit could delete `normalized` and take
+  the item out of every ingredient match
+- `addedAt` is immutable
 
 ---
 
@@ -263,8 +276,11 @@ the app. Adding `preferences.timeZone` is the fix when that matters.
 
 **Security Rules:**
 - Owner-only read, create, update and delete
-- `type` must be one of: "waste-alert", "meal-plan", "system"
+- `type` must be one of: "waste-alert", "meal-plan", "system", on create **and**
+  update
 - `createdAt` cannot be rewritten by an update (marking as read must not restamp it)
+- The required field set is re-checked on update, so marking one read cannot
+  empty out the `title`/`body` the notification list renders
 
 ---
 
@@ -327,10 +343,12 @@ fields, and the rest of the `source` vocabulary.
 
 **Security Rules:**
 - Users can CRUD their own deliveries
-- `source` must be `"hellofresh"`
+- `source` must be `"hellofresh"`, on create **and** update
 - `status` must be one of: "scheduled", "received", "cooked"
-- `mealCount` and `itemsAdded` must be >= 0
+- `mealCount` and `itemsAdded` must be >= 0, on create **and** update
 - `createdAt` is immutable after creation
+- The required field set is re-checked on update, so marking a box cooked cannot
+  strip the counts the history list renders
 
 **Related:** the meals a delivery schedules live in
 `users/{userId}/mealPlanEntries` (section 6), each carrying a `deliveryId` back
@@ -412,6 +430,17 @@ even unchanged — is rejected, so the edit form disables the name field.
 - Authenticated users can create recipes
 - Users can update recipes (e.g., increment timesCooked)
 - Users can only delete recipes where `source: "user-created"`
+- **`source` is immutable.** The delete rule trusts it, so an update that could
+  rewrite it would be a two-write route to deleting any recipe at all —
+  including the ~500 imported from "Let's Eat". `src/hooks/useRecipes.js` has
+  always stripped `source` from patches (`IMMUTABLE_FIELDS`); the rule is that
+  contract enforced rather than assumed.
+- `createdBy` is immutable, and may legitimately be absent — legacy, synced and
+  seeded recipes carry none, so the rule compares
+  `get('createdBy', null)` on both sides rather than requiring the field
+- `difficulty`, `servings` and `timesCooked` are validated on update as well as
+  create, and the required field set is re-checked so an edit cannot leave a
+  recipe without its `ingredients` or `instructions`
 
 ---
 
@@ -546,9 +575,12 @@ await addDoc(collection(db, 'users', uid, 'mealPlanEntries'), {
 - `status` must be one of: "planned", "cooked", "skipped". A `skipped` meal is
   settled like a cooked one: it buys no groceries, joins no batch cooking
   session, and leaves its day open to the planner
-- `source` must be one of: "manual", "ai", "hellofresh", "waste-prevention"
+- `source` must be one of: "manual", "ai", "hellofresh", "waste-prevention", on
+  create **and** update
 - `servings` must be > 0
 - `createdAt` cannot be rewritten; `date` may change (drag-and-drop rescheduling)
+- The required field set is re-checked on update, so rescheduling a meal cannot
+  drop the `recipeName` the day card renders
 
 ---
 
@@ -603,6 +635,9 @@ holds only what belongs to the week as a whole.
   **omits** `createdAt` entirely — sending a fresh `serverTimestamp()` fails
   `request.resource.data.createdAt == resource.data.createdAt` and the plan can
   never be regenerated.
+- Regenerating a week rewrites most of the document, so the four required fields
+  are re-checked on update too. That is a check on the *resulting* document, so
+  the merge write above still passes: `createdAt` survives from the stored one.
 
 ---
 

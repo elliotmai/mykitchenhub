@@ -1,274 +1,243 @@
 # MyKitchenHub
 
-Recipe and inventory management PWA. See [CONTRIBUTING.md](./CONTRIBUTING.md) for
-the working agreement and [TESTING.md](./TESTING.md) for the four test suites.
+A progressive web app for running a household kitchen: what is in the fridge,
+what is about to go off, what to cook with it, and what that has been costing.
 
-## Environment variables
+It is a React single-page app on Firebase — Authentication, Firestore, Cloud
+Storage and Cloud Functions — installable to a phone home screen and usable
+offline for reading.
 
-### Frontend (`.env`, prefixed so CRA inlines them)
-
-| Variable | Purpose |
+| | |
 | --- | --- |
-| `REACT_APP_FIREBASE_API_KEY` … `_APP_ID` | Firebase web config |
-| `REACT_APP_FIREBASE_FUNCTIONS_URL` | Base URL for Cloud Functions |
-| `REACT_APP_USE_EMULATORS` | `true` points the build at local emulators |
-
-### Cloud Functions
-
-| Variable | Required for | Purpose |
-| --- | --- | --- |
-| `SPOONACULAR_API_KEY` | Legacy sync | Recipe lookups. Without it the sync skips straight to Claude. |
-| `ANTHROPIC_API_KEY` | Legacy sync | Writing instructions Spoonacular could not supply. |
-| `ANTHROPIC_MODEL` | optional | Overrides the model (default `claude-opus-5`). Change `PRICE_PER_MTOK` in `functions/src/recipes/claudeInstructions.js` alongside it, or cost tracking drifts. |
-| `LEGACY_FIREBASE_SERVICE_ACCOUNT` | Legacy sync | The legacy "Let's Eat" service account, as JSON or base64-encoded JSON. |
-| `LEGACY_FIREBASE_PROJECT_ID` / `_CLIENT_EMAIL` / `_PRIVATE_KEY` | Legacy sync | The same credential in three parts, if you prefer. Used only when `LEGACY_FIREBASE_SERVICE_ACCOUNT` is unset. |
-| `LEGACY_SYNC_MAX_COST_USD` | optional | Total spend ceiling across all sync runs (default `10`). |
-| `SYNC_ADMIN_UIDS` | optional | Comma-separated uids allowed to start a sync. Unset means any signed-in user. |
-
-Credentials are read from `process.env` or Firebase Functions config — never from
-the service-account JSON files in `functions/`. To set them as deployed config:
-
-```bash
-firebase functions:config:set \
-  legacy.service_account="$(base64 -w0 path/to/lets-eat-service-account.json)"
-```
-
-## Legacy recipe sync
-
-Imports the "Let's Eat" library into the `recipes` collection. **A live run costs
-money**: each recipe without instructions is looked up in Spoonacular, and
-anything unmatched is written by Claude.
-
-It is built to be run in small, resumable batches rather than all at once:
-
-- Each call processes at most `limit` recipes (default 10, hard cap 100).
-- Progress and a resume cursor live in `syncMetadata/legacy-recipe-sync`, so the
-  next call picks up where the last one stopped.
-- Spend is checked against `LEGACY_SYNC_MAX_COST_USD` *before* every paid call,
-  and the run stops cleanly at the ceiling.
-- Setting `enabled: false` on the metadata document refuses live runs entirely.
-
-**To run it:** open **Recipes → Legacy Sync** while signed in. Leave *Dry run*
-on for the first pass — it reads the legacy database and reports what it would
-import without writing or spending anything. Turn it off to import for real,
-one batch at a time, watching the running cost. *Start over* rewinds the cursor
-to the first recipe.
+| **Using the app** | [docs/USER_GUIDE.md](./docs/USER_GUIDE.md) |
+| **Working on the code** | [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md) · [CONTRIBUTING.md](./CONTRIBUTING.md) · [TESTING.md](./TESTING.md) |
+| **When something is broken** | [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) |
+| **Going to production** | [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) |
+| **First-run data** | [docs/INITIAL_DATA_SETUP.md](./docs/INITIAL_DATA_SETUP.md) |
+| **The data contract** | [firestore/SCHEMA_DOCUMENTATION.md](./firestore/SCHEMA_DOCUMENTATION.md) |
 
 ---
 
-## Create React App reference
+## What it does
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+- **Inventory** across as many storage locations as you keep food in, with an
+  expiry date worked out per ingredient and per location — chicken gets days in
+  the fridge, rice gets years in the pantry.
+- **Bulk import** from a spreadsheet, validated row by row before anything is
+  written.
+- **A shared recipe library** you can search by name, tag or ingredient, with
+  the ingredients you already have ticked off.
+- **HelloFresh import** from a photo of the recipe card, from a link, or by
+  hand — and a delivery log that puts the box's ingredients into your fridge
+  and its meals onto your week.
+- **Waste alerts**: what is about to go off, what the freezer would save and by
+  how many days, and which recipes would use it up tonight.
+- **Meal planning** for the week, either by hand or generated around what is
+  closest to expiring, with a shopping list that knows what you already have.
+- **A dashboard and analytics**: what you buy, what it costs, and where.
+
+[docs/USER_GUIDE.md](./docs/USER_GUIDE.md) walks through each of these.
+
+---
+
+## Running it locally
+
+You need **Node.js 20** — what CI runs and what the deployed Cloud Functions
+runtime is. The rules and end-to-end suites also need **Java 21**: the Firebase
+emulators are JVM processes.
+
+```bash
+git clone https://github.com/elliotmai/mykitchenhub.git
+cd mykitchenhub
+npm install                     # frontend
+npm install --prefix functions  # Cloud Functions
+npm install --prefix firestore  # emulators + rules tests
+```
+
+Three `package.json` files, three installs. `npm install` at the root does not
+reach the other two, and a missing one shows up as `firebase: not found` or a
+Cloud Functions suite that will not start.
+
+Then create your environment file:
+
+```bash
+cp .env.example .env
+```
+
+and fill in the six `REACT_APP_FIREBASE_*` values from the Firebase console
+(**Project settings → General → Your apps → SDK setup and configuration**). If
+you do not have a Firebase project yet, [firebase-setup-guide.md](./firebase-setup-guide.md)
+covers creating one.
+
+```bash
+npm start          # http://localhost:3000, against the real project in .env
+```
+
+### …without touching the real project
+
+Point the build at the local emulators instead. Nothing you do reaches the
+Firebase project, and Analytics stays off:
+
+```bash
+npm install --prefix firestore     # provides the firebase CLI
+firestore/node_modules/.bin/firebase emulators:start --only auth,firestore,functions,storage
+```
+
+and in a second terminal:
+
+```bash
+REACT_APP_USE_EMULATORS=true npm start
+```
+
+The emulator UI is on <http://localhost:4000>. Ports are set in
+[firebase.json](./firebase.json): auth 9099, firestore 8080, functions 5001,
+storage 9199.
+
+### Checking your work
+
+```bash
+npm run validate        # lint + format + unit tests + production build
+npm run test:functions  # Cloud Functions
+npm run test:rules      # security rules, against the emulator
+npm run test:e2e        # Playwright, real build against real emulators
+```
+
+[TESTING.md](./TESTING.md) explains what each suite is for and how to write for
+it.
+
+---
 
 ## Environment variables
 
-Every credential is read from the environment — never hardcoded, never
-committed. See [CONTRIBUTING.md](./CONTRIBUTING.md#3-secrets-and-external-services)
-for the rules.
+Every credential is read from the environment. None are committed, and
+`.github/scripts/check-secrets.mjs` fails CI if one ever is.
 
-### Frontend (`.env`, prefixed `REACT_APP_`)
-Every credential is read from the environment — none are committed. Frontend
-values must be prefixed `REACT_APP_` to reach the bundle.
+### Frontend — `.env`, or the build environment
 
-### Frontend (`.env`)
+Create React App only exposes variables prefixed `REACT_APP_`, and it inlines
+them into the bundle at build time. **Everything in this table ends up readable
+in the shipped JavaScript.** That is expected: the Firebase web API key
+identifies the project rather than authorising anything. Firestore security
+rules are what protect the data.
 
-| Variable | Required | Purpose |
+| Variable | Required | Without it |
 | --- | --- | --- |
-| `REACT_APP_FIREBASE_API_KEY` | yes | Firebase web config |
-| `REACT_APP_FIREBASE_AUTH_DOMAIN` | yes | Firebase web config |
-| `REACT_APP_FIREBASE_PROJECT_ID` | yes | Firebase web config |
-| `REACT_APP_FIREBASE_STORAGE_BUCKET` | yes | Firebase web config |
-| `REACT_APP_FIREBASE_MESSAGING_SENDER_ID` | yes | Firebase web config |
-| `REACT_APP_FIREBASE_APP_ID` | yes | Firebase web config |
-| `REACT_APP_FIREBASE_FUNCTIONS_URL` | yes | Base URL for callable/HTTP functions |
-| `REACT_APP_USE_EMULATORS` | no | `true` points the app at local emulators |
+| `REACT_APP_FIREBASE_API_KEY` | yes | The app cannot reach Firebase at all; the console logs which values are missing |
+| `REACT_APP_FIREBASE_AUTH_DOMAIN` | yes | ” |
+| `REACT_APP_FIREBASE_PROJECT_ID` | yes | ” |
+| `REACT_APP_FIREBASE_STORAGE_BUCKET` | yes | ” |
+| `REACT_APP_FIREBASE_MESSAGING_SENDER_ID` | yes | ” |
+| `REACT_APP_FIREBASE_APP_ID` | yes | ” |
+| `REACT_APP_FIREBASE_FUNCTIONS_URL` | in practice | Signup falls back to building the profile from the browser instead of calling `onUserCreated`, and HelloFresh photo and link import are switched off — the page says so and offers manual entry |
+| `REACT_APP_FIREBASE_MEASUREMENT_ID` | no | Firebase Analytics never starts. Nothing else changes |
+| `REACT_APP_USE_EMULATORS` | no | `true` points the app at the local emulators, and suppresses Analytics. Leave it unset for any real build |
 
-### Cloud Functions (`functions/.env` or `firebase functions:config`)
+### Cloud Functions — `functions/.env`, or Firebase Functions config
 
-| Variable | Required | Purpose |
+`functions/index.js` calls `dotenv.config()`, so a gitignored `functions/.env`
+works locally. Deployed, set them as function environment variables; the two
+Anthropic paths and the legacy credentials also accept the older
+`firebase functions:config:set` style as a fallback.
+
+| Variable | Required for | Without it |
 | --- | --- | --- |
-| `ANTHROPIC_API_KEY` | for AI features | Claude API, used by recipe/meal-plan generation |
-| `SPOONACULAR_API_KEY` | for recipe sync | Spoonacular instruction lookup |
-| `LEGACY_FIREBASE_SERVICE_ACCOUNT_PATH` | for the legacy sync | Path to the "Let's Eat" service account |
+| `ANTHROPIC_API_KEY` | HelloFresh photo import, AI meal plans, legacy sync instructions | Photo import returns `vision-not-configured` and the UI offers link or manual entry. Meal plan generation still builds a week from what is expiring and tells the cook the AI was skipped. The legacy sync tags recipes `needs-instructions` instead of writing them. Nothing fails hard. Also readable as `anthropic.key` in Functions config |
+| `SPOONACULAR_API_KEY` | Legacy recipe sync | Instruction lookup is skipped entirely and the sync goes straight to Claude |
+| `ANTHROPIC_MODEL` | no | Defaults to `claude-opus-5` for legacy-sync instruction writing. If you change it, change `PRICE_PER_MTOK` in `functions/src/recipes/claudeInstructions.js` too, or the sync's cost ceiling is measuring the wrong thing |
+| `LEGACY_FIREBASE_SERVICE_ACCOUNT` | Legacy recipe sync | The sync cannot connect to the "Let's Eat" project and fails with a message naming the missing variable. Accepts raw JSON or base64-encoded JSON. Also readable as `legacy.service_account` in Functions config |
+| `LEGACY_FIREBASE_PROJECT_ID`, `_CLIENT_EMAIL`, `_PRIVATE_KEY` | Legacy recipe sync | The same credential in three parts. Used only when `LEGACY_FIREBASE_SERVICE_ACCOUNT` is unset |
+| `LEGACY_SYNC_MAX_COST_USD` | no | Total spend ceiling across every sync run. Defaults to `10` |
+| `SYNC_ADMIN_UIDS` | no | Comma-separated uids allowed to start a sync. **Unset means any signed-in user can start one** — set it before launch |
 
-#### Daily waste alerts by SMS (roadmap 6.2)
+Credentials are read from `process.env` or Functions config only. The
+service-account JSON files in `functions/` are never read by application code;
+they are being rotated out of band and must not be used or copied.
 
-**No SMS provider is configured, and the app works fine without one.** The daily
-waste alert always writes an in-app notification, which is what the Waste Alerts
-page shows. Texts are an optional extra on top: with no key, `sendDailyWasteAlerts`
-logs that it skipped the text and carries on — it never fails, and it never
-blocks the in-app alert.
+### Daily waste alerts by SMS — optional, and currently off
 
-To switch texting on, set these in the Cloud Functions environment:
+**There is no SMS provider key for this project, and the app is designed to work
+without one.** The daily alert always writes an in-app notification, which is
+what the Waste Alerts page shows. A text is an extra on top: with no key
+configured, `sendDailyWasteAlerts` logs that it skipped the text and carries on.
+It never fails, and it never costs the cook their alert.
+
+To switch texting on, see
+[docs/INITIAL_DATA_SETUP.md](./docs/INITIAL_DATA_SETUP.md#3-configuring-sms-alerts).
 
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
-| `SMS_PROVIDER` | no | `textbelt` | Which provider to use: `textbelt` or `zixlow` |
-| `TEXTBELT_API_KEY` | to send via Textbelt | — | Textbelt API key |
+| `SMS_PROVIDER` | no | `textbelt` | `textbelt` or `zixlow`. An unrecognised name logs a warning and skips the text |
+| `TEXTBELT_API_KEY` | to send via Textbelt | — | Textbelt credential |
 | `TEXTBELT_API_URL` | no | `https://textbelt.com/text` | Override, e.g. for a sandbox |
-| `ZIXLOW_API_KEY` | to send via Zixlow | — | Zixlow API key |
+| `ZIXLOW_API_KEY` | to send via Zixlow | — | Zixlow credential |
 | `ZIXLOW_API_URL` | no | `https://api.zixlow.com/v1/sms/send` | Override, e.g. for a sandbox |
 | `ZIXLOW_SENDER_ID` | no | `MyKitchenHub` | Sender name shown on the text |
 
-```bash
-# Example: enable Textbelt for the deployed functions
-firebase functions:config:set sms.provider="textbelt" sms.textbelt_key="YOUR_KEY"
-# …or, for local development, add to functions/.env (which is gitignored):
-#   SMS_PROVIDER=textbelt
-#   TEXTBELT_API_KEY=YOUR_KEY
-```
+Each cook still opts in individually under **Settings → Waste Alerts**.
 
-Each cook still has to opt in individually under **Settings → Waste Alerts**,
-which sets `preferences.smsAlerts.enabled` and stores the number to text.
-| `REACT_APP_FIREBASE_FUNCTIONS_URL` | no | Base URL of the deployed Cloud Functions, e.g. `https://us-central1-<project>.cloudfunctions.net`. Without it, HelloFresh photo and link import are switched off and the app offers manual recipe entry instead. |
-| `REACT_APP_USE_EMULATORS` | no | Set to `true` to point the app at the local Firebase emulators. |
+### CI
 
-### Cloud Functions (`functions/.env`, or Firebase Functions config)
-
-| Variable | Required | Purpose |
-| --- | --- | --- |
-| `ANTHROPIC_API_KEY` | no | Claude Vision, used to read a photographed HelloFresh recipe card (`importHelloFreshFromPhoto`). Also readable from Firebase Functions config as `anthropic.key`. When absent the function returns a `vision-not-configured` error and the UI falls back to link or manual entry — it never crashes. |
-| `SPOONACULAR_API_KEY` | no | Spoonacular recipe lookups. |
-| `LEGACY_FIREBASE_SERVICE_ACCOUNT_PATH` | no | Path to the "Let's Eat" service account, for the legacy recipe sync. |
-
-Set the Functions config values with:
-
-```bash
-firebase functions:config:set anthropic.key="sk-ant-…"
-```
-
-**Never commit a credential.** `.github/scripts/check-secrets.mjs` runs in CI and
-fails the build on committed keys.
-
-## Available Scripts
-
-In the project directory, you can run:
-
-### `npm start`
-
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
-
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
-
-### `npm test`
-
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
-
-### `npm run build`
-
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
-
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
-
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
-
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
-
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Environment variables
-
-### Cloud Functions (`functions/`)
-
-| Variable | Used by | Required? |
-| --- | --- | --- |
-| `ANTHROPIC_API_KEY` | `generateMealPlan` — AI meal planning (roadmap 7.2) | No. Without it the planner still builds a week from what is expiring in the kitchen and tells the cook the AI was skipped. |
-| `LEGACY_FIREBASE_SERVICE_ACCOUNT_PATH` | `syncLegacyRecipes` | Only for the legacy recipe import |
-
-`ANTHROPIC_API_KEY` is a GitHub Actions secret in CI. For a deployment configured
-the older way, `firebase functions:config:set anthropic.key=...` is read as a
-fallback. Never commit a key or print one in a log.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+CI reads the `REACT_APP_FIREBASE_*` set, `ANTHROPIC_API_KEY` and
+`SPOONACULAR_API_KEY` from GitHub Actions secrets, and falls back to
+placeholders so the build job works on a fork without them. The functions deploy
+workflow additionally uses `FIREBASE_SERVICE_ACCOUNT` and `FIREBASE_TOKEN`.
 
 ---
 
-## CSV bulk import (roadmap 3.3)
+## Scripts
 
-Inventory can be stocked from a spreadsheet instead of one item at a time.
-**Inventory → Import CSV** parses and validates the file in the browser, shows
-which rows will import and what is wrong with the rest, then writes the good
-ones in batches of 500 (Firestore's per-batch limit) and logs the run to
-`users/{uid}/importHistory`.
+| Script | What it does |
+| --- | --- |
+| `npm start` | Development server on port 3000 |
+| `npm run build` | Production build into `build/` |
+| `npm run validate` | Lint, format check, unit tests with coverage, production build |
+| `npm test` | Unit tests in watch mode |
+| `npm run test:ci` | Unit tests once, with coverage, as CI runs them |
+| `npm run test:functions` | Cloud Functions tests |
+| `npm run test:rules` | Firestore security rules against the emulator (needs Java) |
+| `npm run test:e2e` | Builds, starts the emulators, runs Playwright |
+| `npm run test:e2e:ui` | The same in Playwright's interactive UI |
+| `npm run lint` / `lint:fix` | ESLint over `src/` and `e2e/`. A warning fails it — `--max-warnings=0` |
+| `npm run format` / `format:check` | Prettier over `src/`, `e2e/` and the root scripts |
 
-### File format
+---
 
-The first line names the columns. Headings are matched case-insensitively and
-accept common synonyms (`Item`/`Product` for `name`, `Qty`/`Amount` for
-`quantity`); columns we don't recognise are ignored.
+## Repository layout
 
-| Column | Required | Notes |
-| --- | --- | --- |
-| `name` | yes | Trimmed to 80 characters |
-| `quantity` | yes | Must be greater than 0; `1,200` is read as 1200 |
-| `location` | yes | One of your own labels ("Main Fridge") or a type ("fridge", "freezer", "pantry") |
-| `unit` | no | Free text — `lbs`, `gal`, `bags` |
-| `notes` | no | Trimmed to 200 characters |
-| `shelfLifeDays` | no | Positive number of days, up to 3650 |
-| `expiresAt` | no | Any date the browser can parse; otherwise the expiry is calculated from shelf life. A plain `2027-01-15` means that calendar day where you are, not midnight UTC |
-| `price`, `store` | no | Recorded in the item's purchase history |
-
-```csv
-name,quantity,unit,location,notes
-Whole Milk,1,gal,Main Fridge,
-Chicken Breast,2,lbs,Freezer,From Costco
-Basmati Rice,5,lbs,Pantry,
+```
+src/
+  components/   one directory per feature area, plus Common/ and Layout/
+  hooks/        all Firestore access lives in hooks, never in components
+  pages/        one per route; thin, they wire hooks to components
+  services/     firebase.js (SDK setup), analytics.js, helloFreshApi.js
+  config/       version.js and whatsNew.js — the footer version and changelog
+  test-utils/   render helpers, document factories, and the Firebase mocks
+functions/
+  index.js      exports only; every implementation lives under src/
+  src/          csvImport, hellofresh, mealPlan, recipes, wasteAlerts, triggers, data
+firestore/
+  firestore.rules            the security rules that are actually deployed
+  SCHEMA_DOCUMENTATION.md    every document shape, field by field
+  tests/                     the rules test suite
+e2e/            Playwright specs and the emulator seed
+docs/           the guides linked at the top of this file
 ```
 
-Files of more than 5,000 rows are rejected — split them.
+Two rules make the rest of the codebase make sense, and both are explained in
+[CONTRIBUTING.md](./CONTRIBUTING.md): shared files are append-only, and
+`firestore.rules` plus `SCHEMA_DOCUMENTATION.md` are a contract that the
+frontend, the functions and the tests must all agree with.
 
-### Importing from a script
+---
 
-The same import is available server-side as the `importInventoryFromCSV` HTTP
-Cloud Function, for automation and files too large to want a browser tab open
-for:
+## Deployment
 
-```bash
-curl -X POST "$FUNCTIONS_URL/importInventoryFromCSV" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $FIREBASE_ID_TOKEN" \
-  -d '{"userId":"<uid>","fileName":"kitchen.csv","csvData":"name,quantity,location\nMilk,1,Main Fridge"}'
-```
+The frontend is a static bundle — `public/_redirects` is set up for Netlify's
+SPA routing. Cloud Functions deploy from `main` via
+`.github/workflows/deploy-functions.yml` whenever anything under `functions/`
+changes.
 
-When an `Authorization: Bearer <Firebase ID token>` header is present the import
-runs against the token's account, ignoring `userId` in the body. It needs no new
-environment variables.
+Going to production for the first time is a sequence of console steps in a
+specific order, and one of them — switching Firestore out of test mode — is
+irreversible in practice. Follow [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)
+rather than improvising.

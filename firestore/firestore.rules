@@ -50,17 +50,28 @@ service cloud.firestore {
       match /storageLocations/{locationId} {
         // Users can read their own storage locations
         allow read: if isOwner(userId);
-        
+
         // Users can create storage locations
         allow create: if isOwner(userId)
           && hasRequiredFields(['label', 'type', 'icon', 'color', 'order', 'isDefault', 'createdAt'])
           && request.resource.data.type in ['fridge', 'freezer', 'pantry'];
-        
-        // Users can update their storage locations
+
+        // Users can update their storage locations.
+        //
+        // The same required fields are re-checked on update: `request.resource`
+        // is the *resulting* document, so without this an update could delete
+        // `label` and leave a location the UI renders blank.
+        //
+        // `isDefault` is immutable. Without that, the delete rule below is a
+        // suggestion rather than a guard: clear the flag, then delete. The edit
+        // form only ever sends label/type/icon/color, so nothing legitimate
+        // changes it.
         allow update: if isOwner(userId)
+          && hasRequiredFields(['label', 'type', 'icon', 'color', 'order', 'isDefault', 'createdAt'])
           && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.isDefault == resource.data.isDefault
           && request.resource.data.type in ['fridge', 'freezer', 'pantry'];
-        
+
         // Users can delete their storage locations
         // Only if it's not a default location
         allow delete: if isOwner(userId) && !resource.data.isDefault;
@@ -83,11 +94,21 @@ service cloud.firestore {
           && request.resource.data.source in ['manual', 'hellofresh', 'csv-import', 'seed']
           && request.resource.data.quantity > 0;
         
-        // Users can update their inventory items
+        // Users can update their inventory items.
+        //
+        // Create validates the shape and the two enums; update has to as well,
+        // or every constraint above is one edit away from being bypassed — an
+        // item could be moved to a `locationType` no query filters on, or have
+        // `source` rewritten so the analytics page stops counting it.
         allow update: if isOwner(userId)
+          && hasRequiredFields(['name', 'normalized', 'quantity', 'unit',
+                                'locationId', 'locationType',
+                                'addedAt', 'source'])
           && request.resource.data.addedAt == resource.data.addedAt
+          && request.resource.data.locationType in ['fridge', 'freezer', 'pantry']
+          && request.resource.data.source in ['manual', 'hellofresh', 'csv-import', 'seed']
           && request.resource.data.quantity >= 0;
-        
+
         // Users can delete their inventory items
         allow delete: if isOwner(userId);
       }
@@ -133,10 +154,18 @@ service cloud.firestore {
           && request.resource.data.mealCount >= 0
           && request.resource.data.itemsAdded >= 0;
 
-        // Users can update a delivery (e.g. mark it cooked)
+        // Users can update a delivery (e.g. mark it cooked). `source` is
+        // re-checked so a delivery cannot be relabelled out of the HelloFresh
+        // history it belongs to, and the field set is re-checked so an update
+        // cannot strip the counts the history list renders.
         allow update: if isOwner(userId)
+          && hasRequiredFields(['deliveredAt', 'source', 'status', 'recipeIds',
+                                'mealCount', 'itemsAdded', 'createdAt'])
           && request.resource.data.createdAt == resource.data.createdAt
-          && request.resource.data.status in ['scheduled', 'received', 'cooked'];
+          && request.resource.data.source == 'hellofresh'
+          && request.resource.data.status in ['scheduled', 'received', 'cooked']
+          && request.resource.data.mealCount >= 0
+          && request.resource.data.itemsAdded >= 0;
 
         // Users can delete a delivery they logged by mistake
         allow delete: if isOwner(userId);
@@ -156,9 +185,12 @@ service cloud.firestore {
           && hasRequiredFields(['type', 'title', 'body', 'createdAt', 'read'])
           && request.resource.data.type in ['waste-alert', 'meal-plan', 'system'];
 
-        // Marking one read must not rewrite when it arrived.
+        // Marking one read must not rewrite when it arrived, empty out the
+        // text the list renders, or change what kind of alert it was.
         allow update: if isOwner(userId)
-          && request.resource.data.createdAt == resource.data.createdAt;
+          && hasRequiredFields(['type', 'title', 'body', 'createdAt', 'read'])
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.type in ['waste-alert', 'meal-plan', 'system'];
 
         allow delete: if isOwner(userId);
       }
@@ -186,13 +218,19 @@ service cloud.firestore {
           && request.resource.data.source in ['manual', 'ai', 'hellofresh', 'waste-prevention']
           && request.resource.data.servings > 0;
 
-        // Users can reschedule (change `date`) and mark cooked (change `status`)
+        // Users can reschedule (change `date`) and mark cooked (change `status`).
+        // The field set and `source` are re-checked so a reschedule cannot
+        // quietly drop `recipeName` — the only thing the day card renders —
+        // or move an entry out of the category that produced it.
         allow update: if isOwner(userId)
+          && hasRequiredFields(['date', 'mealType', 'recipeName', 'servings',
+                                'status', 'source', 'createdAt'])
           && request.resource.data.createdAt == resource.data.createdAt
           && request.resource.data.date is string
           && request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
           && request.resource.data.mealType in ['breakfast', 'lunch', 'dinner', 'snack']
           && request.resource.data.status in ['planned', 'cooked', 'skipped']
+          && request.resource.data.source in ['manual', 'ai', 'hellofresh', 'waste-prevention']
           && request.resource.data.servings > 0;
 
         // Users can remove a scheduled meal
@@ -219,6 +257,7 @@ service cloud.firestore {
 
         // Regenerating a plan rewrites the shopping list and batch tips
         allow update: if isOwner(userId)
+          && hasRequiredFields(['weekStart', 'createdAt', 'source', 'status'])
           && request.resource.data.createdAt == resource.data.createdAt
           && request.resource.data.weekStart is string
           && request.resource.data.weekStart.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
@@ -250,13 +289,36 @@ service cloud.firestore {
         && request.resource.data.servings > 0
         && request.resource.data.timesCooked >= 0;
       
-      // Users can update recipes (for incrementing timesCooked, etc.)
+      // Users can update recipes (for incrementing timesCooked, etc.).
+      //
+      // `recipes` is deliberately a shared library: anyone signed in may fix a
+      // typo or record a cook on a recipe they did not add. `source` is what
+      // keeps that from becoming a way to delete the whole library — the delete
+      // rule below trusts it, so an update must not be able to rewrite it.
+      // Without this, two writes (relabel as `user-created`, then delete)
+      // remove any recipe at all, including the 500 imported from "Let's Eat".
+      //
+      // `createdBy` is pinned for the same reason: it is the record of who
+      // added a recipe, and nothing in the app rewrites it. `get(…, null)`
+      // rather than a plain lookup because recipes from the legacy sync and
+      // the seed data carry no `createdBy` at all.
+      //
+      // src/hooks/useRecipes.js already strips name/createdAt/source from every
+      // patch (IMMUTABLE_FIELDS) — these rules are that contract enforced.
       allow update: if isAuthenticated()
+        && hasRequiredFields(['name', 'ingredients', 'instructions',
+                              'source', 'createdAt', 'tags', 'servings',
+                              'difficulty', 'timesCooked'])
         && request.resource.data.createdAt == resource.data.createdAt
-        && request.resource.data.name == resource.data.name;
-      
+        && request.resource.data.name == resource.data.name
+        && request.resource.data.source == resource.data.source
+        && request.resource.data.get('createdBy', null) == resource.data.get('createdBy', null)
+        && request.resource.data.difficulty in ['easy', 'medium', 'hard']
+        && request.resource.data.servings > 0
+        && request.resource.data.timesCooked >= 0;
+
       // Only allow deletion if user created the recipe
-      allow delete: if isAuthenticated() 
+      allow delete: if isAuthenticated()
         && resource.data.source == 'user-created';
     }
     

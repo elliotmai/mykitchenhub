@@ -5,6 +5,9 @@
 // Completing roadmap step 4.3 (Manual Recipe Creation) means APP_VERSION '0.4.3'.
 // The leading 0 stays until the roadmap is finished and the app ships 1.0.0.
 //
+// It is a roadmap coordinate, not a semantic version and not a date: 0.10.3 is
+// *later* than 0.9.4, because phase 10 follows phase 9.
+//
 // WHEN YOU COMPLETE A ROADMAP STEP:
 //   1. Bump APP_VERSION and ROADMAP_STEP here.
 //   2. Bump "version" in package.json to the same value.
@@ -15,12 +18,12 @@
 // so the footer can never silently lie about what's deployed.
 
 /** Version string rendered in the footer, e.g. "0.8.2". */
-export const APP_VERSION = '0.8.2';
+export const APP_VERSION = '0.10.3';
 
 /** The roadmap step this build completes, e.g. "8.2". */
-export const ROADMAP_STEP = '8.2';
+export const ROADMAP_STEP = '10.3';
 
 /** Human-readable name of that roadmap step — shown in the footer tooltip. */
-export const ROADMAP_STEP_NAME = 'Shopping Analytics';
+export const ROADMAP_STEP_NAME = 'Initial Data Setup';
 
 export default APP_VERSION;

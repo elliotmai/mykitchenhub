@@ -177,19 +177,29 @@ test('does the thing', async ({ authedPage: page }) => {
 
 ### Writing a spec that means something
 
-Confirm a write from a client that never saw it. A write that passes client
+Confirm a write against the database, not the screen. A write that passes client
 validation but violates a security rule still renders locally, so the local view
-proves nothing — open a second page and read it back:
+proves nothing — read it back through `e2e/firestore-admin.js`, which queries
+the emulator directly from the test process:
 
 ```js
+const { inventoryHasItem } = require('./firestore-admin');
+
 await expect(page.getByText(itemName)).toBeVisible();   // local state, weak
-await expectFreshClientToSee(page, itemName, true);     // round trip, real
+expect(await inventoryHasItem(itemName)).toBe(true);    // round trip, real
 ```
 
-Use a second page rather than `page.reload()`. Reloading immediately after a
-write stalls indefinitely: the service worker serves the navigation from
-precache while the outgoing document's Firestore connection is still settling,
-and the new document never reaches DOMContentLoaded.
+It exports a reader per collection — `inventoryItems`, `inventoryItem`,
+`inventoryItemsNamed`, `importHistoryRecords`, `mealPlanEntries`, `deliveries` —
+plus `seedInventoryItem` and `seedMealPlanEntry` for arranging a starting state.
+
+Reading back through a second browser page would be more end-to-end, but it does
+not work here: a service-worker-controlled navigation issued while a Firestore
+connection is still settling never resolves, so it hangs rather than fails.
+`page.reload()` immediately after a write stalls for the same reason — the
+service worker serves the navigation from precache while the outgoing document's
+Firestore connection is still settling, and the new document never reaches
+DOMContentLoaded.
 
 Navigate with `{ waitUntil: 'domcontentloaded' }`. The default `load` waits on
 Firestore's long-lived connection, which adds ~15s per navigation and can hang
