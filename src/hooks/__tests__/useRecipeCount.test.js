@@ -77,6 +77,67 @@ describe('useRecipeCount', () => {
     expect(fs.getDocs).not.toHaveBeenCalled();
   });
 
+  it('falls back when the aggregation resolves without a usable count', async () => {
+    // Some emulator builds answer the aggregation with an empty payload rather
+    // than rejecting it, which would otherwise set the tile to undefined.
+    fs.getCountFromServer.mockResolvedValue({ data: () => ({}) });
+    fs.getDocs.mockResolvedValue(fs.__querySnapshot(asDocs([makeRecipe()])));
+
+    const { result } = await renderCount();
+
+    expect(result.current.count).toBe(1);
+    expect(result.current.error).toBeNull();
+  });
+
+  it('survives an aggregation response with no data() at all', async () => {
+    fs.getCountFromServer.mockResolvedValue({});
+    fs.getDocs.mockResolvedValue(fs.__querySnapshot(asDocs([])));
+
+    const { result } = await renderCount();
+
+    expect(result.current.count).toBe(0);
+    expect(Number.isFinite(result.current.count)).toBe(true);
+  });
+
+  it('reports zero rather than a stale number after signing out', async () => {
+    fs.getCountFromServer.mockResolvedValue({ data: () => ({ count: 7 }) });
+    const { result, rerender } = await renderCount();
+    expect(result.current.count).toBe(7);
+
+    authMock.__setUser(null);
+    rerender();
+
+    await waitFor(() => expect(result.current.count).toBe(0));
+    expect(result.current.error).toBeNull();
+  });
+
+  it('does not set state after unmounting, mid-read', async () => {
+    // The read is async; a component unmounted while it is in flight must not
+    // be written to, or React logs an update-on-unmounted warning at the user.
+    const warn = jest.spyOn(console, 'error').mockImplementation(() => {});
+    let resolveCount;
+    fs.getCountFromServer.mockReturnValue(
+      new Promise((resolve) => {
+        resolveCount = resolve;
+      })
+    );
+
+    authMock.__setUser(authMock.__user({ uid: UID }));
+    fs.getDoc.mockResolvedValue(fs.__doc(UID, makeUserProfile()));
+    const { unmount } = renderHook(() => useRecipeCount(), { wrapper });
+
+    unmount();
+    resolveCount({ data: () => ({ count: 9 }) });
+    await waitFor(() => expect(fs.getCountFromServer).toHaveBeenCalled());
+
+    const updateWarnings = warn.mock.calls.filter(([message]) =>
+      String(message).includes("can't perform a React state update")
+    );
+    warn.mockRestore();
+
+    expect(updateWarnings).toHaveLength(0);
+  });
+
   it('re-reads on refresh', async () => {
     fs.getCountFromServer.mockResolvedValue({ data: () => ({ count: 3 }) });
     const { result } = await renderCount();

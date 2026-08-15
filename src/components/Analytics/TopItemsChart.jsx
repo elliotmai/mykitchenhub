@@ -29,9 +29,28 @@ import {
   formatPurchases,
 } from './chartTheme';
 
-/** Long ingredient names get an ellipsis rather than eating the plot width. */
-export const truncateName = (name, max = 18) =>
-  typeof name === 'string' && name.length > max ? `${name.slice(0, max - 1)}…` : (name ?? '');
+/**
+ * Long ingredient names get an ellipsis rather than eating the plot width.
+ *
+ * The ellipsis goes in the middle, not at the end. Names long enough to need
+ * truncating are usually long because they are *qualified* — "Whole Foods
+ * Market Downtown" and "Whole Foods Market Uptown", "chicken thighs boneless"
+ * and "chicken thighs bone-in" — and cutting the tail off leaves two axis
+ * labels reading identically with no way to tell which bar is which.
+ */
+export const truncateName = (name, max = 18) => {
+  if (typeof name !== 'string') return name ?? '';
+  if (name.length <= max) return name;
+  const head = Math.ceil((max - 1) / 2);
+  const tail = max - 1 - head;
+  return `${name.slice(0, head)}…${tail > 0 ? name.slice(-tail) : ''}`;
+};
+
+/**
+ * The tooltip names the ingredient in full, however far the axis shortened it —
+ * hovering a truncated label is exactly when the reader wants the whole name.
+ */
+export const tooltipItemName = (_label, payload) => payload?.[0]?.payload?.name ?? '';
 
 /**
  * TopItemsChart
@@ -81,7 +100,7 @@ const TopItemsChart = ({ items = [] }) => {
             cursor={{ fill: CHART_GRID }}
             contentStyle={TOOLTIP_STYLE}
             formatter={(value) => [formatPurchases(value), 'Purchased']}
-            labelFormatter={(_label, payload) => payload?.[0]?.payload?.name ?? ''}
+            labelFormatter={tooltipItemName}
           />
           <Bar
             dataKey="purchases"

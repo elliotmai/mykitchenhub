@@ -18,6 +18,7 @@
 // the other, in the same commit.
 
 import Papa from 'papaparse';
+import { toDate } from '../../utils/timestamps';
 
 /** Columns a file must contain to be importable at all. */
 export const REQUIRED_COLUMNS = ['name', 'quantity', 'location'];
@@ -301,8 +302,11 @@ export const validateRow = (row, rowNumber, locations = []) => {
   const rawExpires = cell(row, 'expiresAt');
   let expiresAt = null;
   if (rawExpires) {
-    const parsed = new Date(rawExpires);
-    if (Number.isNaN(parsed.getTime())) {
+    // Via the shared parser: a spreadsheet writes "best by" as a bare
+    // `2027-01-15`, and `new Date()` reads that as midnight UTC — the 14th for
+    // anyone west of Greenwich, expiring their food a day early.
+    const parsed = toDate(rawExpires);
+    if (!parsed) {
       errors.push(`Expiry date "${rawExpires}" is not a date we can read.`);
     } else if (parsed.getTime() > Date.now() + MAX_SHELF_LIFE_DAYS * MS_PER_DAY) {
       // A spreadsheet that exported dates as serial numbers puts "45678" here,

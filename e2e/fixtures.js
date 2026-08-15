@@ -40,6 +40,55 @@ const login = async (page) => {
   await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
 };
 
+/**
+ * Adds an item through the real add-item modal, the way a person would.
+ *
+ * Shared because three specs need it and every one of them needs it to be the
+ * *shipped* writer: the dashboard, the analytics page and the waste alerts all
+ * read a collection the inventory page owns, and a fixture written straight to
+ * Firestore proves nothing about whether those two halves agree.
+ *
+ * Fields are addressed by placeholder. The modal has two <select> elements
+ * (unit, then storage location) and its Form.Label elements are not associated
+ * with their inputs via htmlFor, so getByLabel finds nothing.
+ *
+ * @param {import('@playwright/test').Page} page - already on a page with the
+ *   "Add Item" button, or anywhere if `navigate` is left true
+ * @param {object} item - name (required), quantity, price, store
+ */
+const addInventoryItem = async (page, { name, quantity = '1', price, store, navigate = true }) => {
+  if (navigate) {
+    await page.goto('/inventory', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { name: 'Inventory' })).toBeVisible();
+  }
+
+  await page
+    .getByRole('button', { name: /add item/i })
+    .first()
+    .click();
+
+  const modal = page.locator('.modal.show');
+  await expect(modal).toBeVisible();
+
+  await modal.getByPlaceholder(/Chicken Breast/).fill(name);
+  await modal.getByPlaceholder('e.g. 2').fill(String(quantity));
+  if (price !== undefined) await modal.getByPlaceholder('e.g. 8.99').fill(String(price));
+  if (store !== undefined)
+    await modal
+      .getByPlaceholder(/Costco/)
+      .last()
+      .fill(store);
+
+  // Storage location is required; its <select> is the one containing the
+  // "Select a location…" prompt.
+  const locationSelect = modal.locator('select').filter({ hasText: 'Select a location' });
+  const firstLocation = await locationSelect.locator('option').nth(1).getAttribute('value');
+  await locationSelect.selectOption(firstLocation);
+
+  await modal.getByRole('button', { name: 'Add Item' }).click();
+  await expect(modal).not.toBeVisible();
+};
+
 const test = base.extend({
   // Opt out per-spec with test.use({ suppressWhatsNew: false }).
   suppressWhatsNew: [true, { option: true }],
@@ -92,6 +141,7 @@ module.exports = {
   test,
   expect,
   login,
+  addInventoryItem,
   suppressWhatsNewPopup,
   WHATS_NEW_KEY,
   TEST_USER,

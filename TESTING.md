@@ -22,8 +22,26 @@ Jest + React Testing Library, via `craco test` (CRA's runner).
 ```bash
 npm test                 # watch mode
 npm run test:ci          # single run with coverage, as CI runs it
+npm run test:tz          # the same suite from a non-UTC zone
 npm test -- ItemCard     # one file
 ```
+
+### Dates: run it in another timezone
+
+CI's clock is UTC, where local time and UTC are the same thing — so anything
+that confuses the two passes. `npm run test:tz` runs the whole suite from
+`America/New_York`, and the `unit-tz` CI job does the same on every PR. It has
+already caught a month of spending bucketed into the wrong month and a shelf
+life asserted as an exact millisecond count across a daylight-saving change.
+
+Two rules keep it green:
+
+- **A bare `YYYY-MM-DD` is a local calendar day, never an instant.** Parse one
+  with `toDate` from `src/utils/timestamps.js`, in fixtures as well as in
+  product code — `new Date('2026-07-04')` is midnight UTC, which is the 3rd of
+  July in New York.
+- **Date arithmetic is in calendar days, not milliseconds.** Seven days across a
+  DST boundary is an hour short of `7 * 86400000`.
 
 ### Firebase is mocked globally
 

@@ -10,9 +10,9 @@ import { render, screen, within } from '@testing-library/react';
 jest.mock('recharts', () => require('../../../test-utils/rechartsMock')());
 
 import ChartFrame from '../ChartFrame';
-import TopItemsChart, { truncateName } from '../TopItemsChart';
+import TopItemsChart, { truncateName, tooltipItemName } from '../TopItemsChart';
 import SpendTrendChart, { LastPointLabel } from '../SpendTrendChart';
-import StoreChart from '../StoreChart';
+import StoreChart, { tooltipStoreName } from '../StoreChart';
 import FrequentItemsTable from '../FrequentItemsTable';
 
 const item = (overrides = {}) => ({
@@ -72,6 +72,49 @@ describe('ChartFrame', () => {
 
     expect(screen.getByText('last 6 months')).toBeInTheDocument();
   });
+
+  it('keeps both rows distinct when two share a first cell', () => {
+    // Keyed on the first cell alone, two rows named "Milk" are one key to
+    // React — which warns, and is free to reuse the wrong row on an update.
+    const warn = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    render(
+      <ChartFrame
+        title="Spend"
+        tableColumns={['Item', 'Spend']}
+        tableRows={[
+          ['Milk', '$3.00'],
+          ['Milk', '$4.00'],
+        ]}
+      />
+    );
+
+    expect(screen.getAllByRole('rowheader', { name: 'Milk' })).toHaveLength(2);
+    expect(screen.getByRole('cell', { name: '$4.00' })).toBeInTheDocument();
+    const duplicateKeyWarnings = warn.mock.calls.filter(([message]) =>
+      String(message).includes('two children with the same key')
+    );
+    warn.mockRestore();
+
+    expect(duplicateKeyWarnings).toHaveLength(0);
+  });
+
+  it('opens from the keyboard, since the plot itself is hidden from it', () => {
+    render(
+      <ChartFrame title="Spend" tableColumns={['Month', 'Spend']} tableRows={[['Aug', '$3.00']]}>
+        <div data-testid="plot" />
+      </ChartFrame>
+    );
+
+    const summary = screen.getByText('View as table');
+    // <summary> is focusable and Enter-activated natively; what matters is that
+    // it really is a summary inside a details, not a div wearing the label.
+    expect(summary.tagName).toBe('SUMMARY');
+    expect(summary.closest('details')).not.toBeNull();
+
+    summary.closest('details').open = true;
+    expect(screen.getByRole('columnheader', { name: 'Month' })).toBeVisible();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -84,12 +127,29 @@ describe('truncateName', () => {
   });
 
   it('ellipsises a name that would eat the plot', () => {
-    expect(truncateName('Boneless skinless chicken thighs', 10)).toBe('Boneless …');
+    const short = truncateName('Boneless skinless chicken thighs', 10);
+
+    expect(short).toHaveLength(10);
+    expect(short).toContain('…');
+  });
+
+  it('keeps the end of the name, which is what tells two apart', () => {
+    // Cutting only the tail leaves these two reading identically on the axis.
+    const downtown = truncateName('Whole Foods Market Downtown', 16);
+    const uptown = truncateName('Whole Foods Market Uptown', 16);
+
+    expect(downtown).not.toBe(uptown);
+    expect(downtown).toContain('owntown');
+    expect(uptown).toContain('Uptown');
   });
 
   it('copes with a missing name', () => {
     expect(truncateName(undefined)).toBe('');
     expect(truncateName(null)).toBe('');
+  });
+
+  it('leaves a name exactly at the limit alone', () => {
+    expect(truncateName('123456789012345678')).toBe('123456789012345678');
   });
 });
 
@@ -122,6 +182,59 @@ describe('TopItemsChart', () => {
     render(<TopItemsChart items={[item({ averagePrice: null })]} />);
 
     expect(screen.getByRole('cell', { name: '—' })).toBeInTheDocument();
+  });
+
+  it('gives two long names their own row instead of stacking them on one', () => {
+    // A category axis merges equal categories, so two names that shorten to the
+    // same string used to share a band — and the axis said the same thing twice.
+    const { container } = render(
+      <TopItemsChart
+        items={[
+          item({ key: 'thighs-boneless', name: 'Chicken thighs boneless', purchases: 5 }),
+          item({ key: 'thighs-bone-in', name: 'Chicken thighs bone-in', purchases: 3 }),
+        ]}
+      />
+    );
+
+    const ticks = [
+      ...container.querySelectorAll('.recharts-yAxis .recharts-cartesian-axis-tick-value'),
+    ].map((t) => t.textContent);
+
+    expect(ticks).toHaveLength(2);
+    expect(new Set(ticks).size).toBe(2);
+    expect(container.querySelectorAll('.recharts-bar-rectangle')).toHaveLength(2);
+  });
+
+  it('still lists both rows in the table when their names are identical', () => {
+    // Two documents can share a display name and differ only in their key. The
+    // axis is keyed on the key for exactly this reason: keyed on the label,
+    // recharts folds both into one band and draws one bar for two ingredients.
+    const { container } = render(
+      <TopItemsChart
+        items={[
+          item({ key: 'milk-whole', name: 'Milk', purchases: 4 }),
+          item({ key: 'milk-oat', name: 'Milk', purchases: 2 }),
+        ]}
+      />
+    );
+
+    expect(screen.getAllByRole('rowheader', { name: 'Milk' })).toHaveLength(2);
+    expect(container.querySelectorAll('.recharts-bar-rectangle')).toHaveLength(2);
+  });
+
+  it('names the ingredient in full in the tooltip, not the shortened label', () => {
+    const name = 'Organic free-range boneless skinless chicken thighs';
+
+    expect(tooltipItemName('Organic f…', [{ payload: { name } }])).toBe(name);
+    expect(tooltipItemName('x', [])).toBe('');
+    expect(tooltipItemName('x', undefined)).toBe('');
+  });
+
+  it('draws a single item without collapsing the plot', () => {
+    const { container } = render(<TopItemsChart items={[item({ purchases: 1 })]} />);
+
+    expect(container.querySelectorAll('.recharts-bar-rectangle')).toHaveLength(1);
+    expect(screen.getByRole('cell', { name: '1 time' })).toBeInTheDocument();
   });
 });
 
@@ -199,6 +312,56 @@ describe('StoreChart', () => {
     render(<StoreChart stores={[]} />);
 
     expect(screen.getByText(/note the store when you add an item/i)).toBeInTheDocument();
+  });
+
+  it('tells two branches of the same chain apart on the axis', () => {
+    const { container } = render(
+      <StoreChart
+        stores={[
+          { store: 'Whole Foods Market Downtown', purchases: 2, spend: 50, averagePrice: 25 },
+          { store: 'Whole Foods Market Uptown', purchases: 1, spend: 10, averagePrice: 10 },
+        ]}
+      />
+    );
+
+    const ticks = [
+      ...container.querySelectorAll('.recharts-yAxis .recharts-cartesian-axis-tick-value'),
+    ].map((t) => t.textContent);
+
+    expect(ticks).toHaveLength(2);
+    expect(new Set(ticks).size).toBe(2);
+    expect(container.querySelectorAll('.recharts-bar-rectangle')).toHaveLength(2);
+
+    // The table keeps the full names, however the axis shortened them.
+    expect(
+      screen.getByRole('rowheader', { name: 'Whole Foods Market Downtown' })
+    ).toBeInTheDocument();
+  });
+
+  it('names the store in full in the tooltip, not the shortened label', () => {
+    const store = 'Whole Foods Market Downtown';
+
+    expect(tooltipStoreName('Whole Fo…', [{ payload: { store } }])).toBe(store);
+    expect(tooltipStoreName('x', [])).toBe('');
+    expect(tooltipStoreName('x', undefined)).toBe('');
+  });
+
+  it('draws one store without a degenerate axis', () => {
+    const { container } = render(
+      <StoreChart stores={[{ store: 'Aldi', purchases: 1, spend: 10, averagePrice: 10 }]} />
+    );
+
+    expect(container.querySelectorAll('.recharts-bar-rectangle')).toHaveLength(1);
+    expect(screen.getByRole('rowheader', { name: 'Aldi' })).toBeInTheDocument();
+  });
+
+  it('shows a store that has trips but no prices as zero rather than as blank', () => {
+    render(<StoreChart stores={[{ store: 'Aldi', purchases: 3, spend: 0, averagePrice: null }]} />);
+
+    const table = screen.getByRole('table');
+    expect(within(table).getByRole('cell', { name: '$0.00' })).toBeInTheDocument();
+    expect(within(table).getByRole('cell', { name: '3' })).toBeInTheDocument();
+    expect(within(table).getByRole('cell', { name: '—' })).toBeInTheDocument();
   });
 });
 

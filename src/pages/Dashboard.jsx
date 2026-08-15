@@ -53,8 +53,19 @@ export const countExpiringSoon = (items = []) =>
 const Dashboard = () => {
   const { userProfile } = useAuth();
   const { items, loading: itemsLoading, error: itemsError } = useInventory();
-  const { count: recipeCount, loading: recipesLoading } = useRecipeCount();
-  const { weekStart, weekDays, entriesByDay, loading: planLoading } = useMealPlan();
+  const { count: recipeCount, loading: recipesLoading, error: recipesError } = useRecipeCount();
+  const {
+    weekStart,
+    weekDays,
+    entriesByDay,
+    loading: planLoading,
+    error: planError,
+  } = useMealPlan();
+
+  // A tile whose source failed shows a dash, not a zero. "0 recipes" and
+  // "we could not read your recipes" are different statements, and only one of
+  // them is true — a confident zero sends someone looking for food they have.
+  const loadErrors = [itemsError, recipesError, planError].filter(Boolean);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -78,9 +89,9 @@ const Dashboard = () => {
         <p className="text-muted mb-0">Here's what's happening in your kitchen today.</p>
       </div>
 
-      {itemsError ? (
+      {loadErrors.length > 0 ? (
         <Alert variant="warning" className="mb-4">
-          {itemsError}. The numbers below may be out of date.
+          {loadErrors.join('. ')}. The numbers below may be out of date.
         </Alert>
       ) : null}
 
@@ -89,7 +100,7 @@ const Dashboard = () => {
         <Col xs={6} lg={3}>
           <StatCard
             label="Total Items"
-            value={items.length}
+            value={itemsError ? null : items.length}
             icon={Package}
             to="/inventory"
             loading={itemsLoading}
@@ -99,7 +110,7 @@ const Dashboard = () => {
         <Col xs={6} lg={3}>
           <StatCard
             label="Expiring Soon"
-            value={expiringSoon}
+            value={itemsError ? null : expiringSoon}
             icon={AlertTriangle}
             tone={expiringSoon > 0 ? 'warning' : 'default'}
             to="/inventory"
@@ -110,7 +121,7 @@ const Dashboard = () => {
         <Col xs={6} lg={3}>
           <StatCard
             label="Recipes"
-            value={recipeCount}
+            value={recipesError ? null : recipeCount}
             icon={BookOpen}
             tone="success"
             to="/recipes"
@@ -121,7 +132,7 @@ const Dashboard = () => {
         <Col xs={6} lg={3}>
           <StatCard
             label="Meals Planned"
-            value={mealCount}
+            value={planError ? null : mealCount}
             icon={Calendar}
             to="/meal-plan"
             loading={planLoading}

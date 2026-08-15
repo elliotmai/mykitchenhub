@@ -15,6 +15,7 @@ import useShoppingAnalytics, {
   TREND_MONTHS,
 } from '../useShoppingAnalytics';
 import { AuthProvider } from '../useAuth';
+import { toDate } from '../../utils/timestamps';
 import * as fs from '../../test-utils/mocks/firestore';
 import * as authMock from '../../test-utils/mocks/auth';
 import {
@@ -42,7 +43,10 @@ const renderAnalytics = async (items = []) => {
   return view;
 };
 
-const at = (iso) => new Date(iso);
+// The same parser the product uses, so a bare `2026-07-04` in a fixture means
+// the 4th of July wherever the suite runs. `new Date('2026-07-04')` is midnight
+// UTC, which is the 3rd in New York — a fixture that lands in the wrong month.
+const at = (value) => toDate(value);
 
 // ---------------------------------------------------------------------------
 // buildPurchaseRecords
@@ -201,6 +205,73 @@ describe('buildFrequentItems', () => {
     expect(row.bestPrice).toBeNull();
   });
 
+  it('reports one purchase as one purchase, not as an average of nothing', () => {
+    const items = [
+      makeItemWithPurchases([makePurchase({ price: 6.5, store: 'Aldi' })], {
+        name: 'Oats',
+        normalized: 'oats',
+      }),
+    ];
+    const [row] = buildFrequentItems(items, buildPurchaseRecords(items));
+
+    expect(row).toMatchObject({
+      purchases: 1,
+      spend: 6.5,
+      averagePrice: 6.5,
+      bestStore: 'Aldi',
+      bestPrice: 6.5,
+    });
+    expect(Number.isFinite(row.averagePrice)).toBe(true);
+  });
+
+  it('averages what was paid per trip, and claims no unit, when units differ', () => {
+    // A gallon of milk and a 64oz bottle are not comparable per unit, and
+    // nothing here converts between them. The average is what reached the till
+    // on a shopping trip — so no row may advertise a unit only some of its
+    // purchases used.
+    const items = [
+      makeItemWithPurchases(
+        [
+          makePurchase({ price: 4, unit: 'gal', quantity: 1 }),
+          makePurchase({ price: 2, unit: 'oz', quantity: 64 }),
+        ],
+        { name: 'Milk', normalized: 'milk', unit: 'gal' }
+      ),
+    ];
+    const [row] = buildFrequentItems(items, buildPurchaseRecords(items));
+
+    expect(row.averagePrice).toBe(3);
+    expect(row.spend).toBe(6);
+    expect(row).not.toHaveProperty('unit');
+  });
+
+  it('does not divide by zero when an item is priced only at one store', () => {
+    const items = [
+      makeItemWithPurchases([makePurchase({ price: 0, store: 'Aldi' })], {
+        name: 'Free Sample',
+        normalized: 'free sample',
+      }),
+    ];
+    const [row] = buildFrequentItems(items, buildPurchaseRecords(items));
+
+    // Zero is a price, not a missing price.
+    expect(row.averagePrice).toBe(0);
+    expect(row.bestStore).toBe('Aldi');
+  });
+
+  it('carries a very long name through untouched, for the chart to shorten', () => {
+    const name = 'Organic free-range boneless skinless chicken thighs, family pack';
+    const items = [
+      makeItemWithPurchases([makePurchase({ price: 12 })], {
+        name,
+        normalized: name.toLowerCase(),
+      }),
+    ];
+    const [row] = buildFrequentItems(items, buildPurchaseRecords(items));
+
+    expect(row.name).toBe(name);
+  });
+
   it('buckets priced purchases with no store under "Unspecified"', () => {
     const items = [
       makeItemWithPurchases([makePurchase({ price: 3, store: '' })], {
@@ -320,6 +391,23 @@ describe('buildMonthlySpend', () => {
 
     expect(months.reduce((sum, m) => sum + m.spend, 0)).toBe(0);
   });
+
+  it('leaves the quiet months as zero rather than as a gap in the line', () => {
+    // One purchase, five silent months. Every slot still has a number, so the
+    // line reads "spent nothing" instead of breaking or interpolating.
+    const months = buildMonthlySpend([{ date: at('2026-08-02'), price: 9 }], TREND_MONTHS, now);
+
+    expect(months).toHaveLength(TREND_MONTHS);
+    expect(months.every((m) => Number.isFinite(m.spend))).toBe(true);
+    expect(months.slice(0, -1).map((m) => m.spend)).toEqual([0, 0, 0, 0, 0]);
+    expect(months[months.length - 1].spend).toBe(9);
+  });
+
+  it('gives every month a label a reader can put a name to', () => {
+    const months = buildMonthlySpend([], TREND_MONTHS, now);
+
+    expect(months.every((m) => typeof m.label === 'string' && m.label.length > 0)).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -347,6 +435,37 @@ describe('buildTotals', () => {
       averagePrice: 7.5,
       storesUsed: 2,
     });
+  });
+
+  it('counts one store as one store, however many trips were made to it', () => {
+    const items = [
+      makeItemWithPurchases(
+        [makePurchase({ price: 3, store: 'Aldi' }), makePurchase({ price: 5, store: 'Aldi' })],
+        { name: 'Milk', normalized: 'milk' }
+      ),
+    ];
+
+    expect(buildTotals(items, buildPurchaseRecords(items))).toMatchObject({
+      storesUsed: 1,
+      purchases: 2,
+      averagePrice: 4,
+    });
+  });
+
+  it('never reports NaN or Infinity, whatever the history holds', () => {
+    const items = [
+      makeItemWithPurchases([makePurchase({ price: null, store: '' })], {
+        name: 'Rice',
+        normalized: 'rice',
+      }),
+    ];
+    const totals = buildTotals(items, buildPurchaseRecords(items));
+
+    expect(totals.spend).toBe(0);
+    expect(totals.averagePrice).toBeNull();
+    expect(totals.storesUsed).toBe(0);
+    const numbers = Object.values(totals).filter((value) => typeof value === 'number');
+    expect(numbers.every(Number.isFinite)).toBe(true);
   });
 
   it('is all zeroes and nulls for an empty kitchen', () => {

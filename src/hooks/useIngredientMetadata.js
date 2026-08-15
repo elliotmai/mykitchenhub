@@ -166,6 +166,12 @@ const ingredientShelfLife = {
   pizza: { fridge: 4, freezer: 60, pantry: null },
 };
 
+// The pure lookups over the table above are `listIngredients` and
+// `findIngredients`, exported below. An earlier unexported pair doing the same
+// job outlived the refactor that replaced them; nothing called it, and the
+// unused warning it raised failed the production build, which treats warnings
+// as errors.
+
 /**
  * The shelf-life table itself, for callers that are not React components.
  *
