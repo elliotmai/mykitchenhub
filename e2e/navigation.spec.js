@@ -71,6 +71,71 @@ test.describe('progressive web app', () => {
     expect(response.headers()['content-type']).toContain('javascript');
   });
 
+  // -------------------------------------------------------------------------
+  // What is actually in the precache
+  //
+  // The build job asserts build/service-worker.js exists, and the test below
+  // asserts the app registers it. Neither looks at what it precaches, and
+  // `self.__WB_MANIFEST` resolving to an empty array is a silent way to ship a
+  // worker that installs, activates, controls the page — and caches nothing.
+  // Every check we have would still be green and offline would be broken.
+  // -------------------------------------------------------------------------
+
+  /** The precache manifest, read out of the built worker. */
+  const precacheEntries = async (page) => {
+    const source = await (await page.request.get('/service-worker.js')).text();
+
+    // The manifest survives minification as object literals. Which quote
+    // character it ends up in is the minifier's business, so accept either.
+    return [
+      ...source.matchAll(
+        /\{['"]revision['"]:(null|['"][^'"]*['"]),['"]url['"]:['"]([^'"]+)['"]\}/g
+      ),
+    ].map((m) => ({ revision: m[1], url: m[2] }));
+  };
+
+  test('precaches the app shell, with a revision on the one unhashed file', async ({ page }) => {
+    const entries = await precacheEntries(page);
+    const urls = entries.map((e) => e.url);
+
+    expect(entries.length).toBeGreaterThan(5);
+    expect(urls).toContain('/index.html');
+    expect(urls.some((u) => /\/static\/js\/main\.[^/]+\.js$/.test(u))).toBe(true);
+    expect(urls.some((u) => u.endsWith('.css'))).toBe(true);
+
+    // Everything webpack emits carries its hash in the filename, so workbox
+    // stores it with `revision: null` and the URL itself is the cache key.
+    // index.html does not — its name never changes — so it is the one entry
+    // that needs a content revision. Without it the shell is cached under a key
+    // that never moves: no update is ever detected, and every browser that has
+    // visited once keeps the old app forever, which is the failure mode a
+    // service worker that caches too well produces.
+    const index = entries.find((e) => e.url === '/index.html');
+    expect(index.revision).not.toBe('null');
+    expect(index.revision).toMatch(/^['"][a-f0-9]{8,}['"]$/);
+  });
+
+  test('precaches nothing it does not actually serve', async ({ page }) => {
+    // A manifest entry that 404s rejects the install, and a worker that never
+    // installs is a PWA with no offline at all — the exact thing this phase
+    // set out to fix.
+    const entries = await precacheEntries(page);
+    expect(entries.length).toBeGreaterThan(5);
+
+    const statuses = await Promise.all(
+      entries.map(async ({ url }) => ({ url, status: (await page.request.get(url)).status() }))
+    );
+
+    expect(statuses.filter((s) => s.status !== 200)).toEqual([]);
+  });
+
+  test('caches the offline page its catch handler falls back to', async ({ page }) => {
+    // Not part of the precache manifest — the worker's own install handler does
+    // `cache.add('/offline.html')`, and a rejected add fails the whole install.
+    const response = await page.request.get('/offline.html');
+    expect(response.status()).toBe(200);
+  });
+
   test('and the app actually registers it, so the precache exists', async ({
     authedPage: page,
   }) => {
