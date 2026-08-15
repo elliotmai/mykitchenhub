@@ -161,13 +161,17 @@ describe('Dashboard', () => {
   ])('greets at %i:00 with "%s"', async (hour, greeting) => {
     // The boundaries are the whole point: at noon and at 5pm the greeting
     // changes, and only one of the three branches runs on any given test run.
+    // Restored in a finally — this suite does not reset mocks between tests, so
+    // a failure here would otherwise freeze the clock for everything after it.
     jest.spyOn(Date.prototype, 'getHours').mockReturnValue(hour);
 
-    await renderDashboard();
+    try {
+      await renderDashboard();
 
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(greeting);
-
-    Date.prototype.getHours.mockRestore();
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(greeting);
+    } finally {
+      Date.prototype.getHours.mockRestore();
+    }
   });
 
   it('greets a cook whose profile has no name yet', async () => {
