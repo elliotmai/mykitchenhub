@@ -14,6 +14,13 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.08.15.4',
+    date: 'August 2026',
+    items: [
+      '🔒 Recipes other cooks added are now properly theirs. The delete button only shows on recipes you added yourself — and a recipe someone else put in the shared book can no longer be removed by anyone but them. You can still fix a typo or tick off that you cooked it.',
+    ],
+  },
+  {
     version: '2026.08.15.3',
     date: 'August 2026',
     items: [

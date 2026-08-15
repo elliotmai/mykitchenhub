@@ -1647,6 +1647,27 @@ describe('syncMetadata', () => {
     await assertFails(as(OWNER).doc('syncMetadata/recipesSync').set({ syncStatus: 'complete' }));
   });
 
+  // `syncMetadata` is a root collection. `onUserCreate` also writes a
+  // per-user `users/{uid}/syncMetadata/recipesSync` through the admin SDK,
+  // which bypasses rules — and no rule matches that path, so `{document=**}`
+  // denies it to everyone including its owner.
+  //
+  // Nothing reads it: the dashboard (src/hooks/useSyncStatus.js) and the sync
+  // function both use the root document. This pins that the per-user copy is
+  // unreachable rather than quietly readable, so if anything ever starts
+  // reading it, this test is where the missing rule gets noticed.
+  it('does not expose the per-user copy onUserCreate writes', async () => {
+    await seed((db) =>
+      db.doc(`users/${OWNER}/syncMetadata/recipesSync`).set({ syncStatus: 'pending' })
+    );
+
+    await assertFails(as(OWNER).doc(`users/${OWNER}/syncMetadata/recipesSync`).get());
+    await assertFails(as(INTRUDER).doc(`users/${OWNER}/syncMetadata/recipesSync`).get());
+    await assertFails(
+      as(OWNER).doc(`users/${OWNER}/syncMetadata/recipesSync`).set({ syncStatus: 'complete' })
+    );
+  });
+
   it('lets the dashboard read the legacy sync progress document', async () => {
     await seed((db) =>
       db.doc('syncMetadata/legacy-recipe-sync').set({

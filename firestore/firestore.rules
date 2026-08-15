@@ -44,11 +44,13 @@ service cloud.firestore {
       //
       // `helloFresh` is deliberately NOT required here even though `create`
       // requires it. onUserCreate (functions/src/triggers/onUserCreate.js)
-      // writes the Cloud Function's profile with helloFresh nested under
-      // `preferences` and no top-level key, and the admin SDK bypasses rules —
-      // so every profile created that way would be frozen out of every update,
-      // including the one useDeliveries makes to add the top-level key. Requiring
-      // it would reject a legitimate write, which is worse than not requiring it.
+      // writes through the admin SDK, which bypasses these rules, and until
+      // 10.3 it seeded helloFresh under `preferences` with no top-level key —
+      // so profiles without one exist. Requiring it would freeze every one of
+      // them out of every update, including the write useDeliveries makes to
+      // add that very key. Rejecting a legitimate write is worse than not
+      // requiring the field. It can be tightened once those older profiles are
+      // backfilled; see docs/DEPLOYMENT.md.
       allow update: if isOwner(userId)
         && hasRequiredFields(['email', 'createdAt', 'preferences'])
         // Prevent changing createdAt or email

@@ -171,9 +171,14 @@ Anyone can fix a typo or correct the steps on any recipe — it is a shared
 library. Two things are fixed once a recipe exists: **its name and the date it
 was added**. The edit form disables the name field for that reason.
 
-**You can only delete recipes that were added by hand in this app.** Anything
-imported — from the old "Let's Eat" library, from Spoonacular, from HelloFresh —
-stays. Deleting removes the recipe for everyone, so it asks first.
+**You can only delete recipes you added yourself.** Two things are therefore
+safe from you: anything imported — from the old "Let's Eat" library, from
+Spoonacular, from HelloFresh — and anything another cook added by hand. The
+delete button only appears on your own, so there is nothing to press on someone
+else's.
+
+Deleting removes the recipe for everyone, which is why it is limited to the
+person who added it, and why it asks first.
 
 ---
 
