@@ -14,6 +14,7 @@
 import { useState, useCallback } from 'react';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from '../services/firebase';
+import { friendlyError } from '../utils/firebaseErrors';
 
 /** Content types firestore/storage.rules accepts for recipe images. */
 export const ALLOWED_IMAGE_TYPES = [
@@ -89,7 +90,9 @@ const useRecipeImageUpload = () => {
       return { success: true, url, path };
     } catch (err) {
       console.error('Error uploading recipe image:', err);
-      const message = 'Could not upload that photo. Please try again.';
+      // Storage answers an oversized or wrong-typed file with `unauthorized`,
+      // which reads as a permissions bug; friendlyError says what to do instead.
+      const message = friendlyError(err, { action: 'upload that photo' });
       setUploading(false);
       setError(message);
       return { success: false, error: message };
@@ -104,7 +107,7 @@ const useRecipeImageUpload = () => {
       return { success: true };
     } catch (err) {
       console.error('Error removing recipe image:', err);
-      return { success: false, error: err.message };
+      return { success: false, error: friendlyError(err, { action: 'remove that photo' }) };
     }
   }, []);
 

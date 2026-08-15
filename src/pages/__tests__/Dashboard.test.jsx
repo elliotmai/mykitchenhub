@@ -315,7 +315,7 @@ describe('Dashboard', () => {
     });
 
     expect(
-      screen.getByText(/failed to load inventory\. the numbers below may be out of date/i)
+      screen.getByText(/couldn.t load your kitchen.*the numbers below may be out of date/i)
     ).toBeInTheDocument();
   });
 

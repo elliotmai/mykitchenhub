@@ -31,6 +31,7 @@ import { useIngredientMetadata } from './useIngredientMetadata';
 import { SHELF_LIFE_DEFAULTS } from './useInventory';
 // Day keys are phase 7's format, so reuse its helper rather than a second one.
 import { toDayKey } from './useMealPlan';
+import { friendlyError } from '../utils/firebaseErrors';
 
 /**
  * Cook days within the delivery week. Day 1 is delivery day, then every other
@@ -139,7 +140,7 @@ const useDeliveries = () => {
       },
       (err) => {
         console.error('Error fetching deliveries:', err);
-        setError('Failed to load delivery history');
+        setError(friendlyError(err, { action: 'load your delivery history' }));
         setLoading(false);
       }
     );
@@ -299,7 +300,7 @@ const useDeliveries = () => {
         return { success: true };
       } catch (err) {
         console.error('Error deleting delivery:', err);
-        return { success: false, error: err.message };
+        return { success: false, error: friendlyError(err, { action: 'remove that delivery' }) };
       }
     },
     [user?.uid]

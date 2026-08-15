@@ -105,7 +105,7 @@ describe('MealPlanView', () => {
       fs.__emitError(ENTRIES_PATH, new Error('permission denied'));
     });
 
-    expect(await screen.findByText(/Failed to load your meal plan/)).toBeInTheDocument();
+    expect(await screen.findByText(/couldn.t load your meal plan/i)).toBeInTheDocument();
   });
 });
 
@@ -162,7 +162,7 @@ describe('marking a meal cooked', () => {
 
     await user.click(screen.getByRole('button', { name: /Cooked/ }));
 
-    expect(await screen.findByText('offline')).toBeInTheDocument();
+    expect(await screen.findByText(/couldn.t tick that meal off/i)).toBeInTheDocument();
   });
 });
 

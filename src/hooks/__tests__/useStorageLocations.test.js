@@ -9,6 +9,7 @@ import { AuthProvider } from '../useAuth';
 import * as fs from '../../test-utils/mocks/firestore';
 import * as authMock from '../../test-utils/mocks/auth';
 import { asDocs, makeLocation, makeItem, makeUserProfile } from '../../test-utils/factories';
+import { expectHumanError } from '../../test-utils/humanErrors';
 
 const UID = 'test-uid';
 const LOCATIONS_PATH = `users/${UID}/storageLocations`;
@@ -57,7 +58,7 @@ describe('useStorageLocations subscription', () => {
       fs.__emitError(LOCATIONS_PATH, new Error('permission-denied'));
     });
 
-    expect(result.current.error).toBe('Failed to load storage locations');
+    expectHumanError(result.current.error, /storage locations/i);
   });
 
   it('unsubscribes on unmount', async () => {

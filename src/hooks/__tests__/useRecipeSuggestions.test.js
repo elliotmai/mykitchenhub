@@ -22,6 +22,7 @@ import {
   daysFromNow,
   makeUserProfile,
 } from '../../test-utils/factories';
+import { expectHumanError } from '../../test-utils/humanErrors';
 
 const UID = 'test-uid';
 
@@ -242,7 +243,7 @@ describe('useRecipeSuggestions', () => {
     const { result } = renderHook(() => useRecipeSuggestions([spinach]), { wrapper });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.error).toBe('Failed to load recipe suggestions');
+    expectHumanError(result.current.error, /recipe ideas/i);
   });
 });
 
@@ -356,6 +357,7 @@ describe('useRecipeSuggestions.addToMealPlan', () => {
       response = await result.current.addToMealPlan(result.current.suggestions[0]);
     });
 
-    expect(response).toEqual({ success: false, error: 'quota exceeded' });
+    expect(response.success).toBe(false);
+    expectHumanError(response.error, /add that recipe to your plan/i);
   });
 });

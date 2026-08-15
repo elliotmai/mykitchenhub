@@ -25,6 +25,7 @@ import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../services/firebase';
 import { useAuth } from './useAuth';
 import useInventory from './useInventory';
+import { friendlyError } from '../utils/firebaseErrors';
 
 // ---------------------------------------------------------------------------
 // Day keys
@@ -378,7 +379,7 @@ const useMealPlan = () => {
       },
       (err) => {
         console.error('Error fetching meal plan:', err);
-        setError('Failed to load your meal plan');
+        setError(friendlyError(err, { action: 'load your meal plan' }));
         setLoading(false);
       }
     );
@@ -487,7 +488,10 @@ const useMealPlan = () => {
         return { success: true };
       } catch (err) {
         console.error('Error scheduling meal:', err);
-        return { success: false, error: err.message };
+        return {
+          success: false,
+          error: friendlyError(err, { action: 'add that meal to your plan' }),
+        };
       }
     },
     [user?.uid]
@@ -505,7 +509,7 @@ const useMealPlan = () => {
         return { success: true };
       } catch (err) {
         console.error('Error rescheduling meal:', err);
-        return { success: false, error: err.message };
+        return { success: false, error: friendlyError(err, { action: 'move that meal' }) };
       }
     },
     [user?.uid]
@@ -519,7 +523,7 @@ const useMealPlan = () => {
         return { success: true };
       } catch (err) {
         console.error('Error removing meal:', err);
-        return { success: false, error: err.message };
+        return { success: false, error: friendlyError(err, { action: 'remove that meal' }) };
       }
     },
     [user?.uid]
@@ -568,7 +572,7 @@ const useMealPlan = () => {
         };
       } catch (err) {
         console.error('Error marking meal cooked:', err);
-        return { success: false, error: err.message };
+        return { success: false, error: friendlyError(err, { action: 'tick that meal off' }) };
       }
     },
     [user?.uid, entries, inventoryItems, updateItem]

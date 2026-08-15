@@ -331,6 +331,6 @@ describe('logging a delivery', () => {
 
     fs.__emitError(`users/${uid()}/deliveries`);
 
-    expect(await screen.findByText(/failed to load delivery history/i)).toBeInTheDocument();
+    expect(await screen.findByText(/couldn.t load your delivery history/i)).toBeInTheDocument();
   });
 });

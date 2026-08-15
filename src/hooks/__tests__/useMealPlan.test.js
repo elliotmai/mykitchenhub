@@ -31,6 +31,7 @@ import {
   makeUserProfile,
   dayKey,
 } from '../../test-utils/factories';
+import { expectHumanError } from '../../test-utils/humanErrors';
 
 const UID = 'test-uid';
 const ENTRIES_PATH = `users/${UID}/mealPlanEntries`;
@@ -338,7 +339,8 @@ describe('useMealPlan subscription', () => {
       fs.__emitError(ENTRIES_PATH, new Error('permission denied'));
     });
 
-    await waitFor(() => expect(result.current.error).toMatch(/Failed to load/));
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+    expectHumanError(result.current.error, /meal plan/i);
   });
 
   it('drops its listeners on unmount', async () => {
@@ -435,7 +437,8 @@ describe('scheduleMeal', () => {
       outcome = await result.current.scheduleMeal({ date: '2026-08-15', recipeName: 'Toast' });
     });
 
-    expect(outcome).toEqual({ success: false, error: 'permission denied' });
+    expect(outcome.success).toBe(false);
+    expectHumanError(outcome.error, /add that meal to your plan/i);
   });
 });
 
@@ -570,7 +573,8 @@ describe('markCooked', () => {
       outcome = await result.current.markCooked(entry);
     });
 
-    expect(outcome).toEqual({ success: false, error: 'offline' });
+    expect(outcome.success).toBe(false);
+    expectHumanError(outcome.error);
   });
 });
 

@@ -24,6 +24,7 @@ import {
   makeMealPlanEntry,
   makeUserProfile,
 } from '../../test-utils/factories';
+import { expectHumanError } from '../../test-utils/humanErrors';
 
 const wrapper = ({ children }) => <AuthProvider>{children}</AuthProvider>;
 
@@ -150,7 +151,7 @@ describe('listening to delivery history', () => {
       fs.__emitError(`users/${uid}/deliveries`);
     });
 
-    expect(result.current.error).toMatch(/failed to load/i);
+    expectHumanError(result.current.error, /delivery history/i);
     expect(result.current.loading).toBe(false);
   });
 

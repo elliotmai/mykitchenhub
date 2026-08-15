@@ -10,6 +10,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { collection, getCountFromServer, getDocs } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useAuth } from './useAuth';
+import { friendlyError } from '../utils/firebaseErrors';
 
 /**
  * Count the recipes collection.
@@ -72,7 +73,7 @@ const useRecipeCount = () => {
         console.error('Error counting recipes:', err);
         if (cancelled) return;
         setCount(0);
-        setError('Failed to load recipes');
+        setError(friendlyError(err, { action: 'load your recipes' }));
       } finally {
         if (!cancelled) setLoading(false);
       }

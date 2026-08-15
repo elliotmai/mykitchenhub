@@ -24,6 +24,7 @@ export * as firestoreMock from './mocks/firestore';
 export * as storageMock from './mocks/storage';
 export * as functionsMock from './mocks/functions';
 export * from './factories';
+export * from './humanErrors';
 
 /**
  * Put the mocked backend into a signed-in state *before* rendering.

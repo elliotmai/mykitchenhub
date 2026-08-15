@@ -10,6 +10,7 @@ import { collection, limit, onSnapshot, orderBy, query, where } from 'firebase/f
 
 import { db } from '../services/firebase';
 import { useAuth } from './useAuth';
+import { friendlyError } from '../utils/firebaseErrors';
 
 /** A box is a handful of meals; nobody picks from hundreds. */
 export const RECIPE_LIMIT = 50;
@@ -44,7 +45,7 @@ const useHelloFreshRecipes = () => {
       },
       (err) => {
         console.error('Error fetching HelloFresh recipes:', err);
-        setError('Failed to load your imported recipes');
+        setError(friendlyError(err, { action: 'load your imported recipes' }));
         setLoading(false);
       }
     );

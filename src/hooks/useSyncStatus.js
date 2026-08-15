@@ -15,6 +15,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../services/firebase';
 import { useAuth } from './useAuth';
+import { friendlyError } from '../utils/firebaseErrors';
 
 /** Fixed document id the Cloud Function writes its progress to. */
 export const SYNC_DOC_ID = 'legacy-recipe-sync';
@@ -73,7 +74,7 @@ const useSyncStatus = () => {
       },
       (err) => {
         console.error('Error reading sync status:', err);
-        setError('Could not read the sync status.');
+        setError(friendlyError(err, { action: 'read the sync status' }));
         setLoading(false);
       }
     );

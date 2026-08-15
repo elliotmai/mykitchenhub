@@ -17,6 +17,7 @@ import { AuthProvider } from '../useAuth';
 import * as fs from '../../test-utils/mocks/firestore';
 import * as authMock from '../../test-utils/mocks/auth';
 import { asDocs, makeImportRecord, makeUserProfile } from '../../test-utils/factories';
+import { expectHumanError } from '../../test-utils/humanErrors';
 
 const UID = 'test-uid';
 const INVENTORY_PATH = `users/${UID}/inventory`;
@@ -451,7 +452,8 @@ describe('importItems', () => {
       outcome = await result.current.importItems(rows(3));
     });
 
-    expect(outcome).toMatchObject({ success: false, imported: 0, error: 'permission denied' });
+    expect(outcome).toMatchObject({ success: false, imported: 0 });
+    expectHumanError(outcome.error);
     expect(fs.addDoc.mock.calls.at(-1)[1].status).toBe('failed');
   });
 

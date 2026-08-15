@@ -257,6 +257,6 @@ describe('WasteAlerts page', () => {
       fs.__emitError(`users/${UID}/inventory`, new Error('permission-denied'));
     });
 
-    expect(await screen.findByText('Failed to load inventory')).toBeInTheDocument();
+    expect(await screen.findByText(/couldn.t load your kitchen/i)).toBeInTheDocument();
   });
 });

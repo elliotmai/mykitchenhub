@@ -17,6 +17,7 @@ import { db } from '../services/firebase';
 import { useAuth } from './useAuth';
 import useInventory from './useInventory';
 import { toDate, monthKey, monthLabel, recentMonthKeys } from '../utils/timestamps';
+import { friendlyError } from '../utils/firebaseErrors';
 
 /** How many months the spending trend covers. */
 export const TREND_MONTHS = 6;
@@ -273,7 +274,7 @@ const useShoppingAnalytics = ({ now } = {}) => {
         return { success: true };
       } catch (err) {
         console.error('Error recording purchase:', err);
-        return { success: false, error: err.message };
+        return { success: false, error: friendlyError(err, { action: 'record that purchase' }) };
       }
     },
     [user?.uid]

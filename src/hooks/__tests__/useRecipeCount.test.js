@@ -9,6 +9,7 @@ import { AuthProvider } from '../useAuth';
 import * as fs from '../../test-utils/mocks/firestore';
 import * as authMock from '../../test-utils/mocks/auth';
 import { asDocs, makeRecipe, makeUserProfile } from '../../test-utils/factories';
+import { expectHumanError } from '../../test-utils/humanErrors';
 
 const UID = 'test-uid';
 
@@ -66,7 +67,7 @@ describe('useRecipeCount', () => {
     const { result } = await renderCount();
 
     expect(result.current.count).toBe(0);
-    expect(result.current.error).toBe('Failed to load recipes');
+    expectHumanError(result.current.error, /recipes/i);
   });
 
   it('does not touch Firestore when signed out', async () => {
