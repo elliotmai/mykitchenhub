@@ -9,10 +9,18 @@ const HEADER = 'name,quantity,unit,location';
 
 /** Attaches a CSV to the importer's file input, without touching the disk. */
 const chooseCSV = async (page, text, name = 'kitchen.csv') => {
-  await page.getByRole('button', { name: /import csv/i }).click();
-
   const modal = page.locator('.modal.show');
-  await expect(modal).toBeVisible();
+
+  // Under a loaded machine this click occasionally lands on the button before
+  // React has wired it up: nothing opens, and the spec fails somewhere far
+  // from the cause. Retry the click itself rather than the whole test — the
+  // modal still has to open, this only stops a dropped click reading as a bug.
+  await expect(async () => {
+    if (!(await modal.isVisible())) {
+      await page.getByRole('button', { name: /import csv/i }).click();
+    }
+    await expect(modal).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 20_000 });
 
   await modal.getByLabel('Choose a CSV file').setInputFiles({
     name,
@@ -137,5 +145,82 @@ test.describe('CSV import', () => {
 
     await expect(modal.getByText(/needs a name, quantity, location column/i)).toBeVisible();
     await expect(modal.getByRole('button', { name: /^Import \d/ })).toHaveCount(0);
+
+    // The picker stays put and lets go of the file, so someone can fix the
+    // spreadsheet and choose that same file again.
+    const input = modal.getByLabel('Choose a CSV file');
+    await expect(input).toBeVisible();
+    await expect(input).toHaveValue('');
+  });
+
+  test('offers nothing to import when every row is broken', async ({ authedPage: page }) => {
+    const prefix = `Doomed ${Date.now()}`;
+    const modal = await chooseCSV(
+      page,
+      [HEADER, `${prefix},0,ea,Pantry`, `,1,ea,Main Fridge`, `${prefix} Jar,1,ea,Wine Cellar`].join(
+        '\n'
+      ),
+      'all-bad.csv'
+    );
+
+    await expect(modal.getByText('0 ready to import')).toBeVisible();
+    await expect(modal.getByText(/None of these rows can be imported yet/)).toBeVisible();
+    await expect(modal.getByRole('button', { name: 'Import 0 items' })).toBeDisabled();
+
+    expect(await inventoryItemsNamed(prefix)).toHaveLength(0);
+  });
+
+  test('survives the messy file a real spreadsheet exports', async ({ authedPage: page }) => {
+    // Blank lines between rows, a trailing comma, quoted commas, a location
+    // typed with odd spacing, and an accent. Everything here used to either
+    // reject a usable row or report the wrong line number.
+    const prefix = `Messy ${Date.now()}`;
+    const modal = await chooseCSV(
+      page,
+      [
+        `${HEADER},notes`,
+        `${prefix} Crème,1,tub,  main   fridge  ,"soft, ripe",`,
+        '',
+        '',
+        `${prefix} Rice,5,lbs,Pantry,,`,
+        '',
+        `,1,ea,Pantry,,`,
+      ].join('\r\n'),
+      'messy.csv'
+    );
+
+    await expect(modal.getByText('2 ready to import')).toBeVisible();
+    await expect(modal.getByText('1 needs fixing')).toBeVisible();
+
+    // Line 7 is where the nameless row actually sits in the file.
+    const skipped = modal.getByRole('table', { name: 'Rows we had to skip' });
+    await expect(skipped.getByRole('cell', { name: '7', exact: true })).toBeVisible();
+
+    await modal.getByRole('button', { name: 'Import 2 items' }).click();
+    await expect(modal.getByText('2 items added to your kitchen.')).toBeVisible();
+
+    const stored = await storedItems(prefix, 2);
+    const creme = stored.find((item) => item.name.endsWith('Crème'));
+    expect(creme).toMatchObject({ locationType: 'fridge', notes: 'soft, ripe', quantity: 1 });
+    // Every imported item carries a shelf life, so editing it later cannot
+    // quietly move its expiry date.
+    stored.forEach((item) => expect(item.shelfLifeDays).toBeGreaterThan(0));
+  });
+
+  test('keeps the preview inside the screen on a phone', async ({ authedPage: page }, testInfo) => {
+    test.skip(!testInfo.project.name.includes('mobile'), 'viewport check is mobile-only');
+
+    const rows = Array.from(
+      { length: 40 },
+      (_, i) => `Wide Item Name Number ${i},${i + 1},ea,Pantry`
+    );
+    const modal = await chooseCSV(page, [HEADER, ...rows].join('\n'), 'phone.csv');
+
+    await expect(modal.getByText('40 ready to import')).toBeVisible();
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+    );
+    expect(overflow).toBeLessThanOrEqual(1);
   });
 });

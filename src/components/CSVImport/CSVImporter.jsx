@@ -63,7 +63,8 @@ const CSVImporter = ({
   }, [show, clear]);
 
   const handleFile = async (event) => {
-    const file = event.target.files?.[0];
+    const input = event.target;
+    const file = input.files?.[0];
     if (!file) return;
 
     setReading(true);
@@ -78,6 +79,10 @@ const CSVImporter = ({
       setReadError(err?.message || 'Could not read that file.');
       setAnalysis(null);
     } finally {
+      // Forget the choice so picking the *same* file again — after fixing it
+      // in a spreadsheet, which is exactly what the errors ask for — still
+      // fires a change event.
+      input.value = '';
       setReading(false);
     }
   };
@@ -85,13 +90,19 @@ const CSVImporter = ({
   const handleImport = async () => {
     if (!analysis?.validRows.length) return;
 
-    const outcome = await onImport(analysis.validRows, {
-      fileName,
-      skipped: analysis.errorRows.length,
-      errors: analysis.errorRows,
-    });
+    try {
+      const outcome = await onImport(analysis.validRows, {
+        fileName,
+        skipped: analysis.errorRows.length,
+        errors: analysis.errorRows,
+      });
 
-    setResult(outcome ?? { success: false, error: 'Import did not complete.' });
+      setResult(outcome ?? { success: false, error: 'Import did not complete.' });
+    } catch (err) {
+      // The hook resolves rather than throws, but a caller that throws must not
+      // leave the modal sitting on a preview with no answer.
+      setResult({ success: false, error: err?.message || 'Import did not complete.' });
+    }
   };
 
   const validCount = analysis?.validRows.length ?? 0;
@@ -135,7 +146,9 @@ const CSVImporter = ({
         {fileName} — {analysis.totalRows} row{analysis.totalRows === 1 ? '' : 's'}
       </p>
 
-      <div className="d-flex gap-2 mb-3 flex-wrap">
+      {/* Announced on its own: the counts are the answer to "what will this
+          file do?", and a screen reader lands on the file name above them. */}
+      <div className="d-flex gap-2 mb-3 flex-wrap" role="status">
         <Badge bg="success">{validCount} ready to import</Badge>
         <Badge bg={errorCount ? 'warning' : 'secondary'} text={errorCount ? 'dark' : undefined}>
           {errorCount} need{errorCount === 1 ? 's' : ''} fixing
@@ -150,14 +163,16 @@ const CSVImporter = ({
 
       {validCount > 0 && (
         <>
-          <h6 className="fw-semibold">Ready to import</h6>
-          <div style={{ maxHeight: 220, overflowY: 'auto' }}>
-            <Table size="sm" hover className="mb-1">
+          <h6 className="fw-semibold" id="csv-import-ready">
+            Ready to import
+          </h6>
+          <div style={{ maxHeight: 220, overflowY: 'auto', overflowX: 'auto' }}>
+            <Table size="sm" hover className="mb-1" aria-labelledby="csv-import-ready">
               <thead>
                 <tr>
-                  <th>Item</th>
-                  <th>Qty</th>
-                  <th>Location</th>
+                  <th scope="col">Item</th>
+                  <th scope="col">Qty</th>
+                  <th scope="col">Location</th>
                 </tr>
               </thead>
               <tbody>
@@ -181,13 +196,15 @@ const CSVImporter = ({
 
       {errorCount > 0 && (
         <>
-          <h6 className="fw-semibold mt-3">Rows we had to skip</h6>
-          <div style={{ maxHeight: 220, overflowY: 'auto' }}>
-            <Table size="sm" hover className="mb-1">
+          <h6 className="fw-semibold mt-3" id="csv-import-skipped">
+            Rows we had to skip
+          </h6>
+          <div style={{ maxHeight: 220, overflowY: 'auto', overflowX: 'auto' }}>
+            <Table size="sm" hover className="mb-1" aria-labelledby="csv-import-skipped">
               <thead>
                 <tr>
-                  <th>Line</th>
-                  <th>What is wrong</th>
+                  <th scope="col">Line</th>
+                  <th scope="col">What is wrong</th>
                 </tr>
               </thead>
               <tbody>
@@ -208,10 +225,17 @@ const CSVImporter = ({
 
       {importing && (
         <div className="mt-3">
-          <ProgressBar
-            now={progress.total ? (progress.processed / progress.total) * 100 : 0}
-            label={`${progress.processed}/${progress.total}`}
-          />
+          {/* Nested so the aria attributes land on the element that carries
+              role="progressbar" — react-bootstrap puts stray props on the
+              outer wrapper, which has no role at all. */}
+          <ProgressBar>
+            <ProgressBar
+              now={progress.total ? (progress.processed / progress.total) * 100 : 0}
+              label={`${progress.processed}/${progress.total}`}
+              aria-label="Import progress"
+              aria-valuetext={`${progress.processed} of ${progress.total} items saved`}
+            />
+          </ProgressBar>
           <p className="text-muted small mt-1 mb-0">
             Adding items… large files are saved 500 at a time.
           </p>
@@ -241,8 +265,8 @@ const CSVImporter = ({
       </Form.Group>
 
       {reading && (
-        <p className="text-muted d-flex align-items-center gap-2">
-          <Spinner size="sm" /> Reading {fileName}…
+        <p className="text-muted d-flex align-items-center gap-2" role="status">
+          <Spinner size="sm" aria-hidden="true" /> Reading {fileName}…
         </p>
       )}
 

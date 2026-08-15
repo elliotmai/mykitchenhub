@@ -112,7 +112,10 @@ This document describes the complete Firestore database structure for MyKitchenH
   // Tracking information
   addedAt: Timestamp,                     // When item was added
   expiresAt: Timestamp,                   // Calculated expiration date
-  shelfLifeDays: 270,                     // Shelf life for this ingredient + location
+  shelfLifeDays: 270,                     // Always a number, never null — the
+                                          // edit form recalculates expiresAt
+                                          // from it, so a missing one moves the
+                                          // expiry date every time it is edited
   shelfLifeSource: "default",             // "default" (we calculated it) | "custom" (the user chose it)
   notes: "organic, from Costco",          // User notes
   source: "manual",                       // "manual" | "hellofresh" | "csv-import" | "seed"

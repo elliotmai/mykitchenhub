@@ -12,6 +12,7 @@ import useCSVImport, {
   chunk,
   buildInventoryDoc,
 } from '../useCSVImport';
+import { SHELF_LIFE_DEFAULTS } from '../useInventory';
 import { AuthProvider } from '../useAuth';
 import * as fs from '../../test-utils/mocks/firestore';
 import * as authMock from '../../test-utils/mocks/auth';
@@ -135,6 +136,21 @@ describe('buildInventoryDoc', () => {
     expect(daysOut).toBe(180);
   });
 
+  it.each(['fridge', 'freezer', 'pantry'])(
+    'always records a shelf life, so editing a %s item cannot move its expiry',
+    (locationType) => {
+      // The edit form recalculates expiresAt from the item's shelfLifeDays. A
+      // null one made it fall back to the default, counted from the day of the
+      // edit — every edit pushed an imported item's expiry further out.
+      const doc = buildInventoryDoc(validRow({ locationType }).data);
+
+      expect(doc.shelfLifeDays).toBe(SHELF_LIFE_DEFAULTS[locationType]);
+      expect(Math.round((doc.expiresAt - new Date()) / (1000 * 60 * 60 * 24))).toBe(
+        doc.shelfLifeDays
+      );
+    }
+  );
+
   it('records the purchase, price and store included, so analytics has history', () => {
     const doc = buildInventoryDoc(validRow({ price: 4.99, store: 'Costco' }).data);
 
@@ -189,6 +205,24 @@ describe('importItems', () => {
     fs.writeBatch.mock.results.forEach(({ value }) =>
       expect(value.commit).toHaveBeenCalledTimes(1)
     );
+  });
+
+  it.each([
+    [499, [499]],
+    [500, [500]],
+    [501, [500, 1]],
+    [1000, [500, 500]],
+  ])('splits %s rows across batches as %j', async (count, expected) => {
+    const { result } = await renderImport();
+
+    await act(async () => {
+      await result.current.importItems(rows(count));
+    });
+
+    expect(fs.writeBatch.mock.results.map(({ value }) => value.set.mock.calls.length)).toEqual(
+      expected
+    );
+    expect(batchedDocs()).toHaveLength(count);
   });
 
   it('imports a 150-item file in a single batch', async () => {

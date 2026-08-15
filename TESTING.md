@@ -73,6 +73,22 @@ what it cares about: `makeItem`, `makeLocation`, `makeRecipe`, `makeUserProfile`
 **Keep factories in sync with `firestore/SCHEMA_DOCUMENTATION.md`.** They are the
 shared definition of "a valid document" across the frontend suite.
 
+### Contract tests between the frontend and the functions
+
+Some logic genuinely has to exist in both packages — CSV validation runs in the
+browser to show a preview and again in the Cloud Function because the server
+must not trust the client. Where that happens, a *contract test* runs one shared
+corpus through both implementations and asserts they agree:
+
+| Contract | Test | Corpus |
+| --- | --- | --- |
+| CSV validation | `src/components/CSVImport/__tests__/csvValidation.contract.test.js` | `src/test-utils/csvContractCorpus.js` |
+
+These live in the frontend suite because only that runner transpiles ESM; it
+`require`s the CommonJS copy directly. **A change to either implementation
+belongs in both, in the same commit** — and if it doesn't, this test is what
+says so. Add a case to the corpus whenever you add a rule.
+
 ### Coverage
 
 Thresholds are enforced in `package.json` and act as a ratchet — CI fails if
