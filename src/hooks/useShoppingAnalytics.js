@@ -92,6 +92,11 @@ export const buildPurchaseCounts = (items = []) => {
  * `averagePrice` and `bestStore` come only from purchases that recorded a
  * price, so an item bought six times with one price on file still reports six
  * purchases and one honest average.
+ *
+ * That average is per *purchase*, not per unit. An item bought once as a gallon
+ * and once as a 64oz bottle averages what was paid at the till, which is the
+ * only comparison the recorded data supports — nothing here converts units, and
+ * no row claims a unit that only some of its purchases used.
  */
 export const buildFrequentItems = (items = [], records = [], max = TOP_ITEM_LIMIT) => {
   const counts = buildPurchaseCounts(items);
@@ -99,7 +104,7 @@ export const buildFrequentItems = (items = [], records = [], max = TOP_ITEM_LIMI
 
   records.forEach((record) => {
     if (!detail.has(record.itemKey)) {
-      detail.set(record.itemKey, { priced: [], stores: new Map(), lastPurchased: null, unit: '' });
+      detail.set(record.itemKey, { priced: [], stores: new Map(), lastPurchased: null });
     }
     const d = detail.get(record.itemKey);
 
@@ -110,7 +115,6 @@ export const buildFrequentItems = (items = [], records = [], max = TOP_ITEM_LIMI
       prices.push(record.price);
       d.stores.set(store, prices);
     }
-    if (record.unit && !d.unit) d.unit = record.unit;
     if (record.date && (!d.lastPurchased || record.date > d.lastPurchased)) {
       d.lastPurchased = record.date;
     }
@@ -134,7 +138,6 @@ export const buildFrequentItems = (items = [], records = [], max = TOP_ITEM_LIMI
 
       return {
         ...entry,
-        unit: d?.unit ?? '',
         spend: round2(spend),
         averagePrice: priced.length ? round2(spend / priced.length) : null,
         bestStore,

@@ -59,12 +59,15 @@ const ChartFrame = ({
                     </tr>
                   </thead>
                   <tbody>
-                    {tableRows.map((row) => (
-                      <tr key={String(row[0])}>
+                    {/* Rows are keyed by position, not by their first cell: two
+                        ingredients can share a display name, and a duplicate key
+                        drops one of them from the table. */}
+                    {tableRows.map((row, rowIndex) => (
+                      <tr key={`${rowIndex}-${String(row[0])}`}>
                         <th scope="row">{row[0]}</th>
                         {row.slice(1).map((cell, index) => (
-                          // Columns are fixed per chart, so the index is a stable key.
-                          <td key={tableColumns[index + 1]}>{cell}</td>
+                          // eslint-disable-next-line react/no-array-index-key
+                          <td key={index}>{cell}</td>
                         ))}
                       </tr>
                     ))}
