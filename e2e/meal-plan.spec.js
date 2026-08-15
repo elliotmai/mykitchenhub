@@ -25,6 +25,20 @@ const shiftDayKey = (key, days) => {
 
 const TODAY = toDayKey(new Date());
 
+/**
+ * The Monday the board opens on — `startOfWeek` in src/hooks/useMealPlan.js
+ * uses `(getDay() + 6) % 7`, so weeks run Monday to Sunday.
+ *
+ * Any spec that needs a day with a *next* day on the board uses this rather
+ * than today: today is Sunday one run in seven, and Sunday has no next day.
+ */
+const weekMonday = () => {
+  const now = new Date();
+  return toDayKey(
+    new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7))
+  );
+};
+
 /** Poll Firestore until the entry exists, then hand it back. */
 const storedEntry = async (recipeName) => {
   await expect
@@ -230,23 +244,30 @@ test.describe('meal plan', () => {
 
   test('moves a meal to another day', async ({ authedPage: page }) => {
     const recipeName = `E2E Movable ${Date.now()}`;
-    const tomorrow = shiftDayKey(TODAY, 1);
 
-    await seedMealPlanEntry({ date: TODAY, recipeName });
+    // Monday and Tuesday of the week the board already shows, rather than
+    // today and tomorrow. Today is Sunday one run in seven, and Sunday is the
+    // last card on the board — so this spec used to skip itself one day in
+    // seven, silently, which is the same as not having it on those days.
+    // Monday always has a Tuesday next to it.
+    const monday = weekMonday();
+    const tuesday = shiftDayKey(monday, 1);
+
+    await seedMealPlanEntry({ date: monday, recipeName });
     await page.reload({ waitUntil: 'domcontentloaded' });
 
     const meal = page.locator('[data-testid^="meal-entry-"]').filter({ hasText: recipeName });
     await expect(meal).toBeVisible();
 
-    // Sunday's meals have no next day on the board; skip rather than fail.
-    const targetDay = page.getByTestId(`day-card-${tomorrow}`);
-    if ((await targetDay.count()) === 0) test.skip(true, 'Today is the last day of the week');
+    // Both days are on the board every day of the week — no conditional skip.
+    await expect(page.getByTestId(`day-card-${monday}`)).toHaveCount(1);
+    await expect(page.getByTestId(`day-card-${tuesday}`)).toHaveCount(1);
 
-    await meal.getByRole('combobox').selectOption(tomorrow);
+    await meal.getByRole('combobox').selectOption(tuesday);
 
     await expect
       .poll(async () => (await mealPlanEntry(recipeName))?.date, { timeout: 10_000 })
-      .toBe(tomorrow);
+      .toBe(tuesday);
   });
   test('regenerates a week it has already planned', async ({ authedPage: page }, testInfo) => {
     // The emulator runs the real firestore.rules, and `mealPlans` pins

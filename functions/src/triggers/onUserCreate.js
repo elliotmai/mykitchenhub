@@ -38,11 +38,19 @@ async function onUserCreate(user) {
           restrictions: [],
           preferences: [],
           allergies: []
-        },
-        helloFresh: {
-          linked: false,
-          deliveryDays: [1, 3, 5] // Monday, Wednesday, Friday
         }
+      },
+      // Top-level, not under `preferences`. This is the shape
+      // SCHEMA_DOCUMENTATION.md documents, the shape firestore.rules requires
+      // on create, and — the part that actually mattered — the only shape
+      // anything reads: `readHelloFresh` in functions/src/mealPlan/planContext.js
+      // looks at `profile.helloFresh`, so while these settings were seeded
+      // under `preferences` the meal planner never saw the delivery days at
+      // all. src/hooks/useDeliveries.js has always written here.
+      helloFresh: {
+        enabled: false,
+        deliveryDays: [1, 3, 5], // Monday, Wednesday, Friday
+        mealsPerWeek: 0
       },
       stats: {
         totalRecipes: 0,

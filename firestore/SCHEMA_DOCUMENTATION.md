@@ -70,10 +70,13 @@ rather than guessing a day.
   update could leave a profile with no `preferences` — a state `create` would
   have refused
 - A top-level `helloFresh` is required on **create only**, deliberately not on
-  update: `onUserCreate` writes the profile through the admin SDK with
-  `helloFresh` nested under `preferences` and no top-level key, so requiring it
-  on update would freeze every profile the Cloud Function created — including
-  against the `useDeliveries` write that adds the top-level key
+  update. `onUserCreate` writes the profile through the admin SDK, which
+  bypasses these rules, and until roadmap 10.3 it seeded `helloFresh` under
+  `preferences` with no top-level key — so profiles without one exist. Requiring
+  it on update would freeze every one of them, including against the
+  `useDeliveries` write that adds the field. `onUserCreate` now writes the
+  top-level shape, but the update rule stays permissive until those older
+  profiles are backfilled (see `docs/DEPLOYMENT.md`)
 
 ---
 

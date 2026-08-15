@@ -107,6 +107,38 @@ describe('onUserCreate', () => {
     expect(preferences.smsAlerts.phoneNumber).toBe('');
   });
 
+  // HelloFresh settings used to be seeded under `preferences.helloFresh` while
+  // every reader looked at the top-level field — so the seeded delivery days
+  // reached nothing, and a profile grew a second copy the first time a delivery
+  // was logged. One place only, and it is the documented one.
+  it('seeds HelloFresh settings top-level, where everything reads them', async () => {
+    await onUserCreate(NEW_USER);
+
+    const profile = writeTo('users/user-123').data;
+
+    expect(profile.helloFresh).toEqual({
+      enabled: false,
+      deliveryDays: [1, 3, 5],
+      mealsPerWeek: 0,
+    });
+    expect(profile.preferences.helloFresh).toBeUndefined();
+  });
+
+  it('seeds delivery days the meal planner can actually resolve', async () => {
+    // The planner is the only consumer, so the seeded value has to survive its
+    // reader rather than merely being present.
+    await onUserCreate(NEW_USER);
+    const profile = writeTo('users/user-123').data;
+
+    const { readHelloFresh, weekDayKeys } = require('../../mealPlan/planContext');
+    const hf = readHelloFresh(profile, weekDayKeys('2026-08-10')); // a Monday
+
+    // Not linked yet, but Monday/Wednesday/Friday resolve — which is what the
+    // nested copy never managed.
+    expect(hf.active).toBe(false);
+    expect(hf.deliveryDayKeys).toEqual(['2026-08-10', '2026-08-12', '2026-08-14']);
+  });
+
   it('zeroes the stats counters', async () => {
     await onUserCreate(NEW_USER);
 
