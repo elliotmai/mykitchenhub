@@ -210,11 +210,22 @@ describe('validateRow', () => {
     expect(result.data).toBeNull();
   });
 
-  it('accepts an explicit expiry date', () => {
+  it('accepts an explicit expiry date, on the day the spreadsheet said', () => {
     const result = validateRow(row({ expiresAt: '2027-01-15' }), 2, LOCATIONS);
 
     expect(result.valid).toBe(true);
+    // Local, not UTC: `new Date('2027-01-15')` is the 14th in every zone west
+    // of Greenwich, which expires the imported food a day early.
     expect(result.data.expiresAt.getFullYear()).toBe(2027);
+    expect(result.data.expiresAt.getMonth()).toBe(0);
+    expect(result.data.expiresAt.getDate()).toBe(15);
+  });
+
+  it('rejects a best-by date that never happened', () => {
+    const result = validateRow(row({ expiresAt: '2027-02-30' }), 2, LOCATIONS);
+
+    expect(result.valid).toBe(false);
+    expect(result.errors.join(' ')).toMatch(/not a date we can read/);
   });
 
   it('rejects an expiry date it cannot read', () => {
