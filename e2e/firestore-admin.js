@@ -184,13 +184,9 @@ const seedRecipe = async ({ name, servings = 2, difficulty = 'easy' }) => {
   return ref.id;
 };
 
-/** How many recipes the library holds right now. */
-const recipeCount = async () => (await admin.firestore().collection('recipes').get()).size;
-
 module.exports = {
   testUserId,
   seedRecipe,
-  recipeCount,
   inventoryItems,
   inventoryHasItem,
   inventoryItem,
