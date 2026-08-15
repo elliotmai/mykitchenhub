@@ -43,7 +43,7 @@ describe('getSmsConfig', () => {
     expect(config.configured).toBe(true);
   });
 
-  it('does not treat one provider\'s key as another\'s', () => {
+  it("does not treat one provider's key as another's", () => {
     const config = getSmsConfig({ SMS_PROVIDER: 'zixlow', TEXTBELT_API_KEY: 'test-key' });
     expect(config.configured).toBe(false);
   });
@@ -143,7 +143,11 @@ describe('sendSms when a provider is configured', () => {
   });
 
   it('survives a network failure', async () => {
-    const http = { post: jest.fn(async () => { throw new Error('ETIMEDOUT'); }) };
+    const http = {
+      post: jest.fn(async () => {
+        throw new Error('ETIMEDOUT');
+      }),
+    };
 
     const result = await sendSms('+15551234567', 'hello', {
       env: { TEXTBELT_API_KEY: 'test-key' },
@@ -154,7 +158,11 @@ describe('sendSms when a provider is configured', () => {
   });
 
   it('never writes the credential to the log', async () => {
-    const http = { post: jest.fn(async () => { throw new Error('ETIMEDOUT'); }) };
+    const http = {
+      post: jest.fn(async () => {
+        throw new Error('ETIMEDOUT');
+      }),
+    };
 
     await sendSms('+15551234567', 'hello', {
       env: { TEXTBELT_API_KEY: 'super-secret-key' },
