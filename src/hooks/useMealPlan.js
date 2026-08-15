@@ -27,6 +27,7 @@ import { db, functions } from '../services/firebase';
 import { useAuth } from './useAuth';
 import useInventory from './useInventory';
 import { friendlyError } from '../utils/firebaseErrors';
+import { withRetry } from '../utils/retry';
 
 // ---------------------------------------------------------------------------
 // Day keys
@@ -614,7 +615,15 @@ const useMealPlan = () => {
 
     try {
       const callable = httpsCallable(functions, 'generateMealPlan');
-      const response = await callable({ weekStart, days: 7 });
+      // Retried on a transient failure — roadmap 9.3. Generating a week costs
+      // a Claude call and the cook is watching a spinner for it; giving up on
+      // a dropped connection means paying for it twice, by hand.
+      //
+      // Safe because the callable only *returns* a plan. Everything that
+      // writes — deleting the previous generation, adding the new entries —
+      // happens below, after this has settled, so a second attempt cannot
+      // double up anything.
+      const response = await withRetry(() => callable({ weekStart, days: 7 }));
       const result = response?.data || {};
       const generated = result.plan;
       // The function validates its own output, but this client is what actually

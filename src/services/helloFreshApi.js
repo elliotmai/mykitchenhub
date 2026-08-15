@@ -8,6 +8,8 @@
 // End-to-end specs stub these two URLs with `page.route`, which is why every
 // request goes through `postJson` rather than being scattered across hooks.
 
+import { withRetry } from '../utils/retry';
+
 /** Photos are sent inline, and the Vision API caps a single image at 5MB. */
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
@@ -54,11 +56,23 @@ async function postJson(functionName, payload) {
 
   let response;
   try {
-    response = await fetch(`${base}/${functionName}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    // Retried on a dropped connection — roadmap 9.3. Importing a recipe card
+    // means the cook has already taken a photo or pasted a link; losing that
+    // to a one-second signal blip and making them start again is the worst
+    // moment to give up. Both endpoints read and transform, and neither writes
+    // anything, so a second attempt cannot duplicate work.
+    //
+    // Only the `fetch` is inside the retry. A response that arrives and says
+    // "that link is not a HelloFresh recipe" is an answer, not a failure.
+    response = await withRetry(
+      () =>
+        fetch(`${base}/${functionName}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }),
+      { shouldRetry: () => true }
+    );
   } catch (err) {
     throw new HelloFreshImportError('network');
   }

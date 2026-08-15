@@ -23,6 +23,15 @@ const signIn = () => {
   return user;
 };
 
+/**
+ * How long a code-split route may take to arrive.
+ *
+ * Generous on purpose: this covers a dynamic import resolving while the rest of
+ * the suite runs in parallel, and the cost of being wrong is a flake that only
+ * appears in a full run.
+ */
+const ROUTE_CHUNK_TIMEOUT = 10_000;
+
 const visit = (path) => {
   window.history.pushState({}, '', path);
   return render(<App />);
@@ -69,7 +78,15 @@ describe('routing while signed in', () => {
     signIn();
     visit(path);
 
-    expect(await screen.findAllByText(heading)).not.toHaveLength(0);
+    // The timeout is explicit because rendering a route is now genuinely
+    // asynchronous: App.jsx code-splits every page (roadmap 9.2), so this waits
+    // for a dynamic import to resolve and Suspense to swap the fallback out.
+    // RTL's default is 1000ms — not a budget anyone chose, and under a full
+    // parallel suite the analytics chunk (recharts) does not always make it.
+    // This is the wait becoming real, not a slow assertion being papered over.
+    expect(
+      await screen.findAllByText(heading, {}, { timeout: ROUTE_CHUNK_TIMEOUT })
+    ).not.toHaveLength(0);
   });
 
   it('lands on the dashboard from the root', async () => {
@@ -91,7 +108,9 @@ describe('routing while signed in', () => {
     visit('/dashboard');
 
     const { APP_VERSION } = require('../config/version');
-    expect(await screen.findByText(`v${APP_VERSION}`)).toBeInTheDocument();
+    expect(
+      await screen.findByText(`v${APP_VERSION}`, {}, { timeout: ROUTE_CHUNK_TIMEOUT })
+    ).toBeInTheDocument();
   });
 });
 

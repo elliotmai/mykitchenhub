@@ -672,6 +672,46 @@ describe('generatePlan', () => {
     });
   });
 
+  it('rides out a dropped connection rather than making the cook pay twice', async () => {
+    // Roadmap 9.3. Generating a week costs a Claude call and the cook watches a
+    // spinner through it. Giving up on a one-second blip means paying for it
+    // again, by hand. Safe to retry because the callable only returns a plan —
+    // everything that writes happens after it settles.
+    const callable = fns.__callable('generateMealPlan');
+    callable
+      .mockRejectedValueOnce(Object.assign(new Error('unavailable'), { code: 'unavailable' }))
+      .mockResolvedValue({ data: aiPlan });
+
+    const { result } = await renderMealPlan();
+
+    let outcome;
+    await act(async () => {
+      outcome = await result.current.generatePlan();
+    });
+
+    expect(callable).toHaveBeenCalledTimes(2);
+    expect(outcome.success).toBe(true);
+    expect(fs.addDoc.mock.calls.filter(([ref]) => fs.pathOf(ref) === ENTRIES_PATH)).toHaveLength(1);
+  });
+
+  it('gives up on a refusal instead of hammering the function', async () => {
+    const callable = fns.__callable('generateMealPlan');
+    callable.mockRejectedValue(
+      Object.assign(new Error('permission-denied'), { code: 'permission-denied' })
+    );
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const { result } = await renderMealPlan();
+
+    let outcome;
+    await act(async () => {
+      outcome = await result.current.generatePlan();
+    });
+
+    expect(callable).toHaveBeenCalledTimes(1);
+    expect(outcome.success).toBe(false);
+  });
+
   it('saves the week’s shopping list and batch tips', async () => {
     fns.__callable('generateMealPlan').mockResolvedValue({ data: aiPlan });
     const { result } = await renderMealPlan();

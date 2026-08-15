@@ -206,6 +206,25 @@ A worker-scoped fixture cannot be overridden with `test.use()` from inside a
 file, so `test.use({ storageState: SIGNED_OUT_STATE })` on the normal test
 object is an error rather than a signed-out browser.
 
+### The empty kitchen, and no connection
+
+`e2e/empty-states.spec.js` covers the two states nobody writes a fixture for
+and everybody hits: the first five minutes after signing up, and a phone in a
+kitchen with thick walls.
+
+The `emptyPage` fixture signs in as `EMPTY_USER` — a cook with a profile and
+the default shelves and nothing on them, which is exactly what the sign-up
+function creates. It is shared across workers rather than per-worker, which is
+safe **only because those specs read**. If you add one that writes, give it a
+worker account instead.
+
+The offline tests use `context.setOffline(true)` and then navigate **by
+clicking**, not with `page.goto`. A goto is a full document request, so offline
+it depends on the service worker having activated — a different thing to test
+and a flakier one. Clicking is what a cook does and what a single-page app is
+for. Where a spec does need a document request offline, wait for
+`navigator.serviceWorker.controller` first.
+
 ### What the mobile project runs
 
 Both browser projects used to run all 71 specs, which doubled the suite to pay
