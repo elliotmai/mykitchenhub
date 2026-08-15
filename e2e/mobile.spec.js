@@ -369,9 +369,12 @@ test.describe('mobile navigation', () => {
       await page.goto(path, { waitUntil: 'domcontentloaded' });
       await expect(page.locator('.app-footer__version')).toBeVisible();
 
+      // The label element, not the link's textContent: the Alerts tab carries
+      // a count badge inside the link, so reading the whole thing says
+      // "2Alerts" on a kitchen with food going off.
       const marked = await bar
-        .locator('[aria-current="page"]')
-        .evaluateAll((links) => links.map((l) => l.textContent.trim()));
+        .locator('[aria-current="page"] .mobile-nav__label')
+        .evaluateAll((labels) => labels.map((l) => l.textContent.trim()));
 
       // One entry per route rather than an assertion per route: a failure then
       // prints the whole bar-vs-URL table, which is what you need to see.

@@ -244,6 +244,66 @@ describe('signup', () => {
       });
       expect(profile.data.preferences).not.toHaveProperty('helloFresh');
     });
+
+    it('gives each of the four shelves its own document id', async () => {
+      const writes = await signUpAndCollectWrites();
+      const paths = writes.map((w) => w.path).filter((p) => p.includes('/storageLocations/'));
+
+      // Two shelves are `type: 'pantry'`, so the id carries the order too.
+      // A collision would silently leave a new cook with three shelves.
+      expect(paths).toHaveLength(4);
+      expect(new Set(paths).size).toBe(4);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // When the Cloud Function worked and something *after* it did not
+  //
+  // The read-back used to sit inside the same try as the provisioning call, so
+  // a dropped connection while reading a profile that had just been created
+  // successfully sent signup into the fallback — which then rewrote the
+  // existing document with a fresh serverTimestamp(). firestore.rules pins
+  // `createdAt` on update, so that write is refused, and a cook whose account
+  // was provisioned perfectly is told signup failed. Trying again then says the
+  // email is taken, which is a dead end.
+  // ---------------------------------------------------------------------------
+  describe('when the function succeeds but the read-back does not', () => {
+    const signUp = async () => {
+      authMock.__setUser(null);
+      const { result } = renderAuth();
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      let response;
+      await act(async () => {
+        response = await result.current.signup('new@example.com', 'hunter2', 'New Cook');
+      });
+      return response;
+    };
+
+    it('does not overwrite a profile the Cloud Function already created', async () => {
+      jest.spyOn(console, 'error').mockImplementation(() => {});
+      // Provisioning succeeds (the default fetch mock); reading it back does not.
+      fs.getDoc.mockRejectedValue(Object.assign(new Error('offline'), { code: 'unavailable' }));
+
+      const response = await signUp();
+
+      // Not a single write — there was nothing that needed writing.
+      expect(fs.setDoc).not.toHaveBeenCalled();
+      // And the cook is signed up, because they are.
+      expect(response.success).toBe(true);
+    });
+
+    it('still provisions locally when the function reports success but wrote nothing', async () => {
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+      fs.getDoc.mockResolvedValue(fs.__doc('missing', undefined));
+
+      const response = await signUp();
+
+      const paths = fs.setDoc.mock.calls.map(([ref]) => fs.pathOf(ref));
+      expect(paths.some((p) => /^users\/[^/]+$/.test(p))).toBe(true);
+      expect(paths.filter((p) => p.includes('/storageLocations/'))).toHaveLength(4);
+      expect(response.success).toBe(true);
+    });
   });
 
   it('surfaces an already-registered email as a clear message', async () => {
