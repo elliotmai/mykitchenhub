@@ -88,6 +88,28 @@ describe('buildWeekRows', () => {
   it('handles being given nothing at all', () => {
     expect(buildWeekRows()).toEqual([]);
   });
+
+  it('drops an entry whose recipe name is not text', () => {
+    // A half-written document, or one from a writer that has moved on: the
+    // preview shows nothing for it rather than "[object Object]".
+    const days = weekDays();
+    const rows = buildWeekRows(days, {
+      [days[0].key]: [{ id: 'a', recipeName: null }, { id: 'b', recipeName: 42 }, entry('Salmon')],
+    });
+
+    expect(rows[0].meals.map((m) => m.title)).toEqual(['Salmon']);
+  });
+
+  it('gives an entry with no id a key of its own', () => {
+    const days = weekDays();
+    const rows = buildWeekRows(days, {
+      [days[0].key]: [{ recipeName: 'Soup' }, { recipeName: 'Stew' }],
+    });
+
+    const keys = rows[0].meals.map((m) => m.key);
+    expect(new Set(keys).size).toBe(2);
+    expect(keys.every(Boolean)).toBe(true);
+  });
 });
 
 describe('MealPlanPreview', () => {

@@ -1,37 +1,12 @@
 // The core loop the app exists for: see what's in the kitchen, add to it,
 // and know what's about to go off. Exercised against real Firestore rules.
 
-const { test, expect } = require('./fixtures');
+const { test, expect, addInventoryItem } = require('./fixtures');
 const { inventoryHasItem, inventoryItem } = require('./firestore-admin');
 
-/**
- * Fills and submits the add-item modal.
- *
- * The modal has two <select> elements (unit, then storage location) and several
- * number inputs, so every field is addressed by its own placeholder or label
- * rather than by position.
- */
-const addItem = async (page, name, quantity = '1') => {
-  await page
-    .getByRole('button', { name: /add item/i })
-    .first()
-    .click();
-
-  const modal = page.locator('.modal.show');
-  await expect(modal).toBeVisible();
-
-  await modal.getByPlaceholder(/Chicken Breast/).fill(name);
-  await modal.getByPlaceholder('e.g. 2').fill(quantity);
-
-  // Storage location is required; its <select> is the one containing the
-  // "Select a location…" prompt.
-  const locationSelect = modal.locator('select').filter({ hasText: 'Select a location' });
-  const firstLocation = await locationSelect.locator('option').nth(1).getAttribute('value');
-  await locationSelect.selectOption(firstLocation);
-
-  await modal.getByRole('button', { name: 'Add Item' }).click();
-  await expect(modal).not.toBeVisible();
-};
+/** Fills and submits the add-item modal, already on the inventory page. */
+const addItem = (page, name, quantity = '1') =>
+  addInventoryItem(page, { name, quantity, navigate: false });
 
 /**
  * Asserts whether an item reached Firestore, read straight from the emulator.

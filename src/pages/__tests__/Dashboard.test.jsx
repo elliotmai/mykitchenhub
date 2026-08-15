@@ -3,8 +3,10 @@
 // absent collection produces an empty state rather than a broken page.
 
 import React from 'react';
-import { act, waitFor } from '@testing-library/react';
-import { renderWithProviders, screen, firestoreMock as fs } from '../../test-utils';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { renderWithProviders, screen, firestoreMock as fs, authMock } from '../../test-utils';
+import { AuthProvider } from '../../hooks/useAuth';
+import useWasteAlerts from '../../hooks/useWasteAlerts';
 import {
   asDocs,
   makeItem,
@@ -66,6 +68,78 @@ describe('countExpiringSoon', () => {
     expect(countExpiringSoon([])).toBe(0);
     expect(countExpiringSoon()).toBe(0);
   });
+
+  it('ignores an item with no expiry date at all', () => {
+    expect(
+      countExpiringSoon([makeItem({ expiresAt: null }), makeItem({ expiresAt: undefined })])
+    ).toBe(0);
+  });
+
+  it('counts the day-five boundary in and the day-six boundary out', () => {
+    expect(countExpiringSoon([makeItem({ expiresAt: daysFromNow(5) })])).toBe(1);
+    expect(countExpiringSoon([makeItem({ expiresAt: daysFromNow(6) })])).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Agreement with the Waste Alerts page
+//
+// Two screens showing "how much food is about to go off" have to show the same
+// number, or one of them is lying. The dashboard derives its tile from the
+// expiration *status*; the waste-alerts page counts a day window. They are
+// meant to be the same set, and nothing enforces that but this.
+// ---------------------------------------------------------------------------
+
+describe('the Expiring Soon tile and the Waste Alerts page', () => {
+  /** The waste-alerts hook, signed in, with its two listeners attached. */
+  const renderWasteAlerts = async () => {
+    authMock.__setUser(authMock.__user({ uid: UID }));
+    fs.getDoc.mockResolvedValue(fs.__doc(UID, makeUserProfile()));
+
+    const view = renderHook(() => useWasteAlerts(), {
+      wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+    });
+
+    await waitFor(() => expect(fs.__listenerCount(INVENTORY_PATH)).toBeGreaterThan(0));
+    return view;
+  };
+
+  const spread = () => [
+    makeItem({ name: 'Long gone', expiresAt: daysFromNow(-9) }),
+    makeItem({ name: 'Expired', expiresAt: daysFromNow(-1) }),
+    makeItem({ name: 'Today', expiresAt: daysFromNow(0) }),
+    makeItem({ name: 'Critical', expiresAt: daysFromNow(2) }),
+    makeItem({ name: 'Warning', expiresAt: daysFromNow(3) }),
+    makeItem({ name: 'Edge in', expiresAt: daysFromNow(5) }),
+    makeItem({ name: 'Edge out', expiresAt: daysFromNow(6) }),
+    makeItem({ name: 'Fresh', expiresAt: daysFromNow(90) }),
+    makeItem({ name: 'No date', expiresAt: null }),
+  ];
+
+  it('count the same items, boundary for boundary', async () => {
+    const items = spread();
+    const { result } = await renderWasteAlerts();
+
+    await act(async () => {
+      fs.__emit(INVENTORY_PATH, asDocs(items));
+      fs.__emit(`users/${UID}/storageLocations`, asDocs([]));
+    });
+
+    expect(countExpiringSoon(items)).toBe(result.current.counts.total);
+    expect(countExpiringSoon(items)).toBe(6);
+  });
+
+  it('agree that an empty kitchen has nothing at risk', async () => {
+    const { result } = await renderWasteAlerts();
+
+    await act(async () => {
+      fs.__emit(INVENTORY_PATH, []);
+      fs.__emit(`users/${UID}/storageLocations`, asDocs([]));
+    });
+
+    expect(countExpiringSoon([])).toBe(result.current.counts.total);
+    expect(result.current.counts.total).toBe(0);
+  });
 });
 
 describe('Dashboard', () => {
@@ -75,6 +149,37 @@ describe('Dashboard', () => {
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
       /good (morning|afternoon|evening), Sam!/i
     );
+  });
+
+  it.each([
+    [8, 'Good morning'],
+    [11, 'Good morning'],
+    [12, 'Good afternoon'],
+    [16, 'Good afternoon'],
+    [17, 'Good evening'],
+    [23, 'Good evening'],
+  ])('greets at %i:00 with "%s"', async (hour, greeting) => {
+    // The boundaries are the whole point: at noon and at 5pm the greeting
+    // changes, and only one of the three branches runs on any given test run.
+    jest.spyOn(Date.prototype, 'getHours').mockReturnValue(hour);
+
+    await renderDashboard();
+
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(greeting);
+
+    Date.prototype.getHours.mockRestore();
+  });
+
+  it('greets a cook whose profile has no name yet', async () => {
+    fs.getCountFromServer.mockResolvedValue({ data: () => ({ count: 0 }) });
+    renderWithProviders(<Dashboard />, { route: '/dashboard', userProfile: null });
+
+    await waitFor(() => expect(fs.__listenerCount(INVENTORY_PATH)).toBeGreaterThan(0));
+    await act(async () => {
+      fs.__emit(INVENTORY_PATH, []);
+    });
+
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/, there!/);
   });
 
   it('fills in every stat from real data', async () => {

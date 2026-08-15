@@ -73,6 +73,11 @@ describe('toDate', () => {
     expect(toDate('  2026-03-04T10:00:00.000Z  ')).toEqual(new Date('2026-03-04T10:00:00.000Z'));
   });
 
+  it('means the year it was given, not 1900 plus it', () => {
+    // new Date(26, 0, 1) is 1926 — a two-digit year has to be set explicitly.
+    expect(toDate('0026-05-01').getFullYear()).toBe(26);
+  });
+
   it('returns null for a day that does not exist', () => {
     // new Date(2026, 1, 31) silently rolls into March; a "best by 2026-02-31"
     // is bad data and has to read as absent, not as the 3rd of March.

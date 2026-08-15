@@ -62,8 +62,11 @@ export const buildUrgentAlerts = (items = [], max = 5) =>
  * @param {number} max - rows to show before "view all"
  */
 const UrgentAlerts = ({ items = [], loading = false, max = 5 }) => {
-  const alerts = buildUrgentAlerts(items, max);
-  const totalUrgent = buildUrgentAlerts(items, Number.MAX_SAFE_INTEGER).length;
+  // Built once and sliced, rather than built twice: the second call existed
+  // only to count the rows the first one had already thrown away.
+  const urgent = buildUrgentAlerts(items, Number.MAX_SAFE_INTEGER);
+  const alerts = urgent.slice(0, max);
+  const totalUrgent = urgent.length;
 
   return (
     <Card className="h-100 urgent-alerts">

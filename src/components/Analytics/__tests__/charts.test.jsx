@@ -10,9 +10,9 @@ import { render, screen, within } from '@testing-library/react';
 jest.mock('recharts', () => require('../../../test-utils/rechartsMock')());
 
 import ChartFrame from '../ChartFrame';
-import TopItemsChart, { truncateName } from '../TopItemsChart';
+import TopItemsChart, { truncateName, tooltipItemName } from '../TopItemsChart';
 import SpendTrendChart, { LastPointLabel } from '../SpendTrendChart';
-import StoreChart from '../StoreChart';
+import StoreChart, { tooltipStoreName } from '../StoreChart';
 import FrequentItemsTable from '../FrequentItemsTable';
 
 const item = (overrides = {}) => ({
@@ -222,6 +222,14 @@ describe('TopItemsChart', () => {
     expect(container.querySelectorAll('.recharts-bar-rectangle')).toHaveLength(2);
   });
 
+  it('names the ingredient in full in the tooltip, not the shortened label', () => {
+    const name = 'Organic free-range boneless skinless chicken thighs';
+
+    expect(tooltipItemName('Organic f…', [{ payload: { name } }])).toBe(name);
+    expect(tooltipItemName('x', [])).toBe('');
+    expect(tooltipItemName('x', undefined)).toBe('');
+  });
+
   it('draws a single item without collapsing the plot', () => {
     const { container } = render(<TopItemsChart items={[item({ purchases: 1 })]} />);
 
@@ -328,6 +336,14 @@ describe('StoreChart', () => {
     expect(
       screen.getByRole('rowheader', { name: 'Whole Foods Market Downtown' })
     ).toBeInTheDocument();
+  });
+
+  it('names the store in full in the tooltip, not the shortened label', () => {
+    const store = 'Whole Foods Market Downtown';
+
+    expect(tooltipStoreName('Whole Fo…', [{ payload: { store } }])).toBe(store);
+    expect(tooltipStoreName('x', [])).toBe('');
+    expect(tooltipStoreName('x', undefined)).toBe('');
   });
 
   it('draws one store without a degenerate axis', () => {

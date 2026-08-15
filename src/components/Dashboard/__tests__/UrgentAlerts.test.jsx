@@ -58,6 +58,30 @@ describe('buildUrgentAlerts', () => {
     expect(buildUrgentAlerts()).toEqual([]);
     expect(buildUrgentAlerts([])).toEqual([]);
   });
+
+  it('sorts a mix of Timestamps, Dates and ISO strings by the same clock', () => {
+    // Inventory documents reach the dashboard in whichever shape wrote them:
+    // a Timestamp from the app, a Date from an optimistic local write, an ISO
+    // string from the emulator seed. All three have to sort together.
+    const twoDaysAgo = new Date(Date.now() - 2 * 86400000);
+    const yesterday = new Date(Date.now() - 86400000);
+
+    const alerts = buildUrgentAlerts([
+      makeItem({ name: 'From a Date', expiresAt: yesterday }),
+      makeItem({ name: 'From a Timestamp', expiresAt: daysFromNow(-3) }),
+      makeItem({ name: 'From a string', expiresAt: twoDaysAgo.toISOString() }),
+    ]);
+
+    expect(alerts.map((a) => a.name)).toEqual(['From a Timestamp', 'From a string', 'From a Date']);
+  });
+
+  it('leaves the location blank rather than printing undefined', () => {
+    const [alert] = buildUrgentAlerts([
+      makeItem({ name: 'Mystery', expiresAt: daysFromNow(-1), locationType: undefined }),
+    ]);
+
+    expect(alert.locationType).toBe('');
+  });
 });
 
 describe('UrgentAlerts', () => {

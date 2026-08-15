@@ -47,6 +47,12 @@ export const truncateName = (name, max = 18) => {
 };
 
 /**
+ * The tooltip names the ingredient in full, however far the axis shortened it —
+ * hovering a truncated label is exactly when the reader wants the whole name.
+ */
+export const tooltipItemName = (_label, payload) => payload?.[0]?.payload?.name ?? '';
+
+/**
  * TopItemsChart
  *
  * @param {Array} items - rows from useShoppingAnalytics().frequentItems
@@ -94,7 +100,7 @@ const TopItemsChart = ({ items = [] }) => {
             cursor={{ fill: CHART_GRID }}
             contentStyle={TOOLTIP_STYLE}
             formatter={(value) => [formatPurchases(value), 'Purchased']}
-            labelFormatter={(_label, payload) => payload?.[0]?.payload?.name ?? ''}
+            labelFormatter={tooltipItemName}
           />
           <Bar
             dataKey="purchases"

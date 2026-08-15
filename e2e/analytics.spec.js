@@ -5,40 +5,11 @@
 // checks the insights appear — which also proves the write survives the
 // security rules, since a rejected write would never come back on the listener.
 
-const { test, expect } = require('./fixtures');
+const { test, expect, addInventoryItem } = require('./fixtures');
 
-/**
- * Adds an item through the real inventory UI, with a price and a store.
- *
- * Fields are addressed by placeholder: the modal's Form.Label elements are not
- * associated with their inputs via htmlFor, so getByLabel finds nothing.
- */
+/** Adds an item through the real inventory UI, with a price and a store. */
 const addPricedItem = async (page, { name, price, store }) => {
-  await page.goto('/inventory', { waitUntil: 'domcontentloaded' });
-  await expect(page.getByRole('heading', { name: 'Inventory' })).toBeVisible();
-
-  await page
-    .getByRole('button', { name: /add item/i })
-    .first()
-    .click();
-
-  const modal = page.locator('.modal.show');
-  await expect(modal).toBeVisible();
-
-  await modal.getByPlaceholder(/Chicken Breast/).fill(name);
-  await modal.getByPlaceholder('e.g. 2').fill('2');
-  await modal.getByPlaceholder('e.g. 8.99').fill(String(price));
-  await modal
-    .getByPlaceholder(/Costco/)
-    .last()
-    .fill(store);
-
-  const locationSelect = modal.locator('select').filter({ hasText: 'Select a location' });
-  const firstLocation = await locationSelect.locator('option').nth(1).getAttribute('value');
-  await locationSelect.selectOption(firstLocation);
-
-  await modal.getByRole('button', { name: 'Add Item' }).click();
-  await expect(modal).not.toBeVisible();
+  await addInventoryItem(page, { name, quantity: 2, price, store });
   await expect(page.getByText(name).first()).toBeVisible({ timeout: 20_000 });
 };
 
@@ -106,6 +77,58 @@ test.describe('analytics', () => {
 
     await expect(disclosure.getByRole('columnheader', { name: 'Item' })).toBeVisible();
     await expect(disclosure.getByRole('rowheader', { name })).toBeVisible();
+  });
+
+  test('opens a chart table from the keyboard alone', async ({ authedPage: page }) => {
+    // The plot itself is aria-hidden, so the table is the only way a keyboard
+    // or screen-reader user reads the numbers. A summary that can only be
+    // clicked would put them behind a mouse.
+    const name = `Analytics Lentils ${Date.now()}`;
+    await addPricedItem(page, { name, price: 1.8, store: 'Aldi' });
+
+    await page.goto('/analytics', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { name: 'Bought most often' })).toBeVisible({
+      timeout: 20_000,
+    });
+
+    const disclosure = page.locator('.chart-frame__table').first();
+    const summary = disclosure.locator('summary');
+
+    await summary.focus();
+    await expect(summary).toBeFocused();
+    await page.keyboard.press('Enter');
+
+    await expect(disclosure).toHaveJSProperty('open', true);
+    await expect(disclosure.getByRole('columnheader', { name: 'Item' })).toBeVisible();
+
+    // And it closes again, so the page does not fill up with open tables.
+    await page.keyboard.press('Enter');
+    await expect(disclosure).toHaveJSProperty('open', false);
+  });
+
+  test('every chart offers its own table, none of them left behind', async ({
+    authedPage: page,
+  }) => {
+    const name = `Analytics Barley ${Date.now()}`;
+    await addPricedItem(page, { name, price: 4.4, store: 'Costco' });
+
+    await page.goto('/analytics', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { name: 'Bought most often' })).toBeVisible({
+      timeout: 20_000,
+    });
+
+    // Three charts render: bought most often, spend by month, spend by store.
+    const plots = page.locator('.chart-frame__plot');
+    const disclosures = page.locator('.chart-frame__table');
+
+    await expect(plots).toHaveCount(3);
+    await expect(disclosures).toHaveCount(3);
+
+    // Each plot is hidden from assistive tech precisely because its table is not.
+    for (let i = 0; i < 3; i += 1) {
+      await expect(plots.nth(i)).toHaveAttribute('aria-hidden', 'true');
+      await expect(disclosures.nth(i).locator('summary')).toBeVisible();
+    }
   });
 
   test('is readable on a phone', async ({ authedPage: page }) => {

@@ -158,8 +158,39 @@ const seedMealPlanEntry = async ({
   return ref.id;
 };
 
+/**
+ * Add a recipe to the global library, in the shape the schema documents.
+ *
+ * Phase 4 has not shipped a recipe editor yet, so there is no real UI to drive
+ * — this writes the documented contract instead, which is still enough to prove
+ * the dashboard is counting the right collection. Field-for-field with the
+ * `create` rule in firestore.rules, so it fails loudly if the contract moves.
+ */
+const seedRecipe = async ({ name, servings = 2, difficulty = 'easy' }) => {
+  const ref = await admin
+    .firestore()
+    .collection('recipes')
+    .add({
+      name,
+      ingredients: [{ name: 'rice', quantity: 1, unit: 'cup', normalized: 'rice' }],
+      instructions: 'Cook it.',
+      source: 'user-created',
+      createdAt: admin.firestore.Timestamp.now(),
+      tags: ['dinner'],
+      servings,
+      difficulty,
+      timesCooked: 0,
+    });
+  return ref.id;
+};
+
+/** How many recipes the library holds right now. */
+const recipeCount = async () => (await admin.firestore().collection('recipes').get()).size;
+
 module.exports = {
   testUserId,
+  seedRecipe,
+  recipeCount,
   inventoryItems,
   inventoryHasItem,
   inventoryItem,

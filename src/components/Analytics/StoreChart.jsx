@@ -31,6 +31,12 @@ import {
 import { truncateName } from './TopItemsChart';
 
 /**
+ * The tooltip names the store in full, however far the axis shortened it — two
+ * branches of one chain shorten to something very similar.
+ */
+export const tooltipStoreName = (_label, payload) => payload?.[0]?.payload?.store ?? '';
+
+/**
  * StoreChart
  *
  * @param {Array} stores - rows from useShoppingAnalytics().stores
@@ -79,7 +85,7 @@ const StoreChart = ({ stores = [] }) => {
             cursor={{ fill: CHART_GRID }}
             contentStyle={TOOLTIP_STYLE}
             formatter={(value) => [formatCurrency(value), 'Spent']}
-            labelFormatter={(_label, payload) => payload?.[0]?.payload?.store ?? ''}
+            labelFormatter={tooltipStoreName}
           />
           <Bar
             dataKey="spend"

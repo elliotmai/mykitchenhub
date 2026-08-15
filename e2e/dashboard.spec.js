@@ -13,8 +13,8 @@
 // reader pointed at the wrong collection passes every mocked test and shows an
 // empty week forever.
 
-const { test, expect } = require('./fixtures');
-const { mealPlanEntry, recipeCount } = require('./firestore-admin');
+const { test, expect, addInventoryItem } = require('./fixtures');
+const { mealPlanEntry, recipeCount, seedRecipe } = require('./firestore-admin');
 
 const statValues = (page) => page.getByTestId('stat-card-value');
 
@@ -91,16 +91,112 @@ test.describe('dashboard', () => {
   test('counts the recipe library as the database actually has it', async ({
     authedPage: page,
   }) => {
-    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
-
     // This asserted a literal '0' when it was written, on the reasoning that
     // nothing in the suite wrote recipes. Phase 5's HelloFresh import now does,
     // and specs share one account — so the tile is checked against the real
     // count instead. That still catches the failure this guards against (a
     // blank, NaN or undefined tile), and no longer depends on which other
     // specs happened to run first.
-    await expect(statValues(page).nth(2)).toHaveText(/^\d+$/, { timeout: 20_000 });
-    expect(await statNumber(page, 2)).toBe(await recipeCount());
+    //
+    // Polled rather than read once: the tile is counted at mount, so a recipe
+    // written by another spec between the two reads leaves them one apart
+    // until the next load. A real mismatch never settles.
+    test.setTimeout(120_000);
+
+    await expect
+      .poll(
+        async () => {
+          await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+          await expect(statValues(page).nth(2)).toHaveText(/^\d+$/, { timeout: 15_000 });
+          return (await statNumber(page, 2)) - (await recipeCount());
+        },
+        { message: 'waiting for the recipe tile to match the database', timeout: 60_000 }
+      )
+      .toBe(0);
+  });
+
+  test('shows a recipe added to the library', async ({ authedPage: page }) => {
+    // The spec above proves the tile agrees with the database; this one proves
+    // it is that database it is reading. An empty library makes "0 === 0" true
+    // of any collection, so this writes one and waits for the number to move.
+    //
+    // Phase 4 has not shipped a recipe editor, so the owning UI cannot be
+    // driven here — the write goes through the documented contract instead.
+    // The read is still the real thing: the real bundle, through the real
+    // rules, off the real collection.
+    test.setTimeout(120_000);
+
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+
+    const tile = statValues(page).nth(2);
+    await expect(tile).toHaveText(/^\d+$/, { timeout: 20_000 });
+    const before = Number(await tile.innerText());
+
+    await seedRecipe({ name: `E2E Dashboard Recipe ${Date.now()}` });
+
+    // The count is read once per mount, so each attempt is a fresh load. Other
+    // specs import recipes too, so this waits for the number to *rise* rather
+    // than for one particular total.
+    await expect
+      .poll(
+        async () => {
+          await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+          await expect(tile).toHaveText(/^\d+$/, { timeout: 15_000 });
+          return Number(await tile.innerText());
+        },
+        { message: 'waiting for the recipe tile to notice a new recipe', timeout: 60_000 }
+      )
+      .toBeGreaterThan(before);
+  });
+
+  test('counts an item added through the inventory page', async ({ authedPage: page }) => {
+    // The other half of the seam the meal-plan spec covers: the tile is fed by
+    // a collection the inventory page owns, so the inventory page is what
+    // writes it here.
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+    const tile = statValues(page).nth(0);
+    await expect(tile).toHaveText(/^\d+$/, { timeout: 20_000 });
+    const before = Number(await tile.innerText());
+
+    await addInventoryItem(page, { name: `E2E Dashboard Item ${Date.now()}` });
+
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+    await expect(tile).toHaveText(/^\d+$/, { timeout: 20_000 });
+    expect(Number(await tile.innerText())).toBeGreaterThan(before);
+  });
+
+  test('agrees with the Waste Alerts page about what is expiring', async ({ authedPage: page }) => {
+    // Two screens, one number. The dashboard counts by expiration *status*, the
+    // waste-alerts page by a five-day window; they are meant to be the same set
+    // and nothing but this checks it against real documents.
+    await expect
+      .poll(
+        async () => {
+          await page.goto('/waste-alerts', { waitUntil: 'domcontentloaded' });
+          const summary = page.getByTestId('summary-expired');
+          await expect(summary).toBeVisible({ timeout: 20_000 });
+
+          const buckets = await Promise.all(
+            ['expired', 'critical', 'warning'].map(async (key) =>
+              Number((await page.getByTestId(`summary-${key}`).innerText()).match(/\d+/)[0])
+            )
+          );
+          const wasteTotal = buckets.reduce((sum, n) => sum + n, 0);
+
+          await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+          await expect(statValues(page).nth(1)).toHaveText(/^\d+$/, { timeout: 20_000 });
+          const dashboardTotal = Number(await statValues(page).nth(1).innerText());
+
+          return dashboardTotal - wasteTotal;
+        },
+        {
+          // Specs run in parallel, so an item can be added between the two
+          // reads. Polling lets that settle; a real disagreement never does.
+          message: 'waiting for the two screens to report the same count',
+          timeout: 45_000,
+        }
+      )
+      .toBe(0);
   });
 
   test('lists the food that needs rescuing, worst first', async ({ authedPage: page }) => {
