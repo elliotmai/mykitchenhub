@@ -7,3 +7,5 @@ export { default as useMealPlan } from './useMealPlan';
 export { default as useWasteAlerts } from './useWasteAlerts';
 export { default as useNotifications } from './useNotifications';
 export { default as useRecipeSuggestions } from './useRecipeSuggestions';
+export { default as useRecipeCount } from './useRecipeCount';
+export { default as useShoppingAnalytics } from './useShoppingAnalytics';

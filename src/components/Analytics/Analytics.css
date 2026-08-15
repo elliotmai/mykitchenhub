@@ -1,0 +1,181 @@
+/* ==========================================================================
+   Analytics — shopping patterns
+   Chart chrome kept recessive so the marks are the only loud thing on screen.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Chart frame
+   -------------------------------------------------------------------------- */
+.chart-frame__title {
+  margin-bottom: var(--mkh-spacing-xs);
+  color: var(--mkh-text-primary);
+}
+
+.chart-frame__subtitle {
+  margin-bottom: var(--mkh-spacing-md);
+  font-size: var(--mkh-font-size-small);
+  color: var(--mkh-text-secondary);
+}
+
+.chart-frame__empty {
+  margin: 0;
+  padding: var(--mkh-spacing-lg) 0;
+  color: var(--mkh-text-muted);
+  font-size: var(--mkh-font-size-small);
+}
+
+.chart-frame__plot {
+  /* recharts measures its parent, so the box has to be allowed to shrink. */
+  min-width: 0;
+}
+
+.chart-frame__table {
+  margin-top: var(--mkh-spacing-md);
+  font-size: var(--mkh-font-size-small);
+}
+
+.chart-frame__table > summary {
+  cursor: pointer;
+  color: var(--mkh-text-secondary);
+}
+
+.chart-frame__table-scroll {
+  overflow-x: auto;
+  margin-top: var(--mkh-spacing-sm);
+}
+
+.chart-frame__table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.chart-frame__table th,
+.chart-frame__table td {
+  padding: var(--mkh-spacing-xs) var(--mkh-spacing-sm);
+  border-bottom: 1px solid var(--mkh-border-light);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.chart-frame__table td {
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-frame__table thead th {
+  color: var(--mkh-text-secondary);
+  font-weight: var(--mkh-font-weight-medium);
+}
+
+/* --------------------------------------------------------------------------
+   Hero figure — exactly one per view
+   -------------------------------------------------------------------------- */
+.shopping-patterns__hero-label {
+  margin-bottom: var(--mkh-spacing-xs);
+  font-size: var(--mkh-font-size-small);
+  color: var(--mkh-text-secondary);
+}
+
+.shopping-patterns__hero-value {
+  margin-bottom: var(--mkh-spacing-xs);
+  font-family: var(--mkh-font-family);
+  font-size: 3rem;
+  font-weight: var(--mkh-font-weight-semibold);
+  line-height: 1.1;
+  color: var(--mkh-text-primary);
+}
+
+.shopping-patterns__hero-hint {
+  margin-bottom: 0;
+  font-size: var(--mkh-font-size-small);
+  color: var(--mkh-text-muted);
+}
+
+/* --------------------------------------------------------------------------
+   Stat row
+   -------------------------------------------------------------------------- */
+.shopping-stat .card-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--mkh-spacing-xs);
+  padding: var(--mkh-spacing-md);
+}
+
+.shopping-stat__icon {
+  color: var(--mkh-text-secondary);
+}
+
+.shopping-stat__value {
+  font-size: 1.5rem;
+  font-weight: var(--mkh-font-weight-semibold);
+  color: var(--mkh-text-primary);
+}
+
+.shopping-stat__label {
+  font-size: var(--mkh-font-size-small);
+  color: var(--mkh-text-secondary);
+}
+
+/* --------------------------------------------------------------------------
+   Regulars table
+   -------------------------------------------------------------------------- */
+.frequent-items__scroll {
+  overflow-x: auto;
+}
+
+.frequent-items__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--mkh-font-size-small);
+}
+
+.frequent-items__table th,
+.frequent-items__table td {
+  padding: var(--mkh-spacing-sm);
+  border-bottom: 1px solid var(--mkh-border-light);
+  text-align: left;
+  vertical-align: top;
+}
+
+.frequent-items__table thead th {
+  color: var(--mkh-text-secondary);
+  font-weight: var(--mkh-font-weight-medium);
+  white-space: nowrap;
+}
+
+.frequent-items__table tbody th {
+  font-weight: var(--mkh-font-weight-medium);
+  color: var(--mkh-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.frequent-items__table td {
+  color: var(--mkh-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.frequent-items__best-price {
+  display: block;
+  font-size: var(--mkh-font-size-tiny);
+  color: var(--mkh-text-muted);
+}
+
+/* --------------------------------------------------------------------------
+   Utilities
+   -------------------------------------------------------------------------- */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* recharts sizes itself from the parent, which needs a floor on narrow phones. */
+.recharts-wrapper {
+  max-width: 100%;
+}

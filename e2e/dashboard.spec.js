@@ -1,0 +1,185 @@
+// The dashboard against a real build, real emulators and real security rules.
+//
+// The seed (e2e/global-setup.js) gives the account three items — one expired,
+// one due tomorrow, one that keeps for months — and no recipes. That is
+// deliberately a state the dashboard has to survive: it reads collections other
+// roadmap phases own, and they may be empty.
+//
+// The important spec here is the last one. Every panel is fed by a collection
+// somebody else writes, so a unit test can only prove the dashboard renders the
+// shape it was told to expect. Scheduling a meal through the meal-plan UI and
+// then reading it off the dashboard is what proves the two halves agree — a
+// reader pointed at the wrong collection passes every mocked test and shows an
+// empty week forever.
+
+const { test, expect } = require('./fixtures');
+const { mealPlanEntry } = require('./firestore-admin');
+
+const statValues = (page) => page.getByTestId('stat-card-value');
+
+/** `YYYY-MM-DD` in local time — the format meal plan entries are keyed on. */
+const toDayKey = (date) => {
+  const pad = (v) => String(v).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+};
+
+const TODAY = toDayKey(new Date());
+
+/**
+ * Put a meal on today through the real meal-plan UI, the way a person would.
+ *
+ * Deliberately not a direct Firestore write: the point is to exercise the
+ * writer the app actually ships, so the dashboard is reading whatever that
+ * writer produces rather than whatever a fixture claims it produces.
+ */
+const scheduleMealToday = async (page, recipeName) => {
+  await page.goto('/meal-plan', { waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('heading', { name: 'Meal Plan' })).toBeVisible();
+
+  const dayCard = page.getByTestId(`day-card-${TODAY}`);
+  await dayCard.getByRole('button', { name: /Add a meal on/ }).click();
+
+  const modal = page.locator('.modal.show');
+  await expect(modal).toBeVisible();
+  await modal.getByLabel('What are you cooking?').fill(recipeName);
+  await modal.getByRole('button', { name: 'Add to plan' }).click();
+  await expect(modal).not.toBeVisible();
+
+  // On screen is not proof — confirm it reached Firestore through the rules.
+  await expect
+    .poll(async () => Boolean(await mealPlanEntry(recipeName)), {
+      message: `waiting for "${recipeName}" to reach Firestore`,
+      timeout: 10_000,
+    })
+    .toBe(true);
+};
+
+/**
+ * Read a tile's number.
+ *
+ * Specs share one seeded account and run in parallel, so other specs may have
+ * added items by the time this runs. Item counts are therefore asserted as
+ * "at least the seeded set", never as an exact total.
+ */
+const statNumber = async (page, index) => Number(await statValues(page).nth(index).innerText());
+
+test.describe('dashboard', () => {
+  test('greets the signed-in cook', async ({ authedPage: page }) => {
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(/E2E Cook/);
+  });
+
+  test('counts the seeded kitchen instead of showing placeholders', async ({
+    authedPage: page,
+  }) => {
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+
+    // Every tile must resolve to a number — the page shipped with "--" in all four.
+    await expect(statValues(page)).toHaveCount(4);
+    await expect(statValues(page).nth(0)).toHaveText(/^\d+$/, { timeout: 20_000 });
+    for (const index of [1, 2, 3]) {
+      await expect(statValues(page).nth(index)).toHaveText(/^\d+$/);
+    }
+
+    // Three seeded items, two of them inside the five-day window.
+    expect(await statNumber(page, 0)).toBeGreaterThanOrEqual(3);
+    expect(await statNumber(page, 1)).toBeGreaterThanOrEqual(2);
+  });
+
+  test('reports zero for a collection that has nothing in it', async ({ authedPage: page }) => {
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+
+    // Nothing in the suite writes recipes, so the library is reliably empty —
+    // and an empty collection has to read as zero, not as a failed page.
+    await expect(statValues(page).nth(2)).toHaveText('0', { timeout: 20_000 });
+  });
+
+  test('lists the food that needs rescuing, worst first', async ({ authedPage: page }) => {
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+
+    const alerts = page.locator('.urgent-alert');
+    // The seed guarantees two: Old Yogurt expired two days ago, Fresh Salmon is
+    // due tomorrow. Other specs add their own items, so this is a floor.
+    await expect(alerts.nth(1)).toBeVisible({ timeout: 20_000 });
+
+    // Whatever else is on the list, already-expired sorts above due-today.
+    // innerText is what the reader sees, and the badge is uppercased in CSS.
+    const statuses = (await page.locator('.urgent-alert__status').allInnerTexts()).map((s) =>
+      s.trim().toLowerCase()
+    );
+
+    expect(statuses.length).toBeGreaterThanOrEqual(2);
+    expect(statuses[0]).toBe('expired');
+    expect(statuses).toEqual(
+      [...statuses].sort((a, b) => (a === b ? 0 : a === 'expired' ? -1 : 1))
+    );
+  });
+
+  test('names the week it is previewing', async ({ authedPage: page }) => {
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+
+    // Scoped to the preview card: the quick-action list also links to
+    // /meal-plan, under the longer label "Plan this week's meals".
+    const preview = page.locator('.meal-plan-preview');
+    await expect(preview).toBeVisible({ timeout: 20_000 });
+
+    // The card names the week it is describing, e.g. "Aug 10 – Aug 16".
+    await expect(preview).toContainText(/[A-Z][a-z]{2} \d{1,2} – [A-Z][a-z]{2} \d{1,2}/);
+
+    // Meal-plan specs schedule into the same account, so the week may be empty
+    // or full by the time this runs. Both states offer a way through to the
+    // plan; the empty state itself is covered by the component's unit tests.
+    await expect(preview.getByRole('link', { name: /plan/i })).toBeVisible();
+  });
+
+  test('quick actions reach the pages they promise', async ({ authedPage: page }) => {
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+
+    await page.getByRole('link', { name: 'See shopping insights' }).click();
+
+    await expect(page).toHaveURL(/\/analytics/);
+  });
+
+  test('stat tiles link through to the page behind the number', async ({ authedPage: page }) => {
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+
+    await page.locator('a.stat-card').first().click();
+
+    await expect(page).toHaveURL(/\/inventory/);
+  });
+
+  test('shows a meal scheduled from the meal-plan page', async ({ authedPage: page }) => {
+    // Unique per run: specs share one seeded account and run in parallel.
+    const recipeName = `E2E Dashboard Dinner ${Date.now()}`;
+
+    await scheduleMealToday(page, recipeName);
+
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+
+    // The preview reads the same collection the meal-plan page just wrote to.
+    // If the two ever point at different collections, this is what fails.
+    const preview = page.locator('.meal-plan-preview');
+    await expect(preview).toContainText(recipeName, { timeout: 20_000 });
+
+    // …and the meal is counted, not just listed.
+    expect(await statNumber(page, 3)).toBeGreaterThanOrEqual(1);
+
+    // It lands on today's row, not on some other day of the week.
+    const todayRow = preview.locator('.meal-plan-day--today');
+    await expect(todayRow).toHaveCount(1);
+    await expect(todayRow).toContainText(recipeName);
+  });
+
+  test('fits a phone screen without sideways scrolling', async ({ authedPage: page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+    await expect(statValues(page).first()).toHaveText(/^\d+$/, { timeout: 20_000 });
+
+    const overflows = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1
+    );
+
+    expect(overflows).toBe(false);
+  });
+});

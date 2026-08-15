@@ -14,6 +14,17 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.08.14.4',
+    date: 'August 2026',
+    items: [
+      '🏠 Your dashboard is live. It now counts what is actually in your kitchen, how much of it is about to go off, how many recipes you have, and how many dinners are planned this week.',
+      '⏰ “Urgent alerts” lists the things to cook first, worst offender at the top, so nothing quietly rots at the back of the fridge.',
+      '🗓️ The week now shows all seven days at a glance, with the gaps visible — so you can see Thursday has nothing on it before Thursday arrives.',
+      '📊 New Analytics page: what you buy most often, what it usually costs, how your grocery spend moves month to month, and which shop was cheapest for each thing.',
+      '📋 Every chart has a “View as table” link, so you can read the numbers straight if you would rather not squint at a graph.',
+    ],
+  },
+  {
     version: '2026.08.14.3',
     date: 'August 2026',
     items: [

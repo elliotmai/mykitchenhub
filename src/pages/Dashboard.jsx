@@ -1,24 +1,54 @@
 // src/pages/Dashboard.jsx
 // Dashboard page - main overview of kitchen status
+//
+// Every number here is read live from Firestore. The collections it reads are
+// owned by other roadmap phases, so each one is treated as optional: an empty
+// or missing collection renders an empty state, never an error and never a
+// blank tile.
 
 import React from 'react';
-// eslint-disable-next-line
-import { Container, Row, Col, Card, Button } from 'react-bootstrap';
-import { Package, BookOpen, Calendar, AlertTriangle, Plus, TrendingUp, Clock } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Row, Col, Alert } from 'react-bootstrap';
+import { Package, BookOpen, Calendar, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import useInventory, { getExpirationStatus } from '../hooks/useInventory';
+import useRecipeCount from '../hooks/useRecipeCount';
+import useMealPlan, { fromDayKey, shiftDayKey } from '../hooks/useMealPlan';
+import {
+  StatCard,
+  UrgentAlerts,
+  MealPlanPreview,
+  QuickActions,
+  countPlannedMeals,
+} from '../components/Dashboard';
+import '../components/Dashboard/Dashboard.css';
+
+/** "Aug 10 – Aug 16" for the week starting at a `YYYY-MM-DD` key. */
+export const weekRangeLabel = (weekStart) => {
+  if (!weekStart) return '';
+  const fmt = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return `${fmt(fromDayKey(weekStart))} – ${fmt(fromDayKey(shiftDayKey(weekStart, 6)))}`;
+};
+
+/** Items in the five-day window the inventory page colour-codes as at-risk. */
+const EXPIRING_STATUSES = ['expired', 'critical', 'warning'];
+
+export const countExpiringSoon = (items = []) =>
+  items.filter((item) => EXPIRING_STATUSES.includes(getExpirationStatus(item?.expiresAt))).length;
 
 /**
  * Dashboard Page
  *
  * Main overview showing:
- * - Quick stats (inventory count, recipes, expiring items)
+ * - Quick stats (inventory count, recipes, expiring items, meals planned)
  * - Urgent alerts
  * - This week's meal plan preview
  * - Quick actions
  */
 const Dashboard = () => {
   const { userProfile } = useAuth();
+  const { items, loading: itemsLoading, error: itemsError } = useInventory();
+  const { count: recipeCount, loading: recipesLoading } = useRecipeCount();
+  const { weekStart, weekDays, entriesByDay, loading: planLoading } = useMealPlan();
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -28,126 +58,88 @@ const Dashboard = () => {
   };
 
   const displayName = userProfile?.displayName || 'there';
+  const expiringSoon = countExpiringSoon(items);
+  const mealCount = countPlannedMeals(entriesByDay);
+  const weekLabel = weekRangeLabel(weekStart);
 
   return (
     <div className="dashboard-page">
       {/* Welcome Header */}
       <div className="mb-4">
-        <h1 className="h3 mb-1">
+        <h1 className="h3 dashboard-page__greeting">
           {getGreeting()}, {displayName}! 👋
         </h1>
         <p className="text-muted mb-0">Here's what's happening in your kitchen today.</p>
       </div>
 
+      {itemsError ? (
+        <Alert variant="warning" className="mb-4">
+          {itemsError}. The numbers below may be out of date.
+        </Alert>
+      ) : null}
+
       {/* Quick Stats */}
       <Row className="g-3 mb-4">
         <Col xs={6} lg={3}>
-          <Card className="h-100">
-            <Card.Body className="text-center">
-              <div className="mb-2">
-                <Package size={24} className="text-primary" />
-              </div>
-              <h3 className="h4 mb-1">--</h3>
-              <p className="text-muted small mb-0">Total Items</p>
-            </Card.Body>
-          </Card>
+          <StatCard
+            label="Total Items"
+            value={items.length}
+            icon={Package}
+            to="/inventory"
+            loading={itemsLoading}
+            hint="in your kitchen"
+          />
         </Col>
         <Col xs={6} lg={3}>
-          <Card className="h-100">
-            <Card.Body className="text-center">
-              <div className="mb-2">
-                <AlertTriangle size={24} className="text-warning" />
-              </div>
-              <h3 className="h4 mb-1">--</h3>
-              <p className="text-muted small mb-0">Expiring Soon</p>
-            </Card.Body>
-          </Card>
+          <StatCard
+            label="Expiring Soon"
+            value={expiringSoon}
+            icon={AlertTriangle}
+            tone={expiringSoon > 0 ? 'warning' : 'default'}
+            to="/inventory"
+            loading={itemsLoading}
+            hint="within 5 days"
+          />
         </Col>
         <Col xs={6} lg={3}>
-          <Card className="h-100">
-            <Card.Body className="text-center">
-              <div className="mb-2">
-                <BookOpen size={24} className="text-secondary" />
-              </div>
-              <h3 className="h4 mb-1">--</h3>
-              <p className="text-muted small mb-0">Recipes</p>
-            </Card.Body>
-          </Card>
+          <StatCard
+            label="Recipes"
+            value={recipeCount}
+            icon={BookOpen}
+            tone="success"
+            to="/recipes"
+            loading={recipesLoading}
+            hint="ready to cook"
+          />
         </Col>
         <Col xs={6} lg={3}>
-          <Card className="h-100">
-            <Card.Body className="text-center">
-              <div className="mb-2">
-                <Calendar size={24} className="text-info" />
-              </div>
-              <h3 className="h4 mb-1">--</h3>
-              <p className="text-muted small mb-0">Meals Planned</p>
-            </Card.Body>
-          </Card>
+          <StatCard
+            label="Meals Planned"
+            value={mealCount}
+            icon={Calendar}
+            to="/meal-plan"
+            loading={planLoading}
+            hint="this week"
+          />
         </Col>
       </Row>
 
       <Row className="g-4">
-        {/* Urgent Alerts */}
         <Col lg={6}>
-          <Card className="h-100">
-            <Card.Header className="bg-transparent">
-              <h5 className="mb-0">
-                <AlertTriangle size={18} className="me-2 text-warning" />
-                Urgent Alerts
-              </h5>
-            </Card.Header>
-            <Card.Body>
-              <div className="text-center text-muted py-4">
-                <Clock size={48} className="mb-3 opacity-50" />
-                <p className="mb-0">No urgent alerts right now.</p>
-                <p className="small">Items expiring soon will appear here.</p>
-              </div>
-            </Card.Body>
-          </Card>
+          <UrgentAlerts items={items} loading={itemsLoading} />
         </Col>
 
-        {/* Quick Actions */}
         <Col lg={6}>
-          <Card className="h-100">
-            <Card.Header className="bg-transparent">
-              <h5 className="mb-0">
-                <TrendingUp size={18} className="me-2" />
-                Quick Actions
-              </h5>
-            </Card.Header>
-            <Card.Body>
-              <div className="d-grid gap-2">
-                <Button
-                  as={Link}
-                  to="/inventory"
-                  variant="outline-primary"
-                  className="d-flex align-items-center justify-content-center gap-2"
-                >
-                  <Plus size={18} />
-                  Add Inventory Item
-                </Button>
-                <Button
-                  as={Link}
-                  to="/meal-plan"
-                  variant="outline-secondary"
-                  className="d-flex align-items-center justify-content-center gap-2"
-                >
-                  <Calendar size={18} />
-                  Plan This Week's Meals
-                </Button>
-                <Button
-                  as={Link}
-                  to="/recipes"
-                  variant="outline-info"
-                  className="d-flex align-items-center justify-content-center gap-2"
-                >
-                  <BookOpen size={18} />
-                  Browse Recipes
-                </Button>
-              </div>
-            </Card.Body>
-          </Card>
+          <MealPlanPreview
+            weekDays={weekDays}
+            entriesByDay={entriesByDay}
+            weekLabel={weekLabel}
+            loading={planLoading}
+          />
+        </Col>
+
+        <Col lg={6}>
+          <QuickActions />
         </Col>
       </Row>
     </div>

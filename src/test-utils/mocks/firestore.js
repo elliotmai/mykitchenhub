@@ -126,6 +126,8 @@ export const onSnapshot = jest.fn((ref, a, b) => {
 // Reads default to empty; override per test with mockResolvedValueOnce.
 export const getDoc = jest.fn(async (ref) => __doc(pathOf(ref).split('/').pop() ?? 'doc', null));
 export const getDocs = jest.fn(async () => __querySnapshot([]));
+// Aggregation query — returns `{ data: () => ({ count }) }` like the real SDK.
+export const getCountFromServer = jest.fn(async () => ({ data: () => ({ count: 0 }) }));
 
 // Writes.
 let autoId = 0;
@@ -192,6 +194,7 @@ export const __reset = () => {
   autoId = 0;
   getDoc.mockImplementation(async (ref) => __doc(pathOf(ref).split('/').pop() ?? 'doc', null));
   getDocs.mockImplementation(async () => __querySnapshot([]));
+  getCountFromServer.mockImplementation(async () => ({ data: () => ({ count: 0 }) }));
   addDoc.mockImplementation(async (ref) => makeRef(`${pathOf(ref)}/generated-${++autoId}`, 'doc'));
   setDoc.mockImplementation(async () => undefined);
   updateDoc.mockImplementation(async () => undefined);

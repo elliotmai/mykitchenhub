@@ -116,6 +116,29 @@ export const makeItemsAcrossExpirationStates = () => [
   makeItem({ name: 'Rice', expiresAt: daysFromNow(90) }), // safe
 ];
 
+/** One entry of an item's `purchaseHistory[]`. */
+export const makePurchase = (overrides = {}) => ({
+  addedAt: daysFromNow(-7),
+  quantity: 1,
+  unit: 'gal',
+  price: 4.29,
+  store: 'Costco',
+  ...overrides,
+});
+
+/**
+ * An item with a purchase history, for the shopping analytics.
+ *
+ * `totalTimesPurchased` is kept consistent with the history length unless a
+ * test deliberately overrides it.
+ */
+export const makeItemWithPurchases = (purchases = [], overrides = {}) =>
+  makeItem({
+    purchaseHistory: purchases,
+    totalTimesPurchased: purchases.length,
+    ...overrides,
+  });
+
 // ---------------------------------------------------------------------------
 // users/{userId}/importHistory/{importId}
 // ---------------------------------------------------------------------------
