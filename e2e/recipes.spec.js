@@ -148,7 +148,13 @@ test.describe('recipes', () => {
     await expect(confirm).toBeVisible();
     await confirm.getByRole('button', { name: /^delete$/i }).click();
 
-    await expect(page.getByText(name)).not.toBeVisible();
+    // Wait for the dialog to actually go before looking for the recipe. Its own
+    // message quotes the recipe name, so a page-wide getByText matches both the
+    // card and the dialog asking about it — which fails on a strict-mode
+    // violation rather than on anything being wrong.
+    await expect(confirm).toBeHidden();
+
+    await expect(cardFor(page, name)).toHaveCount(0);
     await expectStoredInFirestore(name, false);
   });
 

@@ -1,12 +1,17 @@
 // e2e/fixtures.js
 // Shared helpers for the end-to-end specs.
 
+const fs = require('fs');
+const path = require('path');
 const { test: base, expect } = require('@playwright/test');
-const { TEST_USER } = require('./global-setup');
+const { TEST_USER, accountForWorker } = require('./accounts');
 const { WHATS_NEW } = require('../src/config/whatsNew');
 
 // Must match STORAGE_KEY in src/components/Common/WhatsNew.jsx.
 const WHATS_NEW_KEY = 'mykitchenhub.whatsNewSeen';
+
+/** Where a worker parks the signed-in state it captured for itself. */
+const workerStatePath = (index) => path.join(__dirname, '.auth', `worker-${index}.json`);
 
 /**
  * Marks the current What's New entry as already seen.
@@ -24,17 +29,18 @@ const suppressWhatsNewPopup = (page) =>
 /**
  * Signs in through the real login form and waits for the dashboard.
  *
- * Only `e2e/auth.setup.js` and the auth spec call this — every other spec
- * starts from the shared signed-in storage state, because a login costs ~15s.
+ * Called by e2e/auth.spec.js, which is about signing in, and once per worker by
+ * the storageState fixture below. Every other spec starts from the captured
+ * state, because a login costs ~15s.
  *
  * Selectors target placeholders rather than labels: the login form's
  * Form.Label elements are not associated with their inputs via htmlFor.
  */
-const login = async (page) => {
+const login = async (page, account = TEST_USER) => {
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
 
-  await page.getByPlaceholder('you@example.com').fill(TEST_USER.email);
-  await page.getByPlaceholder('••••••••').first().fill(TEST_USER.password);
+  await page.getByPlaceholder('you@example.com').fill(account.email);
+  await page.getByPlaceholder('••••••••').first().fill(account.password);
   await page.getByRole('button', { name: 'Sign In' }).click();
 
   await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
@@ -89,22 +95,90 @@ const addInventoryItem = async (page, { name, quantity = '1', price, store, navi
   await expect(modal).not.toBeVisible();
 };
 
-const test = base.extend({
-  // Opt out per-spec with test.use({ suppressWhatsNew: false }).
-  suppressWhatsNew: [true, { option: true }],
+/** The What's New suppression and nothing else — shared by both test objects. */
+const withWhatsNewOption = (testObject) =>
+  testObject.extend({
+    // Opt out per-spec with test.use({ suppressWhatsNew: false }).
+    suppressWhatsNew: [true, { option: true }],
 
-  page: async ({ page, suppressWhatsNew }, use) => {
-    if (suppressWhatsNew) await suppressWhatsNewPopup(page);
-    await use(page);
+    page: async ({ page, suppressWhatsNew }, use) => {
+      if (suppressWhatsNew) await suppressWhatsNewPopup(page);
+      await use(page);
+    },
+  });
+
+/**
+ * The signed-in test object every spec but the auth one uses.
+ *
+ * Each worker signs in once as its own account (e2e/accounts.js) and every test
+ * in that worker starts from it. That replaces the old `setup` project, which
+ * produced one shared state file — and with it, one shared kitchen that every
+ * spec wrote into and none cleaned up.
+ *
+ * The logins happen concurrently, one per worker, so the wall-clock cost is
+ * the same single ~15s login it always was.
+ *
+ * The two-fixture shape is required, not stylistic: `storageState` is a
+ * built-in *test-scoped* option, and redefining it with `{ scope: 'worker' }`
+ * is rejected outright ("has already been registered as a { scope: 'test' }
+ * fixture"). So the expensive part lives in a worker fixture, and the built-in
+ * option is overridden with a one-line test-scoped fixture that reads it.
+ */
+const test = withWhatsNewOption(base).extend({
+  /** The account this worker owns. */
+  workerAccount: [
+    async ({}, use, workerInfo) => {
+      await use(accountForWorker(workerInfo.parallelIndex));
+    },
+    { scope: 'worker' },
+  ],
+
+  /** Signed-in state for this worker's account, captured once per run. */
+  workerStorageState: [
+    async ({ browser, workerAccount }, use, workerInfo) => {
+      const file = workerStatePath(workerInfo.parallelIndex);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+
+      // Captured fresh every run rather than reused from disk: the emulator's
+      // ID tokens expire after an hour, and a stale file restores a browser
+      // that looks signed in until the first Firestore read is refused.
+      //
+      // baseURL has to be passed in by hand. `use.baseURL` is applied by the
+      // `context` fixture, and this page comes straight off `browser`, so
+      // without it `page.goto('/login')` is a relative path with nothing to be
+      // relative to — "Cannot navigate to invalid URL".
+      const page = await browser.newPage({
+        storageState: undefined,
+        baseURL: workerInfo.project.use.baseURL,
+      });
+      try {
+        await login(page, workerAccount);
+        // Confirm the app really considers us signed in before capturing.
+        await expect(page.getByText(/good (morning|afternoon|evening)/i)).toBeVisible();
+
+        // indexedDB: true is essential — the Firebase JS SDK persists its
+        // session there, not in localStorage, so state saved without it
+        // restores a signed-out browser.
+        await page.context().storageState({ path: file, indexedDB: true });
+      } finally {
+        await page.context().close();
+      }
+
+      await use(file);
+    },
+    { scope: 'worker' },
+  ],
+
+  storageState: async ({ workerStorageState }, use) => {
+    await use(workerStorageState);
   },
 
   /**
    * A signed-in page, already showing the app.
    *
-   * The session itself comes from the shared storage state established by the
-   * `setup` project. This still navigates to the dashboard so the fixture
-   * hands back a *loaded* page: specs reasonably expect that, and a fixture
-   * that silently yields about:blank fails in a very confusing way.
+   * This still navigates to the dashboard so the fixture hands back a *loaded*
+   * page: specs reasonably expect that, and a fixture that silently yields
+   * about:blank fails in a very confusing way.
    *
    * Specs that want a different route just navigate again.
    */
@@ -137,12 +211,24 @@ const test = base.extend({
   },
 });
 
+/**
+ * The test object for specs that drive signing in themselves.
+ *
+ * Deliberately without the worker storageState above: a spec cannot override a
+ * worker-scoped fixture from inside the file, and a spec about the login form
+ * must not arrive already logged in. It gets the What's New suppression, since
+ * the popup is in the way there too.
+ */
+const signedOutTest = withWhatsNewOption(base);
+
 module.exports = {
   test,
+  signedOutTest,
   expect,
   login,
   addInventoryItem,
   suppressWhatsNewPopup,
+  workerStatePath,
   WHATS_NEW_KEY,
   TEST_USER,
 };

@@ -99,8 +99,13 @@
      The footer's feedback link was 19px tall — a line of tiny text with no
      padding at all. Padding rather than font-size: it stays visually quiet
      while becoming something a thumb can actually land on.
+
+     `.touch-link` is the opt-in for a link that lives inside a sentence, where
+     turning it into a block would break the line. inline-flex keeps it in the
+     flow of the paragraph and only adds leading around it.
      ------------------------------------------------------------------------ */
-  .app-footer__feedback {
+  .app-footer__feedback,
+  .touch-link {
     display: inline-flex;
     align-items: center;
     min-height: 44px;

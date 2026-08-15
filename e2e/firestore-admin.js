@@ -11,7 +11,7 @@
 // settling never resolves for Playwright, so it hangs rather than fails.
 
 const admin = require('firebase-admin');
-const { TEST_USER } = require('./global-setup');
+const { currentAccount } = require('./accounts');
 
 const PROJECT_ID = process.env.E2E_PROJECT_ID || 'mykitchenhub-e2e';
 
@@ -26,10 +26,19 @@ if (!admin.apps.length) {
 
 let cachedUid = null;
 
-/** UID of the seeded end-to-end account. */
+/**
+ * UID of the account this worker signs in as.
+ *
+ * Every helper below hangs off this, which is what gives all fourteen specs
+ * per-worker isolation without any of them mentioning it: `currentAccount()`
+ * reads TEST_PARALLEL_INDEX, which Playwright sets in each worker process, so
+ * this module resolves to the same account the browser is signed in to.
+ *
+ * Cached per process, which is per worker — so the cache can never be wrong.
+ */
 const testUserId = async () => {
   if (!cachedUid) {
-    cachedUid = (await admin.auth().getUserByEmail(TEST_USER.email)).uid;
+    cachedUid = (await admin.auth().getUserByEmail(currentAccount().email)).uid;
   }
   return cachedUid;
 };

@@ -1,15 +1,11 @@
 // e2e/storage-state.js
-// Where the shared signed-in browser state lives.
+// The signed-out browser state.
 //
-// Its own module so playwright.config.js, auth.setup.js and the specs agree on
-// the path without importing each other.
-
-const path = require('path');
-
-/** Saved by e2e/auth.setup.js, consumed by every authenticated project. */
-const STORAGE_STATE = path.join(__dirname, '.auth', 'user.json');
+// There is no longer a single shared signed-in state file here: each worker
+// captures its own, for its own account, in the storageState fixture in
+// e2e/fixtures.js. See e2e/accounts.js for why.
 
 /** Explicitly signed out — for specs that test the logged-out experience. */
 const SIGNED_OUT_STATE = { cookies: [], origins: [] };
 
-module.exports = { STORAGE_STATE, SIGNED_OUT_STATE };
+module.exports = { SIGNED_OUT_STATE };
