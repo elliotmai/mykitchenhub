@@ -320,6 +320,37 @@ describe('storage locations', () => {
     await seed((db) => db.doc(locPath(OWNER)).set(validLocation({ isDefault: true })));
     await assertFails(as(OWNER).doc(locPath(OWNER)).delete());
   });
+
+  // 10.2 — the guard above is only worth having if `isDefault` cannot be
+  // cleared first. Two writes would otherwise delete any location at all.
+  it('refuses to let a default location be un-defaulted', async () => {
+    await seed((db) => db.doc(locPath(OWNER)).set(validLocation({ isDefault: true })));
+    await assertFails(as(OWNER).doc(locPath(OWNER)).update({ isDefault: false }));
+  });
+
+  it('accepts the rename the edit form sends', async () => {
+    const location = validLocation({ isDefault: true });
+    await seed((db) => db.doc(locPath(OWNER)).set(location));
+
+    // AddLocationModal submits exactly these four fields.
+    await assertSucceeds(
+      as(OWNER)
+        .doc(locPath(OWNER))
+        .update({ label: 'Garage Fridge', type: 'fridge', icon: '🚗', color: '#1abc9c' })
+    );
+  });
+
+  it('refuses an update that strips the label the UI renders', async () => {
+    await seed((db) => db.doc(locPath(OWNER)).set(validLocation()));
+
+    const { label, ...withoutLabel } = validLocation();
+    await assertFails(as(OWNER).doc(locPath(OWNER)).set(withoutLabel));
+  });
+
+  it('rejects an unknown location type on update', async () => {
+    await seed((db) => db.doc(locPath(OWNER)).set(validLocation()));
+    await assertFails(as(OWNER).doc(locPath(OWNER)).update({ type: 'garage' }));
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -482,6 +513,26 @@ describe('inventory items', () => {
         .doc(itemPath(OWNER))
         .set(validItem({ locationType: 'garage' }))
     );
+  });
+
+  // 10.2 — create validated these; before production rules, update did not, so
+  // every constraint was one edit away from being bypassed.
+  it('rejects an unknown location type on update', async () => {
+    await seed((db) => db.doc(itemPath(OWNER)).set(validItem()));
+    await assertFails(as(OWNER).doc(itemPath(OWNER)).update({ locationType: 'garage' }));
+  });
+
+  it('rejects an unrecognised source on update', async () => {
+    await seed((db) => db.doc(itemPath(OWNER)).set(validItem()));
+    await assertFails(as(OWNER).doc(itemPath(OWNER)).update({ source: 'mystery' }));
+  });
+
+  it('refuses an update that strips a required field', async () => {
+    const item = validItem();
+    await seed((db) => db.doc(itemPath(OWNER)).set(item));
+
+    const { normalized, ...withoutNormalized } = item;
+    await assertFails(as(OWNER).doc(itemPath(OWNER)).set(withoutNormalized));
   });
 
   it("keeps one user out of another user's inventory", async () => {
@@ -706,6 +757,16 @@ describe('notifications', () => {
     );
   });
 
+  it('refuses to let marking as read empty out the alert or change its type', async () => {
+    const notification = validNotification();
+    await seed((db) => db.doc(notificationPath(OWNER)).set(notification));
+
+    await assertFails(as(OWNER).doc(notificationPath(OWNER)).update({ type: 'promotion' }));
+
+    const { body, ...withoutBody } = notification;
+    await assertFails(as(OWNER).doc(notificationPath(OWNER)).set(withoutBody));
+  });
+
   it('lets the owner dismiss one', async () => {
     await seed((db) => db.doc(notificationPath(OWNER)).set(validNotification()));
     await assertSucceeds(as(OWNER).doc(notificationPath(OWNER)).delete());
@@ -800,6 +861,21 @@ describe('hellofresh deliveries', () => {
     await assertFails(
       as(OWNER).doc(path(OWNER)).update({ createdAt: '1999-01-01', status: 'cooked' })
     );
+  });
+
+  // 10.2 — create pinned `source` to hellofresh; update has to as well, or a
+  // delivery can be relabelled out of the history that owns it.
+  it('refuses to let a delivery be relabelled away from hellofresh', async () => {
+    await seed((db) => db.doc(path(OWNER)).set(validDelivery()));
+    await assertFails(as(OWNER).doc(path(OWNER)).update({ source: 'manual' }));
+  });
+
+  it('refuses an update that strips the counts the history renders', async () => {
+    const delivery = validDelivery();
+    await seed((db) => db.doc(path(OWNER)).set(delivery));
+
+    const { itemsAdded, ...withoutItemsAdded } = delivery;
+    await assertFails(as(OWNER).doc(path(OWNER)).set(withoutItemsAdded));
   });
 
   it("keeps one user out of another user's delivery history", async () => {
@@ -981,6 +1057,20 @@ describe('meal plan entries', () => {
     await assertFails(
       as(OWNER).doc(entryPath(OWNER)).update({ createdAt: '1999-01-01', status: 'cooked' })
     );
+  });
+
+  // 10.2 — a reschedule must not be able to empty the card it moves.
+  it('refuses an update that strips the recipe name the day card renders', async () => {
+    const entry = validMealPlanEntry();
+    await seed((db) => db.doc(entryPath(OWNER)).set(entry));
+
+    const { recipeName, ...withoutRecipeName } = entry;
+    await assertFails(as(OWNER).doc(entryPath(OWNER)).set(withoutRecipeName));
+  });
+
+  it('rejects an unrecognised source on update', async () => {
+    await seed((db) => db.doc(entryPath(OWNER)).set(validMealPlanEntry()));
+    await assertFails(as(OWNER).doc(entryPath(OWNER)).update({ source: 'mystery' }));
   });
 
   it("keeps one user out of another user's meal plan", async () => {
@@ -1188,6 +1278,16 @@ describe('meal plan weeks', () => {
     );
   });
 
+  // 10.2 — regenerating a week rewrites most of the document; the four fields
+  // that identify it must survive that.
+  it('refuses a regeneration that drops the week it is for', async () => {
+    const plan = validMealPlan();
+    await seed((db) => db.doc(planPath(OWNER)).set(plan));
+
+    const { weekStart, ...withoutWeekStart } = plan;
+    await assertFails(as(OWNER).doc(planPath(OWNER)).set(withoutWeekStart));
+  });
+
   it("keeps one user out of another user's plans", async () => {
     await seed((db) => db.doc(planPath(OWNER)).set(validMealPlan()));
 
@@ -1382,6 +1482,54 @@ describe('recipes', () => {
 
     await assertSucceeds(as(OWNER).doc('recipes/mine').delete());
     await assertFails(as(OWNER).doc('recipes/synced').delete());
+  });
+
+  // -------------------------------------------------------------------------
+  // 10.2 — `recipes` is a shared library, so "you may only delete your own"
+  // rests entirely on `source`. These are the tests that make that true.
+  // -------------------------------------------------------------------------
+
+  it('refuses to let a recipe be relabelled as user-created', async () => {
+    await seed((db) => db.doc('recipes/synced').set(validRecipe({ source: 'legacy' })));
+    await assertFails(as(OWNER).doc('recipes/synced').update({ source: 'user-created' }));
+  });
+
+  it('closes the relabel-then-delete route into the legacy library', async () => {
+    await seed((db) => db.doc('recipes/synced').set(validRecipe({ source: 'legacy' })));
+
+    // Step one is refused, so step two never gets a document to delete.
+    await assertFails(as(INTRUDER).doc('recipes/synced').update({ source: 'user-created' }));
+    await assertFails(as(INTRUDER).doc('recipes/synced').delete());
+
+    const after = await as(OWNER).doc('recipes/synced').get();
+    expect(after.data().source).toBe('legacy');
+  });
+
+  it("refuses to let one cook take credit for another cook's recipe", async () => {
+    await seed((db) =>
+      db.doc('recipes/mine').set(validRecipe({ source: 'user-created', createdBy: OWNER }))
+    );
+    await assertFails(as(INTRUDER).doc('recipes/mine').update({ createdBy: INTRUDER }));
+  });
+
+  it('still accepts an edit to a recipe that carries no createdBy at all', async () => {
+    // Legacy and seeded recipes have no `createdBy`; pinning it must not lock
+    // them against editing.
+    await seed((db) => db.doc('recipes/synced').set(validRecipe({ source: 'legacy' })));
+    await assertSucceeds(as(OWNER).doc('recipes/synced').update({ servings: 6 }));
+  });
+
+  it('refuses an update that strips the fields the recipe view renders', async () => {
+    const recipe = validRecipe();
+    await seed((db) => db.doc('recipes/mine').set(recipe));
+
+    const { instructions, ...withoutInstructions } = recipe;
+    await assertFails(as(OWNER).doc('recipes/mine').set(withoutInstructions));
+  });
+
+  it('rejects an unrecognised difficulty on update', async () => {
+    await seed((db) => db.doc('recipes/mine').set(validRecipe()));
+    await assertFails(as(OWNER).doc('recipes/mine').update({ difficulty: 'expert' }));
   });
 });
 
