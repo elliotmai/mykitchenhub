@@ -1,14 +1,28 @@
 {
-    "extends": [
-        "react-app",
-        "react-app/jest",
-        "prettier"
-    ],
-    "plugins": [
-        "react"
-    ],
-    "rules": {
-        "react/prop-types": "off",
-        "no-unused-vars": "warn"
+  "extends": ["react-app", "react-app/jest", "prettier"],
+  "plugins": ["react"],
+  "rules": {
+    "react/prop-types": "off",
+    "no-unused-vars": "warn"
+  },
+  "overrides": [
+    {
+      "files": ["e2e/**/*.js"],
+      "env": { "node": true, "es2022": true },
+      "rules": {
+        "testing-library/prefer-screen-queries": "off",
+        "testing-library/no-node-access": "off",
+        "testing-library/prefer-find-by": "off",
+        "testing-library/no-container": "off",
+        "testing-library/no-await-sync-queries": "off",
+        "testing-library/await-async-queries": "off",
+        "testing-library/no-wait-for-multiple-assertions": "off",
+        "testing-library/prefer-presence-queries": "off",
+        "jest/no-conditional-expect": "off",
+        "jest/valid-title": "off",
+        "jest/expect-expect": "off",
+        "jest/no-standalone-expect": "off"
+      }
     }
+  ]
 }

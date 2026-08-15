@@ -170,27 +170,36 @@ const recipesHaveRecipe = async (name) => (await recipes()).some((r) => r.name =
 const recipeByName = async (name) => (await recipes()).find((r) => r.name === name);
 
 /**
- * Add a recipe to the shared library.
+ * Add a recipe to the shared library, in the shape the schema documents.
+ *
+ * Field-for-field with the `create` rule in firestore.rules, so it fails loudly
+ * if the contract moves.
  *
  * `recipes` is a global collection, so every spec that seeds one has to pick a
  * unique name — they run in parallel against one emulator.
+ *
+ * Pass `ingredients` when the spec needs the recipe to match specific stock
+ * (the waste-alerts suggestions do); omit it and the recipe gets a filler
+ * ingredient, which is all the dashboard count cares about.
  */
-const seedRecipe = async ({ name, ingredients = [] }) => {
+const seedRecipe = async ({ name, ingredients = [], servings = 2, difficulty = 'easy' }) => {
   const ref = await admin
     .firestore()
     .collection('recipes')
     .add({
       name,
-      ingredients: ingredients.map((ingredient) => ({
-        name: ingredient,
-        normalized: ingredient.toLowerCase(),
-        quantity: 1,
-        unit: 'ea',
-      })),
+      ingredients: ingredients.length
+        ? ingredients.map((ingredient) => ({
+            name: ingredient,
+            normalized: ingredient.toLowerCase(),
+            quantity: 1,
+            unit: 'ea',
+          }))
+        : [{ name: 'rice', normalized: 'rice', quantity: 1, unit: 'cup' }],
       instructions: 'Cook it.',
       source: 'user-created',
-      difficulty: 'easy',
-      servings: 2,
+      difficulty,
+      servings,
       timesCooked: 0,
       tags: ['dinner'],
       createdAt: admin.firestore.Timestamp.now(),
@@ -210,36 +219,9 @@ const mealPlanWeek = async (weekStart) => {
   return snap.exists ? { id: snap.id, ...snap.data() } : undefined;
 };
 
-/**
- * Add a recipe to the global library, in the shape the schema documents.
- *
- * Phase 4 has not shipped a recipe editor yet, so there is no real UI to drive
- * — this writes the documented contract instead, which is still enough to prove
- * the dashboard is counting the right collection. Field-for-field with the
- * `create` rule in firestore.rules, so it fails loudly if the contract moves.
- */
-const seedRecipe = async ({ name, servings = 2, difficulty = 'easy' }) => {
-  const ref = await admin
-    .firestore()
-    .collection('recipes')
-    .add({
-      name,
-      ingredients: [{ name: 'rice', quantity: 1, unit: 'cup', normalized: 'rice' }],
-      instructions: 'Cook it.',
-      source: 'user-created',
-      createdAt: admin.firestore.Timestamp.now(),
-      tags: ['dinner'],
-      servings,
-      difficulty,
-      timesCooked: 0,
-    });
-  return ref.id;
-};
-
 module.exports = {
   mealPlanWeek,
   testUserId,
-  seedRecipe,
   inventoryItems,
   inventoryHasItem,
   inventoryItem,
