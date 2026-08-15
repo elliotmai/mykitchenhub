@@ -404,6 +404,69 @@ test.describe('mobile navigation', () => {
   });
 
   // -------------------------------------------------------------------------
+  // The phone changing shape underneath it
+  // -------------------------------------------------------------------------
+  test('survives being turned on its side', async ({ authedPage: page }) => {
+    const portrait = page.viewportSize();
+    const bar = page.getByRole('navigation', { name: 'Primary' });
+    await expect(bar).toBeVisible();
+
+    await page.setViewportSize({ width: portrait.height, height: portrait.width });
+    await page.goto('/inventory', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { name: 'Inventory' })).toBeVisible();
+
+    // Landscape on a phone is still narrower than the sidebar breakpoint, so
+    // the bar is still the navigation — and it must not have grown a sideways
+    // scroll or shrunk its tabs below the floor on the way round.
+    await expect(bar).toBeVisible();
+    expect(await overflowsHorizontally(page)).toBe(false);
+    expect(await undersizedTargets(page, MIN_TOUCH_TARGET)).toEqual([]);
+
+    const box = await bar.boundingBox();
+    expect(Math.round(box.width)).toBe(portrait.height);
+  });
+
+  test('stays out of the way when the software keyboard takes half the screen', async ({
+    authedPage: page,
+  }) => {
+    // A keyboard opening shortens the viewport rather than the document. The
+    // bar is fixed to the bottom of that viewport, so this is where it can end
+    // up sitting on the field being typed into.
+    const { width, height } = page.viewportSize();
+
+    await page.goto('/inventory', { waitUntil: 'domcontentloaded' });
+    await page
+      .getByRole('button', { name: /add item/i })
+      .first()
+      .click();
+
+    const modal = page.locator('.modal.show');
+    await expect(modal).toBeVisible();
+
+    // Roughly what an Android keyboard leaves behind.
+    await page.setViewportSize({ width, height: Math.round(height * 0.45) });
+
+    const field = modal.getByPlaceholder(/Chicken Breast/);
+    await field.scrollIntoViewIfNeeded();
+    await field.click();
+    await field.fill('Keyboard Test');
+
+    // The field the cook is typing into must be the thing at that point on the
+    // screen, not the navigation bar drawn over it.
+    const box = await field.boundingBox();
+    const hit = await page.evaluate(
+      ([x, y]) => {
+        const el = document.elementFromPoint(x, y);
+        return el?.closest('.mobile-nav') ? 'the bar' : (el?.tagName ?? 'nothing');
+      },
+      [box.x + box.width / 2, box.y + box.height / 2]
+    );
+
+    expect(hit).toBe('INPUT');
+    await expect(field).toHaveValue('Keyboard Test');
+  });
+
+  // -------------------------------------------------------------------------
   // The other things pinned to the bottom of the screen
   // -------------------------------------------------------------------------
   test('is not buried by the offline banner when the signal drops', async ({

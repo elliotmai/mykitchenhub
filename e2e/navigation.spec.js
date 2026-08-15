@@ -32,21 +32,24 @@ test.describe('navigation', () => {
   test('says so when a page chunk cannot be downloaded, instead of showing an empty panel', async ({
     authedPage: page,
   }) => {
-    // /analytics is a good target: it is behind the drawer, so getting there is
-    // a client-side navigation that triggers the dynamic import, and its chunk
-    // is not already in memory from the dashboard.
+    // Every lazily-loaded route is a `<id>.<hash>.chunk.js`; the initial bundle
+    // is `main.<hash>.js` and is deliberately left alone, so the app still
+    // boots and it is only the page inside the shell that cannot arrive.
     await page.route(/\/static\/js\/.*\.chunk\.js/, (route) =>
       route.fulfill({ status: 503, body: '' })
     );
 
-    await page.getByRole('button', { name: 'Toggle sidebar' }).click();
-    await page
-      .getByRole('navigation', { name: 'Main navigation' })
-      .getByRole('link', { name: 'Analytics' })
-      .click();
+    // Navigated rather than clicked, because this spec runs on both the desktop
+    // and the phone project and the sidebar is a permanent rail on one and a
+    // drawer on the other. Either way it is the dynamic import that has to
+    // resolve before anything renders.
+    await page.goto('/analytics', { waitUntil: 'domcontentloaded' });
 
-    // Whatever it settles on — the retry succeeding from cache, or the error
-    // screen — it must not be a shell with an empty content area.
+    // Whichever way it settles, it must not be a shell with an empty content
+    // area. Both endings are correct: the service worker may satisfy the chunk
+    // from precache, in which case the page simply renders, and if it does not,
+    // the error screen has to appear. The one unacceptable outcome — the app
+    // looking like it worked, with nothing in it — is what this rules out.
     await expect
       .poll(
         async () => {

@@ -27,6 +27,34 @@ test.describe("what's new popup", () => {
     await expect(dialog).not.toBeVisible();
   });
 
+  test('keeps "Got it" tappable above the phone\'s bottom bar', async ({
+    authedPage: page,
+  }, testInfo) => {
+    // The popup opens over every page, and on a phone the bottom tab bar is
+    // pinned to the same edge. If the bar were drawn on top of the dismiss
+    // button, the popup — which swallows clicks — could not be got rid of at
+    // all until the entry aged out.
+    test.skip(!testInfo.project.name.includes('mobile'), 'about the phone bottom bar');
+
+    const gotIt = page.getByRole('button', { name: 'Got it' });
+    await expect(gotIt).toBeVisible();
+
+    const box = await gotIt.boundingBox();
+    const hit = await page.evaluate(
+      ([x, y]) => {
+        const el = document.elementFromPoint(x, y);
+        return el?.closest('.mobile-nav') ? 'the bar' : (el?.textContent?.trim() ?? 'nothing');
+      },
+      [box.x + box.width / 2, box.y + box.height / 2]
+    );
+
+    expect(hit).toBe('Got it');
+
+    // And it really does dismiss, rather than merely being on top.
+    await gotIt.click();
+    await expect(page.locator('.whats-new-modal')).not.toBeVisible();
+  });
+
   test('records the version it showed, so only newer entries reappear', async ({
     authedPage: page,
   }) => {
