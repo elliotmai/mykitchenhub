@@ -86,7 +86,40 @@ describe('FreezerSuggestions actions', () => {
     expect(onFreezeHalf).toHaveBeenCalledWith(match.item);
   });
 
-  it('will not offer to halve a single item', () => {
+  it('keeps the button’s name while the freeze is in flight', async () => {
+    // The label used to be replaced by a bare spinner, leaving the control
+    // with no accessible name — a screen reader announced "button" for the
+    // thing it had just been asked to press.
+    let resolve;
+    const onFreezeAll = jest.fn(
+      () =>
+        new Promise((r) => {
+          resolve = r;
+        })
+    );
+
+    render(
+      <FreezerSuggestions
+        suggestions={[suggestion()]}
+        freezerLocation={FREEZER}
+        onFreezeAll={onFreezeAll}
+      />
+    );
+
+    const button = screen.getByRole('button', { name: 'Freeze All' });
+    await act(async () => {
+      await userEvent.click(button);
+    });
+
+    const busy = screen.getByRole('button', { name: 'Freeze All' });
+    expect(busy).toHaveAttribute('aria-busy', 'true');
+
+    await act(async () => {
+      resolve({ success: true });
+    });
+  });
+
+  it('will not offer to halve a single item, and says why', () => {
     render(
       <FreezerSuggestions
         suggestions={[suggestion({ item: { quantity: 1 } })]}
@@ -94,7 +127,9 @@ describe('FreezerSuggestions actions', () => {
       />
     );
 
-    expect(screen.getByRole('button', { name: 'Freeze Half' })).toBeDisabled();
+    // The reason is in the accessible name, not only the `title` — a title on
+    // a disabled button is not reliably read out.
+    expect(screen.getByRole('button', { name: /not enough .* to split/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Freeze All' })).toBeEnabled();
   });
 

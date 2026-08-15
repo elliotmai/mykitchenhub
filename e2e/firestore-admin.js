@@ -135,6 +135,40 @@ const seedMealPlanEntry = async ({
   return ref.id;
 };
 
+/**
+ * Add a recipe to the shared library.
+ *
+ * `recipes` is a global collection, so every spec that seeds one has to pick a
+ * unique name — they run in parallel against one emulator.
+ */
+const seedRecipe = async ({ name, ingredients = [] }) => {
+  const ref = await admin
+    .firestore()
+    .collection('recipes')
+    .add({
+      name,
+      ingredients: ingredients.map((ingredient) => ({
+        name: ingredient,
+        normalized: ingredient.toLowerCase(),
+        quantity: 1,
+        unit: 'ea',
+      })),
+      instructions: 'Cook it.',
+      source: 'user-created',
+      difficulty: 'easy',
+      servings: 2,
+      timesCooked: 0,
+      tags: ['dinner'],
+      createdAt: admin.firestore.Timestamp.now(),
+    });
+  return ref.id;
+};
+
+/** Remove a recipe again, so a parallel spec's library stays predictable. */
+const deleteRecipe = async (id) => {
+  await admin.firestore().doc(`recipes/${id}`).delete();
+};
+
 module.exports = {
   testUserId,
   inventoryItems,
@@ -147,4 +181,6 @@ module.exports = {
   mealPlanEntries,
   mealPlanEntry,
   seedMealPlanEntry,
+  seedRecipe,
+  deleteRecipe,
 };

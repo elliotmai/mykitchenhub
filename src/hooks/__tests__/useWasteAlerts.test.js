@@ -5,6 +5,8 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import React from 'react';
 
 import useWasteAlerts, { canSplitQuantity, getFreezerBenefit, halfOf } from '../useWasteAlerts';
+import { buildUrgentAlerts } from '../../components/Dashboard/UrgentAlerts';
+import { countExpiringSoon } from '../../pages/Dashboard';
 import { AuthProvider } from '../useAuth';
 import * as fs from '../../test-utils/mocks/firestore';
 import * as authMock from '../../test-utils/mocks/auth';
@@ -155,6 +157,55 @@ describe('halfOf', () => {
     [1, 0.5],
   ])('halves %p to %p', (input, expected) => {
     expect(halfOf(input)).toBe(expected);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Agreement with the dashboard (Phase 8)
+//
+// The dashboard's "Expiring Soon" tile and its Urgent Alerts panel describe
+// the same kitchen as this page, from the same inventory documents, and a cook
+// moving between the two will notice immediately if the numbers differ. Each
+// screen used to define the window for itself — one by status name, one by day
+// count, one by comparing raw timestamps — so they only agreed by coincidence.
+// ---------------------------------------------------------------------------
+
+describe('the dashboard and the waste alerts page', () => {
+  // Deliberately spans every boundary: expired, today, the critical/warning
+  // edge at 2 and 3 days, the window edge at 5 and 6, and an item with no
+  // expiry at all.
+  const SPREAD = [
+    makeItem({ id: 'a', name: 'Old Yogurt', expiresAt: daysFromNow(-4) }),
+    makeItem({ id: 'b', name: 'Milk', expiresAt: daysFromNow(0) }),
+    makeItem({ id: 'c', name: 'Salmon', expiresAt: daysFromNow(2) }),
+    makeItem({ id: 'd', name: 'Spinach', expiresAt: daysFromNow(3) }),
+    makeItem({ id: 'e', name: 'Carrots', expiresAt: daysFromNow(5) }),
+    makeItem({ id: 'f', name: 'Cheese', expiresAt: daysFromNow(6) }),
+    makeItem({ id: 'g', name: 'Rice', expiresAt: daysFromNow(400) }),
+    makeItem({ id: 'h', name: 'Salt', expiresAt: null }),
+  ];
+
+  it('count the same food as at risk', async () => {
+    const { result } = await renderAlerts(SPREAD);
+
+    expect(countExpiringSoon(SPREAD)).toBe(result.current.counts.total);
+    expect(result.current.counts.total).toBe(5);
+  });
+
+  it('agree on which food is urgent', async () => {
+    const { result } = await renderAlerts(SPREAD);
+
+    const dashboardUrgent = buildUrgentAlerts(SPREAD, Number.MAX_SAFE_INTEGER);
+    const pageUrgent = [...result.current.buckets.expired, ...result.current.buckets.critical];
+
+    expect(dashboardUrgent.map((a) => a.id).sort()).toEqual(pageUrgent.map((i) => i.id).sort());
+  });
+
+  it('agree that an item with no expiry date is not at risk', async () => {
+    const { result } = await renderAlerts(SPREAD);
+
+    expect(result.current.expiringItems.map((i) => i.id)).not.toContain('h');
+    expect(buildUrgentAlerts(SPREAD).map((a) => a.id)).not.toContain('h');
   });
 });
 

@@ -393,10 +393,19 @@ const useInventory = () => {
         // Anything that can change how long the item keeps: an explicit shelf
         // life, a move to another kind of storage, or a rename that lands on a
         // different ingredient in the shelf-life table.
+        //
+        // A move or a rename is only recognised as such against an item we
+        // hold. With no local copy — an id from outside the current snapshot —
+        // every field would look changed and the shelf life would be
+        // recalculated from `undefined`, landing on the 30-day last resort. An
+        // explicit shelf life needs no comparison, so it still applies.
         const chosenShelfLife = hasExplicitShelfLife(updates.shelfLifeDays);
         const movedLocation =
-          Boolean(updates.locationType) && updates.locationType !== existing?.locationType;
-        const renamed = Boolean(updates.name) && updates.name !== existing?.name;
+          Boolean(existing) &&
+          Boolean(updates.locationType) &&
+          updates.locationType !== existing.locationType;
+        const renamed =
+          Boolean(existing) && Boolean(updates.name) && updates.name !== existing.name;
 
         if (chosenShelfLife || movedLocation || renamed) {
           const nextLocationType = updates.locationType ?? existing?.locationType;

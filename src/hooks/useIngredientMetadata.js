@@ -215,7 +215,18 @@ export const findIngredients = (searchTerm) => {
 };
 
 /**
- * Custom hook for ingredient metadata
+ * Custom hook for ingredient metadata.
+ *
+ * Shelf-life questions only — "how long does this keep, and where?".
+ *
+ * How close an item is to its date, what colour that makes it, and what to
+ * call it all live in `useInventory`: `getDaysUntilExpiration`,
+ * `getExpirationStatus`, `getExpirationLevel`, `getExpirationLabel`. This hook
+ * used to answer those too, with a second set of thresholds (`soon` at seven
+ * days against the app's five), a second set of status names, and hardcoded
+ * hex colours where the rest of the app uses design-system tokens. Nothing
+ * imported them and nothing tested them, but the next person adding a badge
+ * could easily have reached for the wrong pair.
  */
 export function useIngredientMetadata() {
   const getShelfLife = (ingredientName, locationType) => {
@@ -240,51 +251,11 @@ export function useIngredientMetadata() {
   const getAllIngredients = listIngredients;
   const searchIngredients = findIngredients;
 
-  const getDaysUntilExpiration = (expirationDate) => {
-    if (!expirationDate) return null;
-
-    const now = new Date();
-    const expDate = new Date(expirationDate);
-    const diffTime = expDate - now;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    return diffDays;
-  };
-
-  const getExpirationStatus = (expirationDate) => {
-    const days = getDaysUntilExpiration(expirationDate);
-
-    if (days === null) return 'unknown';
-    if (days < 0) return 'expired';
-    if (days === 0) return 'today';
-    if (days <= 2) return 'urgent';
-    if (days <= 7) return 'soon';
-    return 'fresh';
-  };
-
-  const getExpirationColor = (expirationDate) => {
-    const status = getExpirationStatus(expirationDate);
-
-    const colors = {
-      expired: '#dc3545', // red
-      today: '#fd7e14', // orange
-      urgent: '#ffc107', // yellow
-      soon: '#28a745', // green
-      fresh: '#28a745', // green
-      unknown: '#6c757d', // gray
-    };
-
-    return colors[status] || colors.unknown;
-  };
-
   return {
     getShelfLife,
     calculateExpirationDate,
     getAllIngredients,
     searchIngredients,
-    getDaysUntilExpiration,
-    getExpirationStatus,
-    getExpirationColor,
     ingredientShelfLife,
   };
 }

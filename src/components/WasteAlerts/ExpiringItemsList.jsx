@@ -36,7 +36,7 @@ const ExpiringItemsList = ({ items = [], locations = [] }) => {
     return (
       <Card>
         <Card.Body className="text-center py-5">
-          <PartyPopper size={48} className="text-muted mb-3 opacity-50" />
+          <PartyPopper size={48} className="text-muted mb-3 opacity-50" aria-hidden="true" />
           <h5 className="mb-1">Nothing is about to go off</h5>
           <p className="text-muted mb-0">
             Everything in your kitchen has more than five days left.

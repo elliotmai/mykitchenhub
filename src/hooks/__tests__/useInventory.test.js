@@ -740,6 +740,34 @@ describe('useInventory.updateItem', () => {
     expect(patch).not.toHaveProperty('shelfLifeSource');
   });
 
+  it('does not invent an expiry for an item it has no copy of', async () => {
+    // Nothing to compare against means everything looks changed, so the shelf
+    // life was recalculated from an undefined location and landed on the
+    // 30-day last resort — quietly replacing whatever the item really had.
+    const { result } = await renderInventory([makeItem({ id: 'item-1' })]);
+
+    await act(async () => {
+      await result.current.updateItem('not-in-the-snapshot', { name: 'Milk', quantity: 2 });
+    });
+
+    const [, patch] = fs.updateDoc.mock.calls[0];
+    expect(patch).not.toHaveProperty('expiresAt');
+    expect(patch).not.toHaveProperty('shelfLifeDays');
+    expect(patch.quantity).toBe(2);
+  });
+
+  it('still honours an explicit shelf life for an item it has no copy of', async () => {
+    const { result } = await renderInventory([makeItem({ id: 'item-1' })]);
+
+    await act(async () => {
+      await result.current.updateItem('not-in-the-snapshot', { shelfLifeDays: 14 });
+    });
+
+    const [, patch] = fs.updateDoc.mock.calls[0];
+    expect(patch.shelfLifeDays).toBe(14);
+    expect(patch.shelfLifeSource).toBe('custom');
+  });
+
   it('leaves the expiry alone for edits that do not affect shelf life', async () => {
     const { result } = await renderInventory([makeItem({ id: 'item-1' })]);
 

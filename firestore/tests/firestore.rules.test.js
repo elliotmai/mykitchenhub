@@ -695,6 +695,33 @@ describe('meal plan entries', () => {
     await assertFails(as(OWNER).doc(entryPath(OWNER)).set({ recipeName: 'Toast' }));
   });
 
+  it('accepts the document the waste-prevention button writes, field for field', async () => {
+    // Transcribed from `addToMealPlan` in src/hooks/useRecipeSuggestions.js.
+    // The fixture above is Phase 7's own shape; this collection is written by
+    // Phase 6 as well, and a cross-phase writer is exactly the kind that
+    // drifts without anybody noticing until the rules go into production
+    // mode. `createdAt` is a serverTimestamp() in the app — a Timestamp here.
+    await assertSucceeds(
+      as(OWNER)
+        .doc(entryPath(OWNER, 'from-waste-alerts'))
+        .set({
+          date: '2026-08-15',
+          mealType: 'dinner',
+          recipeId: 'recipe-1',
+          recipeName: 'Creamed Spinach',
+          servings: 2,
+          status: 'planned',
+          source: 'waste-prevention',
+          createdAt: new Date(),
+          cookedAt: null,
+          usesIngredients: [{ name: 'Spinach', normalized: 'spinach', quantity: 1, unit: 'bag' }],
+          batchGroup: null,
+          notes: '',
+          planId: null,
+        })
+    );
+  });
+
   it('requires `recipeName` — an entry carrying only a recipeId is rejected', async () => {
     const { recipeName, ...rest } = validMealPlanEntry();
     await assertFails(as(OWNER).doc(entryPath(OWNER)).set(rest));
