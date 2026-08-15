@@ -60,17 +60,11 @@ const ingredientShelfLife = {
   // Add more as needed...
 };
 
-// These two are pure lookups over the table above — nothing about them depends
-// on a render. Defining them at module scope gives them a stable identity, so
-// `useIngredientAutocomplete` can memoize on the search term alone.
-const getAllIngredients = () => {
-  return Object.keys(ingredientShelfLife).sort();
-};
-
-const searchIngredients = (searchTerm) => {
-  const term = searchTerm.toLowerCase().trim();
-  return getAllIngredients().filter((ingredient) => ingredient.includes(term));
-};
+// The pure lookups over the table above are `listIngredients` and
+// `findIngredients`, exported below. An earlier unexported pair doing the same
+// job outlived the refactor that replaced them; nothing called it, and the
+// unused warning it raised failed the production build, which treats warnings
+// as errors.
 
 /**
  * The shelf-life table itself, for callers that are not React components.
