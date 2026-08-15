@@ -123,7 +123,8 @@ test.describe('dashboard', () => {
     // Phase 4 has not shipped a recipe editor, so the owning UI cannot be
     // driven here — the write goes through the documented contract instead.
     // The read is still the real thing: the real bundle, through the real
-    // rules, off the real collection.
+    // rules, off the real collection. A dashboard counting some other
+    // collection shows a number that never moves.
     test.setTimeout(120_000);
 
     await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
@@ -169,12 +170,13 @@ test.describe('dashboard', () => {
     // Two screens, one number. The dashboard counts by expiration *status*, the
     // waste-alerts page by a five-day window; they are meant to be the same set
     // and nothing but this checks it against real documents.
+    test.setTimeout(120_000);
+
     await expect
       .poll(
         async () => {
           await page.goto('/waste-alerts', { waitUntil: 'domcontentloaded' });
-          const summary = page.getByTestId('summary-expired');
-          await expect(summary).toBeVisible({ timeout: 20_000 });
+          await expect(page.getByTestId('summary-expired')).toBeVisible({ timeout: 15_000 });
 
           const buckets = await Promise.all(
             ['expired', 'critical', 'warning'].map(async (key) =>
@@ -184,7 +186,7 @@ test.describe('dashboard', () => {
           const wasteTotal = buckets.reduce((sum, n) => sum + n, 0);
 
           await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
-          await expect(statValues(page).nth(1)).toHaveText(/^\d+$/, { timeout: 20_000 });
+          await expect(statValues(page).nth(1)).toHaveText(/^\d+$/, { timeout: 15_000 });
           const dashboardTotal = Number(await statValues(page).nth(1).innerText());
 
           return dashboardTotal - wasteTotal;
@@ -193,7 +195,7 @@ test.describe('dashboard', () => {
           // Specs run in parallel, so an item can be added between the two
           // reads. Polling lets that settle; a real disagreement never does.
           message: 'waiting for the two screens to report the same count',
-          timeout: 45_000,
+          timeout: 60_000,
         }
       )
       .toBe(0);
