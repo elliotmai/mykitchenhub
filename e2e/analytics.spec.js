@@ -44,7 +44,14 @@ test.describe('analytics', () => {
 
   test('turns a real purchase into charts and a table', async ({ authedPage: page }) => {
     const name = `Analytics Oats ${Date.now()}`;
+
+    // Bought twice, in two shops. Two reasons: it is the case worth proving —
+    // the same ingredient in two places is one shopping habit — and the chart
+    // only shows the eight most-bought items, so an item on one purchase can
+    // honestly fall off the end of a shared account that other specs keep
+    // adding to. Two purchases puts it above everything bought once.
     await addPricedItem(page, { name, price: 6.5, store: 'Aldi' });
+    await addPricedItem(page, { name, price: 5.5, store: 'Costco' });
 
     await page.goto('/analytics', { waitUntil: 'domcontentloaded' });
 
@@ -56,7 +63,15 @@ test.describe('analytics', () => {
     // The charts are real SVG, not a placeholder image.
     await expect(page.locator('.recharts-surface').first()).toBeVisible();
 
-    await expect(page.locator('.frequent-items__table')).toContainText(name);
+    const regulars = page.locator('.frequent-items__table');
+    await expect(regulars).toContainText(name);
+
+    // Counted as two purchases of one thing, not two things — and the cheaper
+    // of the two shops is named.
+    const row = regulars.getByRole('row').filter({ hasText: name });
+    await expect(row).toHaveCount(1);
+    await expect(row).toContainText('2 times');
+    await expect(row).toContainText('Costco');
   });
 
   test('offers every chart as a table for anyone who cannot read it', async ({
@@ -76,7 +91,15 @@ test.describe('analytics', () => {
     await disclosure.getByText('View as table').click();
 
     await expect(disclosure.getByRole('columnheader', { name: 'Item' })).toBeVisible();
-    await expect(disclosure.getByRole('rowheader', { name })).toBeVisible();
+
+    // Rows, with the numbers the plot draws — not just a header. Deliberately
+    // not "and mine is one of them": the chart shows the eight most-bought
+    // items, and specs share one account, so by the time this runs the item it
+    // just added may honestly rank ninth. That the table exists, opens and
+    // carries the chart's data is what this spec is for; `.frequent-items__table`
+    // below is where a specific item is checked.
+    await expect(disclosure.getByRole('rowheader').first()).toBeVisible();
+    await expect(disclosure.getByRole('cell').first()).toContainText(/\d/);
   });
 
   test('opens a chart table from the keyboard alone', async ({ authedPage: page }) => {
