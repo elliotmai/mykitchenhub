@@ -110,7 +110,70 @@ describe('WasteAlerts page', () => {
     await renderPage({ items: [ITEMS[2]] });
 
     expect(await screen.findByText('Nothing needs rescuing today.')).toBeInTheDocument();
-    expect(screen.getByText(/Nothing is about to go off/)).toBeInTheDocument();
+    expect(screen.getByTestId('nothing-at-risk')).toHaveTextContent('Nothing is going to waste');
+  });
+
+  it('says the good news once, not four times over', async () => {
+    // The page used to render zero-count tiles beside three separate "nothing
+    // here" panels, which reads like a page that failed to load.
+    await renderPage({ items: [ITEMS[2]] });
+
+    await screen.findByTestId('nothing-at-risk');
+    expect(screen.queryByTestId('summary-expired')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('freezer-suggestions')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('recipe-suggestions')).not.toBeInTheDocument();
+  });
+
+  it('points an empty kitchen at the inventory rather than congratulating it', async () => {
+    await renderPage({ items: [] });
+
+    const panel = await screen.findByTestId('nothing-at-risk');
+    expect(panel).toHaveTextContent('Nothing to keep an eye on yet');
+    expect(
+      screen.getByRole('link', { name: /Add something to your inventory/ })
+    ).toBeInTheDocument();
+  });
+
+  it('says so when the recipe library will not load', async () => {
+    // The hook already tracked this error and the page never read it, so a
+    // failed load rendered "No recipes use what is expiring right now" — a
+    // confident wrong answer instead of a problem.
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    fs.getDocs.mockRejectedValue(new Error('offline'));
+
+    renderWithProviders(<WasteAlerts />, {
+      route: '/waste-alerts',
+      user: authMock.__user({ uid: UID }),
+    });
+
+    await waitFor(() => expect(fs.onSnapshot).toHaveBeenCalled());
+    await act(async () => {
+      fs.__emit(`users/${UID}/inventory`, asDocs(ITEMS));
+      fs.__emit(`users/${UID}/storageLocations`, asDocs(LOCATIONS));
+    });
+
+    expect(await screen.findByText(/Failed to load recipe suggestions/)).toBeInTheDocument();
+  });
+
+  it('says so when past alerts will not load', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    fs.getDocs.mockResolvedValue(fs.__querySnapshot(asDocs(RECIPES)));
+
+    renderWithProviders(<WasteAlerts />, {
+      route: '/waste-alerts',
+      user: authMock.__user({ uid: UID }),
+    });
+
+    await waitFor(() => expect(fs.onSnapshot).toHaveBeenCalled());
+    await act(async () => {
+      fs.__emit(`users/${UID}/inventory`, asDocs(ITEMS));
+      fs.__emit(`users/${UID}/storageLocations`, asDocs(LOCATIONS));
+      fs.__emitError(`users/${UID}/notifications`, new Error('permission denied'));
+    });
+
+    expect(await screen.findByText(/Failed to load notifications/)).toBeInTheDocument();
+    // The at-risk list is independent of that failure and must survive it.
+    expect(screen.getByTestId('freezer-suggestions')).toBeInTheDocument();
   });
 
   it('offers to freeze what the freezer would save', async () => {

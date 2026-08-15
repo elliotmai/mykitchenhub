@@ -180,11 +180,16 @@ export const makeNotification = (overrides = {}) => ({
 // ---------------------------------------------------------------------------
 export const makeRecipe = (overrides = {}) => ({
   id: nextId('recipe'),
-  title: 'Sheet Pan Salmon',
-  source: 'manual',
+  // `name`, not `title`. The security rules require `name` on create and the
+  // schema documents it; this factory produced only `title`, so every test
+  // went down `recipeTitle`'s legacy fallback and the field production
+  // actually stores was never exercised.
+  name: 'Sheet Pan Salmon',
+  source: 'user-created',
+  difficulty: 'easy',
   ingredients: [
-    { name: 'salmon', quantity: 2, unit: 'fillet' },
-    { name: 'spinach', quantity: 1, unit: 'bag' },
+    { name: 'salmon', normalized: 'salmon', quantity: 2, unit: 'fillet' },
+    { name: 'spinach', normalized: 'spinach', quantity: 1, unit: 'bag' },
   ],
   instructions: ['Heat oven to 400F.', 'Roast 15 minutes.'],
   tags: ['dinner', 'quick'],
