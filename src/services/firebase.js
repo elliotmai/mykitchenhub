@@ -52,7 +52,10 @@ export const functions = getFunctions(app);
 // point that build at the real project.
 if (process.env.REACT_APP_USE_EMULATORS === 'true') {
   console.log('🔧 Connecting to Firebase emulators...');
-  connectAuthEmulator(auth, 'http://localhost:9099');
+  // disableWarnings suppresses the SDK's "Running in emulator mode" banner. It
+  // is fixed to the bottom of the viewport, so on a phone-sized screen it sits
+  // over the footer of a tall modal and swallows the submit click.
+  connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
   connectFirestoreEmulator(db, 'localhost', 8080);
   connectStorageEmulator(storage, 'localhost', 9199);
   connectFunctionsEmulator(functions, 'localhost', 5001);

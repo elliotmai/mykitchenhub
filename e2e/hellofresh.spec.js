@@ -80,14 +80,6 @@ const stubImport = (page, pattern, body, status = 200) =>
   });
 
 /**
- * The emulators inject a fixed banner across the bottom of the page. On a phone
- * viewport it sits over the modal's footer buttons and swallows the click, so
- * hide it — it is emulator furniture, not part of the app under test.
- */
-const hideEmulatorBanner = (page) =>
-  page.addStyleTag({ content: '.firebase-emulator-warning { display: none !important; }' });
-
-/**
  * Confirm a write from outside the browser. A write that passes client
  * validation but violates a security rule still renders locally, so reading it
  * back from the emulator is the only proof it was accepted.
@@ -254,7 +246,6 @@ test.describe('hellofresh deliveries', () => {
 
     await page.goto('/hellofresh', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'HelloFresh', exact: true })).toBeVisible();
-    await hideEmulatorBanner(page);
 
     // Import a recipe so the delivery picker has something in it.
     const draft = draftFor(recipeName);
