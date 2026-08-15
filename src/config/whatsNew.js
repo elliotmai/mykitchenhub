@@ -14,7 +14,7 @@
 
 export const WHATS_NEW = [
   {
-    version: '2026.08.15.4',
+    version: '2026.08.15.5',
     date: 'August 2026',
     items: [
       '📶 The row of buttons along the bottom of your phone no longer disappears when the signal drops. The “you’re offline” message used to sit right on top of it — so the moment you needed the app to keep working, you could not get around it.',
