@@ -156,6 +156,23 @@ npm run test:rules
 npm run test:e2e
 ```
 
+### The build fails on something `npm test` was happy with
+
+An ESLint **warning**. The production build runs under `CI=true`, which promotes
+every warning to a compile error, so an unused import is enough to fail the
+`build` and `e2e` jobs while the unit suite stays green.
+
+`npm run lint` is pinned to `--max-warnings=0` and covers `e2e/` as well as
+`src/`, so it fails on exactly what the build fails on — in forty seconds rather
+than four minutes:
+
+```bash
+npm run lint
+npm run lint:fix   # for the ones that fix themselves
+```
+
+Fix the warning rather than suppressing it with a disable comment.
+
 ### A unit test hangs or times out on a hook
 
 The hooks subscribe with `onSnapshot`; they do not resolve a promise. Emit on

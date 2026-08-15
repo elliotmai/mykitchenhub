@@ -62,6 +62,25 @@ export const SOURCE_LABELS = {
 // Pure helpers — exported so components and tests can use them without a hook
 // ---------------------------------------------------------------------------
 
+/**
+ * May `uid` delete this recipe?
+ *
+ * `recipes` is one shared library, so `source: 'user-created'` only says *a*
+ * cook wrote it — not which one. Deleting is the single irreversible thing the
+ * collection allows, so it takes both: the recipe was added from the app, and
+ * this is the cook who added it. The security rules enforce exactly this pair;
+ * offering a control the rules would refuse is worse than not offering it.
+ *
+ * Legacy, synced and seeded recipes carry no `createdBy` and so belong to
+ * nobody — undeletable, which is the safe direction.
+ *
+ * @param {object} recipe - recipes/{id} document
+ * @param {string} uid    - the signed-in cook's uid
+ * @returns {boolean}
+ */
+export const canDeleteRecipe = (recipe, uid) =>
+  Boolean(recipe && uid && recipe.source === 'user-created' && recipe.createdBy === uid);
+
 /** Lowercased, whitespace-collapsed form used to match against inventory. */
 export const normalizeName = (value) =>
   String(value ?? '')
@@ -397,7 +416,7 @@ const useRecipes = () => {
       if (!user?.uid) return { success: false, error: 'Not authenticated' };
 
       const recipe = recipes.find((r) => r.id === recipeId);
-      if (recipe && recipe.source !== 'user-created') {
+      if (recipe && !canDeleteRecipe(recipe, user.uid)) {
         return {
           success: false,
           error: 'Only recipes you added yourself can be deleted.',
@@ -456,6 +475,9 @@ const useRecipes = () => {
     loading,
     error,
     tags,
+    // The signed-in cook's uid, so the list can tell which recipes are theirs
+    // to delete without reaching for the auth context a second time.
+    currentUid: user?.uid ?? null,
     addRecipe,
     updateRecipe,
     deleteRecipe,

@@ -182,6 +182,23 @@ request. [TESTING.md](../TESTING.md) is the how-to; this is the why.
 pre-push check and does **not** include the functions, rules or e2e suites — run
 those too before a final push.
 
+### Linting
+
+```bash
+npm run lint        # eslint src/ e2e/ --max-warnings=0
+npm run lint:fix
+```
+
+Two things about it that catch people out:
+
+- **It covers `e2e/` as well as `src/`.** An unused variable in a Playwright
+  spec fails the lint job exactly the way one in a component does.
+- **A warning fails it.** `--max-warnings=0` is not pedantry — the production
+  build runs under `CI=true`, which turns every ESLint warning into a compile
+  error. So a stray unused import takes down the `build` job and the `e2e` job
+  with it. `npm run lint` fails on the same things the build does, in about
+  forty seconds instead of four minutes. Fix warnings; don't suppress them.
+
 ### Frontend
 
 Jest and React Testing Library through `craco test`. `src/setupTests.js`

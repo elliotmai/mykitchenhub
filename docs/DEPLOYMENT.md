@@ -56,17 +56,31 @@ array, and add a top-level `helloFresh` to `fallbackData` — but it is a change
 a shared app file, so it is written up here rather than made from the
 documentation branch.
 
-### 2. `helloFresh` preferences live in two places
+### 2. `helloFresh` preferences live in two places — *fixed in `onUserCreate`*
 
-`onUserCreate` (and the client fallback) seed HelloFresh settings under
-`preferences.helloFresh`. `src/hooks/useDeliveries.js` writes them to a
-**top-level** `helloFresh` map, which is what `SCHEMA_DOCUMENTATION.md` and the
-rules describe. Both work — the update rule does not police it — so a profile
-ends up with settings in both places after the first delivery is logged.
+`onUserCreate` used to seed HelloFresh settings under `preferences.helloFresh`,
+while `src/hooks/useDeliveries.js` writes them to a **top-level** `helloFresh`
+map — the shape `SCHEMA_DOCUMENTATION.md` and the rules describe. A profile
+therefore ended up with settings in both places after the first delivery.
 
-This is cosmetic rather than breaking, but it is the kind of drift that becomes a
-bug the first time something reads the wrong one. Worth consolidating on the
-top-level field, which is the documented one.
+This turned out to be more than cosmetic. `readHelloFresh` in
+`functions/src/mealPlan/planContext.js` reads `profile.helloFresh` and nothing
+else, so while the settings were seeded under `preferences` the meal planner
+never saw the seeded delivery days at all — exactly the "reads the wrong one"
+failure the drift was flagged for.
+
+`onUserCreate` now writes the documented top-level shape and no nested copy.
+Two things remain outstanding, and both are somebody else's file to change:
+
+- the client signup fallback in `src/hooks/useAuth.js` still writes the nested
+  copy (it is being fixed alongside drift 1 above);
+- **profiles created before this change still have no top-level `helloFresh`.**
+  They are not broken — `useDeliveries` adds the field on the first logged
+  delivery, and the meal planner treats a missing map as "no deliveries" — but
+  the security rules deliberately do **not** require `helloFresh` on update for
+  precisely this reason. See the users section of `SCHEMA_DOCUMENTATION.md`.
+  A one-off backfill would let that rule be tightened later; nothing needs it
+  today.
 
 ---
 
@@ -283,13 +297,13 @@ for real users.
 
 ### What makes this safe
 
-`firestore/tests/firestore.rules.test.js` — 183 cases running the **real** rules
-file against the Firestore emulator. Its fixtures mirror what the app actually
+`firestore/tests/firestore.rules.test.js` — over 200 cases running the **real**
+rules file against the Firestore emulator. Its fixtures mirror what the app actually
 writes, so a shape the app produces and the rules reject fails there rather than
 in production. That suite is the evidence, and running it is not optional:
 
 ```bash
-npm run test:rules      # must be 183/183 green
+npm run test:rules      # every case green, no exceptions
 npm run test:e2e        # the real bundle against the real rules
 ```
 

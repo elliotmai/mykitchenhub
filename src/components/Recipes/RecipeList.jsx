@@ -36,6 +36,7 @@ const TIME_FILTERS = [
  * @param {function} onEdit      - (recipe) => void
  * @param {function} onDelete    - (recipe) => void
  * @param {function} onCook      - (recipe) => void
+ * @param {string}   currentUid  - the signed-in cook's uid, for the delete guard
  * @param {function} onOpenSync  - () => void — opens the legacy sync dashboard
  */
 const RecipeList = ({
@@ -47,6 +48,7 @@ const RecipeList = ({
   onDelete,
   onCook,
   onOpenSync,
+  currentUid,
 }) => {
   const [search, setSearch] = useState('');
   const [selectedTags, setSelectedTags] = useState([]);
@@ -279,6 +281,7 @@ const RecipeList = ({
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onCook={onCook}
+                currentUid={currentUid}
               />
             </Col>
           ))}

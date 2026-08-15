@@ -310,6 +310,21 @@ export const AuthProvider = ({ children }) => {
 
   /**
    * Update user email
+   *
+   * NOT WIRED INTO ANY SCREEN, and it cannot be as it stands: the Firestore
+   * half of this will be denied under production rules. `firestore.rules` pins
+   * the profile's `email` to its previous value on update, so the
+   * `setDoc({ email: newEmail })` below fails while the Firebase Auth change
+   * above has already succeeded — leaving the two out of step.
+   *
+   * Wiring this up means changing the rule as well, and the way to keep its
+   * anti-spoofing intent is to pin the profile email to the *authenticated*
+   * email rather than to the old one:
+   *
+   *   request.resource.data.email == request.auth.token.email
+   *
+   * Auth stays the source of truth, the profile is only allowed to follow it,
+   * and a legitimate change goes through.
    */
   const updateUserEmail = useCallback(
     async (newEmail, currentPassword) => {

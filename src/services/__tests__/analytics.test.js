@@ -11,6 +11,7 @@ import {
   initAnalytics,
   isAnalyticsEnabled,
   logAppEvent,
+  scrubParams,
 } from '../analytics';
 
 const ORIGINAL_ENV = { ...process.env };
@@ -189,6 +190,86 @@ describe('logAppEvent', () => {
 
     logAppEvent('app_opened');
     expect(analyticsSdk.logEvent).toHaveBeenCalledWith(expect.anything(), 'app_opened', {});
+  });
+});
+
+// What this app knows about a cook is their email, what they eat, what they
+// buy and where they shop. None of it may reach a GA4 property — so the module
+// drops it rather than trusting every future call site to remember.
+describe('scrubParams', () => {
+  it.each([
+    ['uid', { uid: 'abc123' }],
+    ['userId', { userId: 'abc123' }],
+    ['user_id', { user_id: 'abc123' }],
+    ['email', { email: 'cook@example.com' }],
+    ['e-mail', { 'e-mail': 'cook@example.com' }],
+    ['name', { name: 'Grandma Chili' }],
+    ['recipe_name', { recipe_name: 'Grandma Chili' }],
+    ['recipeName', { recipeName: 'Grandma Chili' }],
+    ['item_name', { item_name: 'salmon' }],
+    ['store_name', { store_name: 'Costco' }],
+    ['displayName', { displayName: 'Eli' }],
+    ['phone', { phone: '+15551234567' }],
+    ['phoneNumber', { phoneNumber: '+15551234567' }],
+    ['address', { address: '1 Kitchen Way' }],
+    ['notes', { notes: 'the good knife is blunt' }],
+    ['token', { token: 'ya29.abc' }],
+  ])('drops %s', (_label, params) => {
+    expect(scrubParams(params)).toEqual({});
+  });
+
+  it('drops an email-shaped value whatever the parameter is called', () => {
+    expect(scrubParams({ contact: 'cook@example.com' })).toEqual({});
+  });
+
+  it('keeps the counts and categories that are the point of an event', () => {
+    expect(
+      scrubParams({ source: 'legacy', item_count: 4, difficulty: 'easy', degraded: false })
+    ).toEqual({ source: 'legacy', item_count: 4, difficulty: 'easy', degraded: false });
+  });
+
+  it('keeps the safe half of a mixed payload rather than dropping the event', () => {
+    expect(scrubParams({ source: 'manual', recipe_name: 'Grandma Chili' })).toEqual({
+      source: 'manual',
+    });
+  });
+
+  it('survives being handed nothing, or something that is not an object', () => {
+    expect(scrubParams()).toEqual({});
+    expect(scrubParams(null)).toEqual({});
+    expect(scrubParams('nope')).toEqual({});
+  });
+});
+
+describe('logAppEvent scrubbing', () => {
+  beforeEach(async () => {
+    withEnv({ REACT_APP_FIREBASE_MEASUREMENT_ID: 'G-REAL' });
+    await initAnalytics();
+  });
+
+  it('never sends a food name, an email or a uid, even when a caller passes one', () => {
+    expect(
+      logAppEvent('recipe_cooked', {
+        source: 'legacy',
+        recipe_name: 'Grandma Chili',
+        email: 'cook@example.com',
+        uid: 'abc123',
+      })
+    ).toBe(true);
+
+    expect(analyticsSdk.logEvent).toHaveBeenCalledWith(expect.anything(), 'recipe_cooked', {
+      source: 'legacy',
+    });
+
+    // Nothing identifying anywhere in what was actually sent.
+    const sent = JSON.stringify(analyticsSdk.logEvent.mock.calls);
+    expect(sent).not.toMatch(/Grandma Chili|cook@example\.com|abc123/);
+  });
+
+  it('still records the event when every parameter had to be dropped', () => {
+    // The count is the useful part; losing the dimension is the safe trade.
+    expect(logAppEvent('recipe_cooked', { recipe_name: 'Grandma Chili' })).toBe(true);
+    expect(analyticsSdk.logEvent).toHaveBeenCalledWith(expect.anything(), 'recipe_cooked', {});
   });
 });
 
