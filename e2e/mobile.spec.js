@@ -90,10 +90,29 @@ const widestOffender = (page) =>
     const limit = document.documentElement.clientWidth;
     let worst = null;
 
+    /**
+     * True when something above `el` scrolls horizontally.
+     *
+     * A wide table inside `overflow-x: auto` is the correct answer to a narrow
+     * screen, not a bug — but it still reports a bounding rect past the edge,
+     * because the rect describes the element, not the window it is seen
+     * through. Without this the analytics table failed a check it passes.
+     */
+    const insideAScroller = (el) => {
+      for (let node = el.parentElement; node && node !== document.body; node = node.parentElement) {
+        const overflowX = getComputedStyle(node).overflowX;
+        if (overflowX === 'auto' || overflowX === 'scroll' || overflowX === 'hidden') return true;
+      }
+      return false;
+    };
+
     document.querySelectorAll('body *').forEach((el) => {
       const rect = el.getBoundingClientRect();
       if (rect.width === 0) return;
-      if (rect.right > limit + 1 && (!worst || rect.right > worst.right)) {
+      if (rect.right <= limit + 1) return;
+      if (insideAScroller(el)) return;
+
+      if (!worst || rect.right > worst.right) {
         worst = {
           right: Math.round(rect.right),
           tag: el.tagName.toLowerCase(),
@@ -111,11 +130,12 @@ test.describe('on a phone', () => {
       await page.goto(path, { waitUntil: 'domcontentloaded' });
       await expect(page.locator('.app-footer__version')).toBeVisible();
 
-      const offender = await widestOffender(page);
-      expect(
-        await overflowsHorizontally(page),
-        offender ? `widest element: ${JSON.stringify(offender)}` : 'no offender found'
-      ).toBe(false);
+      // Asserted on the offending element rather than on a boolean with a
+      // message: the element *is* the evidence, so a failure names what stuck
+      // out instead of just saying "true is not false". The scrollWidth check
+      // stays as a backstop for overflow no single element accounts for.
+      expect(await widestOffender(page)).toBeNull();
+      expect(await overflowsHorizontally(page)).toBe(false);
     });
 
     test(`${path} has no tap target smaller than ${MIN_TOUCH_TARGET}px`, async ({
@@ -124,9 +144,9 @@ test.describe('on a phone', () => {
       await page.goto(path, { waitUntil: 'domcontentloaded' });
       await expect(page.locator('.app-footer__version')).toBeVisible();
 
-      const problems = await undersizedTargets(page, MIN_TOUCH_TARGET);
-
-      expect(problems, `undersized: ${JSON.stringify(problems, null, 2)}`).toEqual([]);
+      // The array is the message: a failure prints every control that is too
+      // small, with its size and accessible name.
+      expect(await undersizedTargets(page, MIN_TOUCH_TARGET)).toEqual([]);
     });
   }
 });

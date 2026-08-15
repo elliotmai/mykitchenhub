@@ -31,6 +31,11 @@
   input[type='submit'],
   input[type='reset'] {
     min-height: 44px;
+    /* Width as well as height. An icon-only button has no text to stretch it —
+       the "remove this meal" control on a day card is a 13px trash icon with
+       `p-0`, so height alone left it 13px wide and 44px tall. Harmless on a
+       button with a label, which is already wider than this. */
+    min-width: 44px;
   }
 
   /* Form controls are tapped to focus, and a 38px input is just as easy to

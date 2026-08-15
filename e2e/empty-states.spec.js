@@ -31,7 +31,7 @@ const waitForServiceWorker = async (page) => {
 const EMPTY_STATES = [
   ['/inventory', /your inventory is empty/i],
   ['/meal-plan', /no meals|nothing planned|plan your week|add a meal/i],
-  ['/waste-alerts', /nothing is about to go off/i],
+  ['/waste-alerts', /nothing to keep an eye on yet|nothing is going to waste/i],
   ['/analytics', /no shopping history yet/i],
   ['/hellofresh', /no deliveries|nothing logged|add.*delivery/i],
 ];

@@ -125,8 +125,14 @@ const withWhatsNewOption = (testObject) =>
  * option is overridden with a one-line test-scoped fixture that reads it.
  */
 const test = withWhatsNewOption(base).extend({
-  /** The account this worker owns. */
+  /**
+   * The account this worker owns.
+   *
+   * The unused first parameter is Playwright's fixture-dependencies object;
+   * this fixture needs none of them, only the workerInfo that follows it.
+   */
   workerAccount: [
+    // eslint-disable-next-line no-empty-pattern
     async ({}, use, workerInfo) => {
       await use(accountForWorker(workerInfo.parallelIndex));
     },
