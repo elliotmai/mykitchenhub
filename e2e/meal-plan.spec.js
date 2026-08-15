@@ -5,6 +5,7 @@
 const { test, expect } = require('./fixtures');
 const {
   mealPlanEntry,
+  mealPlanWeek,
   seedMealPlanEntry,
   seedInventoryItem,
   inventoryItemById,
@@ -35,6 +36,17 @@ const storedEntry = async (recipeName) => {
   return mealPlanEntry(recipeName);
 };
 
+/** Poll Firestore until the week document exists, then hand it back. */
+const storedWeek = async (weekStart) => {
+  await expect
+    .poll(async () => Boolean(await mealPlanWeek(weekStart)), {
+      message: `waiting for the ${weekStart} week document to reach Firestore`,
+      timeout: 10_000,
+    })
+    .toBe(true);
+  return mealPlanWeek(weekStart);
+};
+
 /**
  * Stub the AI planner at the network boundary.
  *
@@ -44,6 +56,7 @@ const storedEntry = async (recipeName) => {
  * actually asked for, so the request is verified as well as the response.
  */
 const stubPlanner = async (page, recipeNames) => {
+  await page.unroute('**/generateMealPlan').catch(() => {});
   await page.route('**/generateMealPlan', async (route) => {
     if (route.request().method() === 'OPTIONS') {
       await route.fulfill({
@@ -234,5 +247,103 @@ test.describe('meal plan', () => {
     await expect
       .poll(async () => (await mealPlanEntry(recipeName))?.date, { timeout: 10_000 })
       .toBe(tomorrow);
+  });
+  test('regenerates a week it has already planned', async ({ authedPage: page }, testInfo) => {
+    // The emulator runs the real firestore.rules, and `mealPlans` pins
+    // createdAt on update. A regeneration that re-stamps it is refused here
+    // even though production's test mode would wave it through today.
+    const weeksAhead = testInfo.project.name === 'mobile-chromium' ? 4 : 3;
+    const stamp = Date.now();
+    const first = [`E2E First Plan ${stamp}`];
+    const second = [`E2E Second Plan ${stamp}`];
+
+    for (let i = 0; i < weeksAhead; i += 1) {
+      await page.getByRole('button', { name: 'Next week' }).click();
+    }
+
+    await stubPlanner(page, first);
+    await page.getByRole('button', { name: /Generate plan/ }).click();
+    await expect(page.getByText(first[0])).toBeVisible();
+
+    const stored = await storedEntry(first[0]);
+    const weekStart = stored.planId;
+    // generatePlan writes the entries first and the week document after, so
+    // an entry landing does not mean the week has.
+    const created = (await storedWeek(weekStart)).createdAt;
+    expect(created).toBeTruthy();
+
+    // The button says "Regenerate plan" once the week document exists.
+    await expect(page.getByRole('button', { name: /Regenerate plan/ })).toBeVisible();
+
+    await stubPlanner(page, second);
+    await page.getByRole('button', { name: /Regenerate plan/ }).click();
+
+    await expect(page.getByText(second[0])).toBeVisible();
+    await expect(page.getByText(first[0])).toHaveCount(0);
+
+    // Read it back from outside the browser: the second write went through the
+    // rules, and the week kept the creation date it started with.
+    const replanned = await storedEntry(second[0]);
+    expect(replanned).toMatchObject({ source: 'ai', status: 'planned', planId: weekStart });
+
+    const week = await storedWeek(weekStart);
+    expect(week.createdAt.toMillis()).toBe(created.toMillis());
+    expect(week.weekStart).toBe(weekStart);
+  });
+
+  test('does not empty the kitchen twice for one dinner', async ({ authedPage: page }) => {
+    const stamp = Date.now();
+    const ingredientName = `E2E Rice ${stamp}`;
+    const recipeName = `E2E Dinner Once Only ${stamp}`;
+
+    const itemId = await seedInventoryItem({ name: ingredientName, quantity: 5, unit: 'cup' });
+    await seedMealPlanEntry({
+      date: TODAY,
+      recipeName,
+      usesIngredients: [
+        {
+          name: ingredientName,
+          normalized: ingredientName.toLowerCase(),
+          quantity: 2,
+          unit: 'cup',
+        },
+      ],
+    });
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    const meal = page.locator('[data-testid^="meal-entry-"]').filter({ hasText: recipeName });
+    await expect(meal).toBeVisible();
+
+    await meal.getByRole('button', { name: 'Cooked', exact: true }).click();
+
+    await expect
+      .poll(async () => (await inventoryItemById(itemId))?.quantity, { timeout: 10_000 })
+      .toBe(3);
+
+    // Once cooked, there is no second button to press — and the quantity stays
+    // where the first click left it rather than sliding to 1.
+    await expect(meal.getByText('Cooked')).toBeVisible();
+    await expect(meal.getByRole('button', { name: 'Cooked', exact: true })).toHaveCount(0);
+
+    await page.waitForTimeout(1000);
+    expect((await inventoryItemById(itemId)).quantity).toBe(3);
+  });
+
+  test('keeps a cooked meal removable', async ({ authedPage: page }) => {
+    const recipeName = `E2E Mislogged ${Date.now()}`;
+
+    await seedMealPlanEntry({ date: TODAY, recipeName });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+
+    const meal = page.locator('[data-testid^="meal-entry-"]').filter({ hasText: recipeName });
+    await meal.getByRole('button', { name: 'Cooked', exact: true }).click();
+    await expect(meal.getByText('Cooked')).toBeVisible();
+
+    // Ticking off the wrong meal used to leave a card with no way off the board.
+    await meal.getByRole('button', { name: `Remove ${recipeName}` }).click();
+
+    await expect
+      .poll(async () => Boolean(await mealPlanEntry(recipeName)), { timeout: 10_000 })
+      .toBe(false);
   });
 });

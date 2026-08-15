@@ -135,7 +135,15 @@ const seedMealPlanEntry = async ({
   return ref.id;
 };
 
+/** The stored week document for `weekStart`, or undefined. */
+const mealPlanWeek = async (weekStart) => {
+  const uid = await testUserId();
+  const snap = await admin.firestore().doc(`users/${uid}/mealPlans/${weekStart}`).get();
+  return snap.exists ? { id: snap.id, ...snap.data() } : undefined;
+};
+
 module.exports = {
+  mealPlanWeek,
   testUserId,
   inventoryItems,
   inventoryHasItem,

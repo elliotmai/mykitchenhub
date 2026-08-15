@@ -37,7 +37,11 @@ const login = async (page) => {
   await page.getByPlaceholder('••••••••').first().fill(TEST_USER.password);
   await page.getByRole('button', { name: 'Sign In' }).click();
 
-  await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
+  // `domcontentloaded`, not the default `load`: waiting for `load` waits on
+  // Firestore's long-lived connection, which the dashboard opens as soon as it
+  // mounts. That connection stays open, so `load` can never settle and the
+  // whole run dies here with "66 did not run".
+  await page.waitForURL(/\/dashboard/, { waitUntil: 'domcontentloaded', timeout: 30_000 });
 };
 
 const test = base.extend({
