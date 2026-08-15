@@ -38,7 +38,10 @@ describe('calculateExpirationDate', () => {
     const purchased = new Date('2026-03-01T12:00:00Z');
     const expires = calculateExpirationDate('milk', 'fridge', purchased);
 
-    expect(expires.getTime() - purchased.getTime()).toBe(7 * 86400000);
+    // Calendar days, not milliseconds: a shelf life spanning a daylight-saving
+    // change is still seven days, and is an hour short of 7 × 86400000.
+    expect(Math.round((expires - purchased) / 86400000)).toBe(7);
+    expect(expires.getHours()).toBe(purchased.getHours());
   });
 
   it('does not mutate the purchase date it was given', () => {

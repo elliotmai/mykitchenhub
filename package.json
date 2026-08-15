@@ -45,6 +45,7 @@
     "test": "craco test",
     "test:ci": "cross-env CI=true craco test --coverage --watchAll=false --passWithNoTests",
     "test:coverage": "cross-env CI=true craco test --coverage --watchAll=false",
+    "test:tz": "cross-env CI=true TZ=America/New_York craco test --watchAll=false",
     "test:functions": "npm --prefix functions test",
     "test:rules": "npm --prefix firestore run test:rules",
     "test:e2e": "npm run build:e2e && npm run test:e2e:only",

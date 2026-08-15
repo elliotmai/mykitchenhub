@@ -15,6 +15,7 @@ import useShoppingAnalytics, {
   TREND_MONTHS,
 } from '../useShoppingAnalytics';
 import { AuthProvider } from '../useAuth';
+import { toDate } from '../../utils/timestamps';
 import * as fs from '../../test-utils/mocks/firestore';
 import * as authMock from '../../test-utils/mocks/auth';
 import {
@@ -42,7 +43,10 @@ const renderAnalytics = async (items = []) => {
   return view;
 };
 
-const at = (iso) => new Date(iso);
+// The same parser the product uses, so a bare `2026-07-04` in a fixture means
+// the 4th of July wherever the suite runs. `new Date('2026-07-04')` is midnight
+// UTC, which is the 3rd in New York — a fixture that lands in the wrong month.
+const at = (value) => toDate(value);
 
 // ---------------------------------------------------------------------------
 // buildPurchaseRecords

@@ -64,6 +64,23 @@ jobs:
           retention-days: 7
 
   # ---------------------------------------------------------------------------
+  # The runner's clock is UTC, where local time and UTC are the same thing — so
+  # every "is this the 1st of the month?" bug hides. This runs the same suite
+  # once more from a zone behind Greenwich, which is where they show up.
+  unit-tz:
+    name: Frontend unit tests (non-UTC)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Jest, in America/New_York
+        run: npm run test:tz
+
+  # ---------------------------------------------------------------------------
   functions:
     name: Cloud Functions tests
     runs-on: ubuntu-latest
@@ -179,7 +196,7 @@ jobs:
   ci:
     name: CI
     runs-on: ubuntu-latest
-    needs: [quality, unit, functions, rules, build, e2e, secrets]
+    needs: [quality, unit, unit-tz, functions, rules, build, e2e, secrets]
     if: always()
     steps:
       - name: Verify every job succeeded
