@@ -207,6 +207,16 @@ actually did to their kitchen after the fact
 ### 3a. `users/{userId}/notifications` Subcollection
 
 **Purpose:** In-app alerts, written by the daily waste-alert function (Phase 6.2)
+### 3c. `users/{userId}/deliveries` Subcollection
+
+**Purpose:** History of HelloFresh boxes received, and the audit trail for what
+each one added to the kitchen (roadmap 5.3)
+
+**This is the delivery record only.** Logging a box also writes one `inventory`
+document per ingredient and one **`mealPlanEntries`** document per meal
+(`source: 'hellofresh'`, cook days 1/3/5) — see section 6. There is no separate
+meal plan collection for HelloFresh; a delivered meal is an ordinary meal plan
+entry, which is what puts it on the user's week.
 
 **Document Structure:**
 ```javascript
@@ -269,6 +279,42 @@ fields, and the rest of the `source` vocabulary.
 
 ---
 
+
+  id: "auto-generated",                   // Firestore auto-ID
+  deliveredAt: Timestamp,                 // When the box arrived
+  weekOf: "2026-08-10",                   // Monday of the delivery week (YYYY-MM-DD)
+
+  // What was in the box
+  recipeIds: ["recipe-1", "recipe-2"],    // References to recipes documents
+  recipeNames: ["Sweet Chili Chicken"],   // Denormalised, so history renders without a join
+  mealCount: 3,                           // Number of meals in the box
+
+  // What it did to the kitchen
+  itemsAdded: 12,                         // Inventory documents created
+  locationId: "loc-fridge",               // Storage location the ingredients went to
+
+  status: "received",                     // "scheduled" | "received" | "cooked"
+  source: "hellofresh",                   // Always "hellofresh" for now
+  notes: "",                              // Free-text
+  createdAt: Timestamp
+}
+```
+
+**Indexes Required:**
+- Single: `deliveredAt` DESC (for the delivery history list)
+
+**Security Rules:**
+- Users can CRUD their own deliveries
+- `source` must be `"hellofresh"`
+- `status` must be one of: "scheduled", "received", "cooked"
+- `mealCount` and `itemsAdded` must be >= 0
+- `createdAt` is immutable after creation
+
+**Related:** the meals a delivery schedules live in
+`users/{userId}/mealPlanEntries` (section 6), each carrying a `deliveryId` back
+to the box it came in.
+
+---
 
 ### 4. `recipes` Collection
 
@@ -626,6 +672,9 @@ Collection: users/{userId}/inventory
 Collection: recipes
 - source ASC, createdAt DESC
 - tags ARRAY, createdAt DESC
+
+Collection: users/{userId}/deliveries
+- deliveredAt DESC
 ```
 
 ---

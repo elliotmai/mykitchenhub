@@ -9,6 +9,10 @@ committed. See [CONTRIBUTING.md](./CONTRIBUTING.md#3-secrets-and-external-servic
 for the rules.
 
 ### Frontend (`.env`, prefixed `REACT_APP_`)
+Every credential is read from the environment — none are committed. Frontend
+values must be prefixed `REACT_APP_` to reach the bundle.
+
+### Frontend (`.env`)
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
@@ -58,6 +62,25 @@ firebase functions:config:set sms.provider="textbelt" sms.textbelt_key="YOUR_KEY
 
 Each cook still has to opt in individually under **Settings → Waste Alerts**,
 which sets `preferences.smsAlerts.enabled` and stores the number to text.
+| `REACT_APP_FIREBASE_FUNCTIONS_URL` | no | Base URL of the deployed Cloud Functions, e.g. `https://us-central1-<project>.cloudfunctions.net`. Without it, HelloFresh photo and link import are switched off and the app offers manual recipe entry instead. |
+| `REACT_APP_USE_EMULATORS` | no | Set to `true` to point the app at the local Firebase emulators. |
+
+### Cloud Functions (`functions/.env`, or Firebase Functions config)
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `ANTHROPIC_API_KEY` | no | Claude Vision, used to read a photographed HelloFresh recipe card (`importHelloFreshFromPhoto`). Also readable from Firebase Functions config as `anthropic.key`. When absent the function returns a `vision-not-configured` error and the UI falls back to link or manual entry — it never crashes. |
+| `SPOONACULAR_API_KEY` | no | Spoonacular recipe lookups. |
+| `LEGACY_FIREBASE_SERVICE_ACCOUNT_PATH` | no | Path to the "Let's Eat" service account, for the legacy recipe sync. |
+
+Set the Functions config values with:
+
+```bash
+firebase functions:config:set anthropic.key="sk-ant-…"
+```
+
+**Never commit a credential.** `.github/scripts/check-secrets.mjs` runs in CI and
+fails the build on committed keys.
 
 ## Available Scripts
 

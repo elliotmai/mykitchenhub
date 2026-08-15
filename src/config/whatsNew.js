@@ -14,6 +14,17 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.08.14.5',
+    date: 'August 2026',
+    items: [
+      '📸 Snap a photo of your HelloFresh recipe card and the app reads the ingredients and steps off it. You get to check everything before it is saved.',
+      '🔗 Got the link instead? Paste a HelloFresh recipe link and it fills itself in. No card and no link — type it in yourself.',
+      '📦 Tell the app your box arrived and every ingredient goes straight into your fridge with its own use-by date, so nothing gets forgotten at the back.',
+      '🗓️ Your box’s meals land straight on your Meal Plan — one on delivery day, then every other evening — so you are not cooking three dinners on a Monday.',
+      '🚚 A new delivery history shows every box you have logged, what came in it, and how much it stocked your kitchen.',
+    ],
+  },
+  {
     version: '2026.08.14.4',
     date: 'August 2026',
     items: [

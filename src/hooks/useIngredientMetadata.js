@@ -60,6 +60,18 @@ const ingredientShelfLife = {
   // Add more as needed...
 };
 
+// These two are pure lookups over the table above — nothing about them depends
+// on a render. Defining them at module scope gives them a stable identity, so
+// `useIngredientAutocomplete` can memoize on the search term alone.
+const getAllIngredients = () => {
+  return Object.keys(ingredientShelfLife).sort();
+};
+
+const searchIngredients = (searchTerm) => {
+  const term = searchTerm.toLowerCase().trim();
+  return getAllIngredients().filter((ingredient) => ingredient.includes(term));
+};
+
 /**
  * The shelf-life table itself, for callers that are not React components.
  *

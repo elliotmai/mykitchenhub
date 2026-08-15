@@ -78,6 +78,12 @@ if (!window.IntersectionObserver) {
 
 window.scrollTo = jest.fn();
 
+// jsdom has no object URLs; components use them for local image previews.
+if (typeof URL.createObjectURL !== 'function') {
+  URL.createObjectURL = jest.fn(() => 'blob:mock-object-url');
+  URL.revokeObjectURL = jest.fn();
+}
+
 // react-bootstrap measures scrollbar width when opening modals.
 if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = jest.fn();

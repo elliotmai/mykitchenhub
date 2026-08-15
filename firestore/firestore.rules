@@ -119,6 +119,30 @@ service cloud.firestore {
       }
 
       // ============================================
+
+      match /deliveries/{deliveryId} {
+        // Users can read their own delivery history
+        allow read: if isOwner(userId);
+
+        // Users can log a delivery
+        allow create: if isOwner(userId)
+          && hasRequiredFields(['deliveredAt', 'source', 'status', 'recipeIds',
+                                'mealCount', 'itemsAdded', 'createdAt'])
+          && request.resource.data.source == 'hellofresh'
+          && request.resource.data.status in ['scheduled', 'received', 'cooked']
+          && request.resource.data.mealCount >= 0
+          && request.resource.data.itemsAdded >= 0;
+
+        // Users can update a delivery (e.g. mark it cooked)
+        allow update: if isOwner(userId)
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.status in ['scheduled', 'received', 'cooked'];
+
+        // Users can delete a delivery they logged by mistake
+        allow delete: if isOwner(userId);
+      }
+
+      // ============================================
       // NOTIFICATIONS SUBCOLLECTION (waste alerts, 6.2)
       // ============================================
 

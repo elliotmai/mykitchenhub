@@ -106,6 +106,21 @@ const validImportedItem = (overrides = {}) => ({
   ...overrides,
 });
 
+const validDelivery = (overrides = {}) => ({
+  deliveredAt: new Date().toISOString(),
+  weekOf: '2026-08-10',
+  recipeIds: ['recipe-1', 'recipe-2', 'recipe-3'],
+  recipeNames: ['Sweet Chili Chicken', 'Sheet Pan Salmon', 'Veggie Tacos'],
+  mealCount: 3,
+  itemsAdded: 12,
+  locationId: 'loc-fridge',
+  status: 'received',
+  source: 'hellofresh',
+  notes: '',
+  createdAt: new Date().toISOString(),
+  ...overrides,
+});
+
 const validRecipe = (overrides = {}) => ({
   name: 'Sheet Pan Salmon',
   ingredients: [{ name: 'salmon', quantity: 2, unit: 'fillet' }],
@@ -351,7 +366,9 @@ describe('inventory items', () => {
     'accepts a CSV row resolved to a %s location',
     async (locationType) => {
       await assertSucceeds(
-        as(OWNER).doc(itemPath(OWNER, `csv-${locationType}`)).set(validImportedItem({ locationType }))
+        as(OWNER)
+          .doc(itemPath(OWNER, `csv-${locationType}`))
+          .set(validImportedItem({ locationType }))
       );
     }
   );
@@ -359,7 +376,11 @@ describe('inventory items', () => {
   it('rejects an imported item with a quantity the validator should have caught', async () => {
     // Belt and braces: both csvValidation copies reject "0", and if one ever
     // stops, the database still will.
-    await assertFails(as(OWNER).doc(itemPath(OWNER)).set(validImportedItem({ quantity: 0 })));
+    await assertFails(
+      as(OWNER)
+        .doc(itemPath(OWNER))
+        .set(validImportedItem({ quantity: 0 }))
+    );
   });
 
   it('rejects an imported item missing the fields the importer promises', async () => {
@@ -682,6 +703,110 @@ describe('notifications', () => {
 
 // ---------------------------------------------------------------------------
 // users/{userId}/mealPlan/{entryId} — written by "Add to Meal Plan"
+// ---------------------------------------------------------------------------
+
+describe('hellofresh deliveries', () => {
+  const path = (uid, id = 'delivery-1') => `users/${uid}/deliveries/${id}`;
+
+  it('accepts the document shape the Add Delivery workflow writes', async () => {
+    await assertSucceeds(as(OWNER).doc(path(OWNER)).set(validDelivery()));
+  });
+
+  it.each(['deliveredAt', 'source', 'status', 'recipeIds', 'mealCount', 'itemsAdded', 'createdAt'])(
+    'requires %s',
+    async (field) => {
+      const doc = validDelivery();
+      delete doc[field];
+      await assertFails(as(OWNER).doc(path(OWNER)).set(doc));
+    }
+  );
+
+  it.each(['scheduled', 'received', 'cooked'])('accepts status "%s"', async (status) => {
+    await assertSucceeds(
+      as(OWNER)
+        .doc(path(OWNER, `d-${status}`))
+        .set(validDelivery({ status }))
+    );
+  });
+
+  it('rejects an unrecognised status', async () => {
+    await assertFails(
+      as(OWNER)
+        .doc(path(OWNER))
+        .set(validDelivery({ status: 'in-transit' }))
+    );
+  });
+
+  it('only accepts hellofresh as the source', async () => {
+    await assertFails(
+      as(OWNER)
+        .doc(path(OWNER))
+        .set(validDelivery({ source: 'manual' }))
+    );
+  });
+
+  it('rejects negative counts', async () => {
+    await assertFails(
+      as(OWNER)
+        .doc(path(OWNER))
+        .set(validDelivery({ mealCount: -1 }))
+    );
+    await assertFails(
+      as(OWNER)
+        .doc(path(OWNER, 'd2'))
+        .set(validDelivery({ itemsAdded: -1 }))
+    );
+  });
+
+  it('allows an empty box — a delivery logged before its recipes were imported', async () => {
+    await assertSucceeds(
+      as(OWNER)
+        .doc(path(OWNER))
+        .set(validDelivery({ mealCount: 0, itemsAdded: 0, recipeIds: [] }))
+    );
+  });
+
+  it('lets an owner mark a delivery cooked', async () => {
+    const delivery = validDelivery();
+    await seed((db) => db.doc(path(OWNER)).set(delivery));
+
+    await assertSucceeds(
+      as(OWNER).doc(path(OWNER)).update({ createdAt: delivery.createdAt, status: 'cooked' })
+    );
+  });
+
+  it('refuses to let the logged date be rewritten', async () => {
+    await seed((db) => db.doc(path(OWNER)).set(validDelivery()));
+
+    await assertFails(
+      as(OWNER).doc(path(OWNER)).update({ createdAt: '1999-01-01', status: 'cooked' })
+    );
+  });
+
+  it("keeps one user out of another user's delivery history", async () => {
+    await seed((db) => db.doc(path(OWNER)).set(validDelivery()));
+
+    await assertFails(as(INTRUDER).doc(path(OWNER)).get());
+    await assertFails(as(INTRUDER).doc(path(OWNER, 'new')).set(validDelivery()));
+    await assertFails(as(INTRUDER).doc(path(OWNER)).delete());
+  });
+
+  it('keeps a signed-out visitor out entirely', async () => {
+    await seed((db) => db.doc(path(OWNER)).set(validDelivery()));
+    await assertFails(anon().doc(path(OWNER)).get());
+  });
+
+  it('lets an owner delete a delivery logged by mistake', async () => {
+    await seed((db) => db.doc(path(OWNER)).set(validDelivery()));
+    await assertSucceeds(as(OWNER).doc(path(OWNER)).delete());
+  });
+});
+
+// ---------------------------------------------------------------------------
+// users/{userId}/mealPlanEntries/{entryId}
+//
+// Phase 5 (HelloFresh) and Phase 6 (waste prevention) both write into this
+// collection, so these cases are the shared contract, not just Phase 7's.
 // ---------------------------------------------------------------------------
 
 describe('meal plan entries', () => {
