@@ -175,22 +175,56 @@ export const makeNotification = (overrides = {}) => ({
 // ---------------------------------------------------------------------------
 // recipes/{recipeId}
 // ---------------------------------------------------------------------------
-export const makeRecipe = (overrides = {}) => ({
-  id: nextId('recipe'),
-  title: 'Sheet Pan Salmon',
-  source: 'manual',
-  ingredients: [
-    { name: 'salmon', quantity: 2, unit: 'fillet' },
-    { name: 'spinach', quantity: 1, unit: 'bag' },
-  ],
-  instructions: ['Heat oven to 400F.', 'Roast 15 minutes.'],
-  tags: ['dinner', 'quick'],
-  prepTime: 10,
-  cookTime: 15,
-  servings: 2,
-  imageUrl: null,
-  timesCooked: 0,
-  createdAt: daysFromNow(-10),
+// The field names here are the ones firestore.rules requires on create:
+// `name` (not `title`), and a `source` drawn from the documented list — a
+// recipe keyed on `title` or sourced from 'manual'/'seed' is rejected.
+export const makeRecipe = (overrides = {}) => {
+  const name = overrides.name ?? 'Sheet Pan Salmon';
+  return {
+    id: nextId('recipe'),
+    name,
+    source: 'user-created',
+    ingredients: [
+      { name: 'salmon', quantity: 2, unit: 'fillet', normalized: 'salmon' },
+      { name: 'spinach', quantity: 1, unit: 'bag', normalized: 'spinach' },
+    ],
+    instructions: ['Heat oven to 400F.', 'Roast 15 minutes.'],
+    tags: ['dinner', 'quick'],
+    prepTime: 10,
+    cookTime: 15,
+    servings: 2,
+    difficulty: 'easy',
+    imageUrl: null,
+    timesCooked: 0,
+    createdAt: daysFromNow(-10),
+    ...overrides,
+  };
+};
+
+/** One recipe per source, for filter and permission assertions. */
+export const makeRecipesAcrossSources = () => [
+  makeRecipe({ name: 'My Weeknight Pasta', source: 'user-created' }),
+  makeRecipe({ name: 'Grandma Chili', source: 'legacy', tags: ['legacy', 'dinner'] }),
+  makeRecipe({ name: 'Spoon Curry', source: 'spoonacular', tags: ['curry'] }),
+  makeRecipe({ name: 'Box Stir Fry', source: 'hellofresh', tags: ['quick'] }),
+];
+
+// ---------------------------------------------------------------------------
+// syncMetadata/legacy-recipe-sync
+// ---------------------------------------------------------------------------
+export const makeSyncMetadata = (overrides = {}) => ({
+  id: 'legacy-recipe-sync',
+  currentStatus: 'idle',
+  recipesToProcess: 100,
+  recipesProcessed: 40,
+  recipesImported: 35,
+  recipesSkipped: 5,
+  instructionSources: { spoonacular: 25, ai_generated: 10 },
+  costAccumulated: 1.25,
+  costLimitUsd: 10,
+  lastSyncTimestamp: daysFromNow(-1),
+  lastError: null,
+  cursor: null,
   ...overrides,
 });
 

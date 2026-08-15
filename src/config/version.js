@@ -2,7 +2,7 @@
 // Single source of truth for the app version shown in the footer.
 //
 // The version tracks the development roadmap: `0.<phase>.<step>`.
-// Completing roadmap step 3.2 (Core Inventory CRUD) means APP_VERSION '0.3.2'.
+// Completing roadmap step 4.3 (Manual Recipe Creation) means APP_VERSION '0.4.3'.
 // The leading 0 stays until the roadmap is finished and the app ships 1.0.0.
 //
 // WHEN YOU COMPLETE A ROADMAP STEP:

@@ -156,8 +156,54 @@ module.exports = async () => {
     )
   );
 
+  // Recipes are a single global collection, not a per-user one. Field names must
+  // match firestore.rules: `name` (not `title`) and a documented `source`.
+  const recipes = [
+    {
+      id: 'e2e-recipe-salmon',
+      name: 'Seeded Sheet Pan Salmon',
+      source: 'user-created',
+      tags: ['dinner', 'quick'],
+      difficulty: 'easy',
+      servings: 2,
+      prepTime: 5,
+      cookTime: 15,
+      ingredients: [
+        { name: 'salmon', quantity: 2, unit: 'fillet', normalized: 'salmon' },
+        { name: 'capers', quantity: 1, unit: 'tbsp', normalized: 'capers' },
+      ],
+      instructions: ['Heat the oven to 220C.', 'Roast for 15 minutes.'],
+    },
+    {
+      id: 'e2e-recipe-chili',
+      name: 'Seeded Grandma Chili',
+      source: 'legacy',
+      tags: ['dinner', 'legacy'],
+      difficulty: 'medium',
+      servings: 6,
+      prepTime: 20,
+      cookTime: 160,
+      ingredients: [{ name: 'ground beef', quantity: 2, unit: 'lb', normalized: 'ground beef' }],
+      instructions: ['Brown the beef.', 'Simmer for an hour.'],
+    },
+  ];
+
+  await Promise.all(
+    recipes.map(({ id, ...data }) =>
+      db
+        .collection('recipes')
+        .doc(id)
+        .set({
+          ...data,
+          imageUrl: null,
+          timesCooked: 0,
+          createdAt: admin.firestore.Timestamp.fromDate(daysFromNow(-10)),
+        })
+    )
+  );
+
   console.log(
-    `[e2e] seeded ${TEST_USER.email} (${uid}) with ${locations.length} locations, ${items.length} items`
+    `[e2e] seeded ${TEST_USER.email} (${uid}) with ${locations.length} locations, ${items.length} items, ${recipes.length} recipes`
   );
 };
 

@@ -157,6 +157,17 @@ const seedMealPlanEntry = async ({
   });
   return ref.id;
 };
+/** Every recipe in the shared library. */
+const recipes = async () => {
+  const snap = await admin.firestore().collection('recipes').get();
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+/** Does a recipe with this exact name exist in Firestore? */
+const recipesHaveRecipe = async (name) => (await recipes()).some((r) => r.name === name);
+
+/** The stored document for a recipe, or undefined. */
+const recipeByName = async (name) => (await recipes()).find((r) => r.name === name);
 
 module.exports = {
   testUserId,
@@ -173,4 +184,7 @@ module.exports = {
   deliveries,
   hellofreshRecipes,
   recipeCount,
+  recipes,
+  recipesHaveRecipe,
+  recipeByName,
 };

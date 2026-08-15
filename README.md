@@ -1,4 +1,62 @@
-# Getting Started with Create React App
+# MyKitchenHub
+
+Recipe and inventory management PWA. See [CONTRIBUTING.md](./CONTRIBUTING.md) for
+the working agreement and [TESTING.md](./TESTING.md) for the four test suites.
+
+## Environment variables
+
+### Frontend (`.env`, prefixed so CRA inlines them)
+
+| Variable | Purpose |
+| --- | --- |
+| `REACT_APP_FIREBASE_API_KEY` … `_APP_ID` | Firebase web config |
+| `REACT_APP_FIREBASE_FUNCTIONS_URL` | Base URL for Cloud Functions |
+| `REACT_APP_USE_EMULATORS` | `true` points the build at local emulators |
+
+### Cloud Functions
+
+| Variable | Required for | Purpose |
+| --- | --- | --- |
+| `SPOONACULAR_API_KEY` | Legacy sync | Recipe lookups. Without it the sync skips straight to Claude. |
+| `ANTHROPIC_API_KEY` | Legacy sync | Writing instructions Spoonacular could not supply. |
+| `ANTHROPIC_MODEL` | optional | Overrides the model (default `claude-opus-5`). Change `PRICE_PER_MTOK` in `functions/src/recipes/claudeInstructions.js` alongside it, or cost tracking drifts. |
+| `LEGACY_FIREBASE_SERVICE_ACCOUNT` | Legacy sync | The legacy "Let's Eat" service account, as JSON or base64-encoded JSON. |
+| `LEGACY_FIREBASE_PROJECT_ID` / `_CLIENT_EMAIL` / `_PRIVATE_KEY` | Legacy sync | The same credential in three parts, if you prefer. Used only when `LEGACY_FIREBASE_SERVICE_ACCOUNT` is unset. |
+| `LEGACY_SYNC_MAX_COST_USD` | optional | Total spend ceiling across all sync runs (default `10`). |
+| `SYNC_ADMIN_UIDS` | optional | Comma-separated uids allowed to start a sync. Unset means any signed-in user. |
+
+Credentials are read from `process.env` or Firebase Functions config — never from
+the service-account JSON files in `functions/`. To set them as deployed config:
+
+```bash
+firebase functions:config:set \
+  legacy.service_account="$(base64 -w0 path/to/lets-eat-service-account.json)"
+```
+
+## Legacy recipe sync
+
+Imports the "Let's Eat" library into the `recipes` collection. **A live run costs
+money**: each recipe without instructions is looked up in Spoonacular, and
+anything unmatched is written by Claude.
+
+It is built to be run in small, resumable batches rather than all at once:
+
+- Each call processes at most `limit` recipes (default 10, hard cap 100).
+- Progress and a resume cursor live in `syncMetadata/legacy-recipe-sync`, so the
+  next call picks up where the last one stopped.
+- Spend is checked against `LEGACY_SYNC_MAX_COST_USD` *before* every paid call,
+  and the run stops cleanly at the ceiling.
+- Setting `enabled: false` on the metadata document refuses live runs entirely.
+
+**To run it:** open **Recipes → Legacy Sync** while signed in. Leave *Dry run*
+on for the first pass — it reads the legacy database and reports what it would
+import without writing or spending anything. Turn it off to import for real,
+one batch at a time, watching the running cost. *Start over* rewinds the cursor
+to the first recipe.
+
+---
+
+## Create React App reference
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 

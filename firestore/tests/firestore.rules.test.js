@@ -1120,6 +1120,101 @@ describe('recipes', () => {
     );
   });
 
+  // ── Shapes Phase 4 actually writes ────────────────────────────────────────
+
+  it('rejects a recipe keyed on `title` instead of `name`', async () => {
+    const { name, ...rest } = validRecipe();
+    await assertFails(as(OWNER).doc('recipes/r1').set({ ...rest, title: 'Sheet Pan Salmon' }));
+  });
+
+  it('accepts the document the Add Recipe form writes', async () => {
+    await assertSucceeds(
+      as(OWNER).doc('recipes/from-the-form').set(
+        validRecipe({
+          ingredients: [{ name: 'salmon', quantity: 2, unit: 'fillet', normalized: 'salmon' }],
+          instructions: ['Heat the oven to 220C.', 'Roast for 15 minutes.'],
+          prepTime: 5,
+          cookTime: 15,
+          imageUrl: 'https://storage.test/recipes/r1/salmon.jpg',
+          createdBy: OWNER,
+        })
+      )
+    );
+  });
+
+  it('accepts the document the legacy sync writes', async () => {
+    await assertSucceeds(
+      as(OWNER).doc('recipes/from-the-sync').set(
+        validRecipe({
+          source: 'legacy',
+          legacyId: 'lets-eat-abc123',
+          sourceId: 'spoonacular-12345',
+          tags: ['dinner', 'legacy', 'spoonacular-instructions'],
+          difficulty: 'medium',
+          prepTime: null,
+          cookTime: 25,
+        })
+      )
+    );
+  });
+
+  it('accepts a recipe the sync could not write instructions for', async () => {
+    await assertSucceeds(
+      as(OWNER).doc('recipes/needs-work').set(
+        validRecipe({
+          source: 'legacy',
+          tags: ['legacy', 'needs-instructions'],
+          instructions: ['Instructions were not available in the original recipe.'],
+        })
+      )
+    );
+  });
+
+  it('accepts the seeded recipes seedData writes', async () => {
+    await assertSucceeds(
+      as(OWNER).doc('recipes/seeded').set(
+        validRecipe({
+          name: 'Classic Spaghetti Carbonara',
+          source: 'user-created',
+          description: 'Traditional Italian pasta dish',
+          createdBy: OWNER,
+          prepTime: 10,
+          cookTime: 20,
+        })
+      )
+    );
+  });
+
+  it.each(['ingredients', 'instructions', 'tags', 'servings', 'difficulty', 'timesCooked'])(
+    'rejects a recipe missing `%s`',
+    async (field) => {
+      const recipe = validRecipe();
+      delete recipe[field];
+      await assertFails(as(OWNER).doc('recipes/r1').set(recipe));
+    }
+  );
+
+  it('lets a cook fix the servings or steps on their own recipe', async () => {
+    const recipe = validRecipe();
+    await seed((db) => db.doc('recipes/r1').set(recipe));
+
+    await assertSucceeds(
+      as(OWNER).doc('recipes/r1').update({
+        servings: 6,
+        instructions: ['Roast at 400F for 20 minutes.'],
+        tags: ['dinner', 'weeknight'],
+      })
+    );
+  });
+
+  // Any signed-in cook may record that they made a legacy recipe, even though
+  // they may not delete it.
+  it('allows anyone to record a cook on a recipe they did not create', async () => {
+    await seed((db) => db.doc('recipes/r1').set(validRecipe({ source: 'legacy' })));
+
+    await assertSucceeds(as(INTRUDER).doc('recipes/r1').update({ timesCooked: 4 }));
+  });
+
   it('only allows deleting user-created recipes', async () => {
     await seed((db) => db.doc('recipes/mine').set(validRecipe({ source: 'user-created' })));
     await seed((db) => db.doc('recipes/synced').set(validRecipe({ source: 'legacy' })));
@@ -1141,6 +1236,37 @@ describe('syncMetadata', () => {
 
   it('is never writable from the client — only Cloud Functions may update it', async () => {
     await assertFails(as(OWNER).doc('syncMetadata/recipesSync').set({ syncStatus: 'complete' }));
+  });
+
+  it('lets the dashboard read the legacy sync progress document', async () => {
+    await seed((db) =>
+      db.doc('syncMetadata/legacy-recipe-sync').set({
+        currentStatus: 'in-progress',
+        recipesToProcess: 500,
+        recipesProcessed: 40,
+        instructionSources: { spoonacular: 25, ai_generated: 10 },
+        costAccumulated: 1.25,
+        costLimitUsd: 10,
+        cursor: 'users/legacy-user/recipes/abc',
+      })
+    );
+
+    await assertSucceeds(as(OWNER).doc('syncMetadata/legacy-recipe-sync').get());
+  });
+
+  // The dashboard's Run button goes through a Cloud Function precisely because
+  // the client cannot write the cost total it would otherwise be trusted with.
+  it('stops the dashboard rewriting the cost total from the client', async () => {
+    await seed((db) => db.doc('syncMetadata/legacy-recipe-sync').set({ costAccumulated: 8.5 }));
+
+    await assertFails(
+      as(OWNER).doc('syncMetadata/legacy-recipe-sync').update({ costAccumulated: 0 })
+    );
+  });
+
+  it('hides sync status from signed-out visitors', async () => {
+    await seed((db) => db.doc('syncMetadata/legacy-recipe-sync').set({ currentStatus: 'idle' }));
+    await assertFails(anon().doc('syncMetadata/legacy-recipe-sync').get());
   });
 });
 
