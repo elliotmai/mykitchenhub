@@ -60,7 +60,7 @@ const {
   handler,
   importInventoryFromCSV,
   buildInventoryDoc,
-  resolveShelfLifeDays,
+  resolveRowShelfLife,
   chunk,
   BATCH_SIZE,
   MAX_LOGGED_ERRORS,
@@ -148,26 +148,60 @@ describe('chunk', () => {
   });
 });
 
-describe('resolveShelfLifeDays', () => {
-  it('uses the shelf life the file gave', () => {
-    expect(resolveShelfLifeDays({ shelfLifeDays: 12, name: 'milk', locationType: 'fridge' })).toBe(
-      12
+describe('resolveRowShelfLife', () => {
+  it('uses the shelf life the file gave, and records that the file chose it', () => {
+    expect(
+      resolveRowShelfLife({ shelfLifeDays: 12, name: 'milk', locationType: 'fridge' })
+    ).toEqual({ days: 12, source: 'custom' });
+  });
+
+  it('treats a shelf life matching our own guess as the file’s all the same', () => {
+    // Milk keeps 7 days in the fridge either way. Only the recorded source can
+    // tell "the file said 7" from "we guessed 7", and the app rewrites the
+    // expiry of the second on the next edit but not the first.
+    expect(resolveRowShelfLife({ shelfLifeDays: 7, name: 'milk', locationType: 'fridge' })).toEqual(
+      { days: 7, source: 'custom' }
     );
   });
 
-  it('derives days from an explicit expiry date', () => {
+  it('derives days from an explicit expiry date, and calls that the file’s too', () => {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 20);
 
-    expect(resolveShelfLifeDays({ expiresAt, name: 'milk', locationType: 'fridge' })).toBe(20);
+    expect(resolveRowShelfLife({ expiresAt, name: 'milk', locationType: 'fridge' })).toEqual({
+      days: 20,
+      source: 'custom',
+    });
   });
 
-  it('falls back to what the ingredient table knows', () => {
-    expect(resolveShelfLifeDays({ name: 'chicken breast', locationType: 'freezer' })).toBe(270);
+  it('falls back to what the ingredient table knows, and calls that ours', () => {
+    expect(resolveRowShelfLife({ name: 'chicken breast', locationType: 'freezer' })).toEqual({
+      days: 270,
+      source: 'default',
+    });
   });
 
   it('falls back again to the default for that kind of storage', () => {
-    expect(resolveShelfLifeDays({ name: 'unheard-of thing', locationType: 'freezer' })).toBe(90);
+    // 180, the same number a hand-added freezer item gets from
+    // SHELF_LIFE_DEFAULTS in src/hooks/useInventory.js. This used to answer 90
+    // because it went through the data module's `getShelfLife`, which quietly
+    // substitutes unknown-ingredient defaults of its own — so an unknown item
+    // expired three months earlier when imported by this function than when
+    // imported in the browser or typed in by hand.
+    expect(resolveRowShelfLife({ name: 'unheard-of thing', locationType: 'freezer' })).toEqual({
+      days: 180,
+      source: 'default',
+    });
+  });
+
+  it('still refuses a location the table says the ingredient does not belong in', () => {
+    // Lettuce in the freezer is recorded as null: known ingredient, wrong
+    // place. That is not "never heard of it", but the outcome is the same —
+    // the item is in there, so it needs some expiry date.
+    expect(resolveRowShelfLife({ name: 'lettuce', locationType: 'freezer' })).toEqual({
+      days: 180,
+      source: 'default',
+    });
   });
 
   it('falls back for an ingredient that does not belong in that location', () => {
@@ -228,6 +262,33 @@ describe('buildInventoryDoc', () => {
     const expiresAt = new Date('2027-03-01');
 
     expect(buildInventoryDoc({ ...data, expiresAt }, 'ts').expiresAt).toBe(expiresAt);
+  });
+
+  it('records who chose the shelf life, so the app knows what it may recalculate', () => {
+    expect(buildInventoryDoc(data, 'ts').shelfLifeSource).toBe('default');
+    expect(buildInventoryDoc({ ...data, shelfLifeDays: 30 }, 'ts').shelfLifeSource).toBe('custom');
+  });
+
+  // The two importers are interchangeable by design — the comment at the top
+  // of this file says so — and a cook cannot tell which one ran. They drifted
+  // once already: this one consulted the ingredient table and the in-app one
+  // fell back to a blanket per-location default.
+  //
+  // The frontend hook is ESM and cannot be required from here, so the contract
+  // is written out on both sides instead. The mirror of this table lives in
+  // src/hooks/__tests__/useCSVImport.test.js — change one, change the other.
+  it.each([
+    ['an ingredient the table knows', { name: 'Chicken Breast' }, { days: 2, source: 'default' }],
+    ['a shelf life from the file', { shelfLifeDays: 21 }, { days: 21, source: 'custom' }],
+    [
+      'an ingredient nobody has heard of',
+      { name: 'Marmite', locationType: 'pantry' },
+      { days: 90, source: 'default' },
+    ],
+  ])('agrees with the in-app importer about %s', (_label, row, expected) => {
+    const doc = buildInventoryDoc({ ...data, ...row }, 'ts');
+
+    expect({ days: doc.shelfLifeDays, source: doc.shelfLifeSource }).toEqual(expected);
   });
 });
 

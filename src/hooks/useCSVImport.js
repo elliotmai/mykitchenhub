@@ -24,7 +24,13 @@ import {
 } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useAuth } from './useAuth';
-import { calcExpiresAt, SHELF_LIFE_DEFAULTS } from './useInventory';
+import {
+  SHELF_LIFE_SOURCES,
+  calcExpiresAt,
+  getDaysUntilExpiration,
+  hasExplicitShelfLife,
+  resolveShelfLifeDays,
+} from './useInventory';
 
 /** Firestore's hard limit on writes in a single batch. */
 export const BATCH_SIZE = 500;
@@ -50,18 +56,39 @@ export const chunk = (rows, size = BATCH_SIZE) => {
  * `source: 'csv-import'` is the field the security rules check — an item
  * tagged with anything else (`addedBy`, say) is rejected on create.
  */
-export const buildInventoryDoc = (data) => {
-  const fromFile =
-    data.shelfLifeDays ??
-    (data.expiresAt
-      ? Math.max(1, Math.ceil((data.expiresAt - new Date()) / (1000 * 60 * 60 * 24)))
-      : null);
+/**
+ * How long a row's food keeps, and who decided that.
+ *
+ * A shelf life or an expiry date in the file was chosen by whoever wrote the
+ * file, so it is `custom` and nothing may quietly recalculate it later. Only a
+ * row that says nothing about timing gets our own number — and that number
+ * comes from the per-ingredient table, not a blanket per-location default, so
+ * imported chicken keeps for two days rather than the fridge's seven.
+ */
+export const resolveRowShelfLife = (data) => {
+  if (hasExplicitShelfLife(data.shelfLifeDays)) {
+    return { days: Number(data.shelfLifeDays), source: SHELF_LIFE_SOURCES.CUSTOM };
+  }
 
+  if (data.expiresAt) {
+    return {
+      days: Math.max(1, getDaysUntilExpiration(data.expiresAt) ?? 1),
+      source: SHELF_LIFE_SOURCES.CUSTOM,
+    };
+  }
+
+  return {
+    days: resolveShelfLifeDays(data.name, data.locationType),
+    source: SHELF_LIFE_SOURCES.DEFAULT,
+  };
+};
+
+export const buildInventoryDoc = (data) => {
   // Never null. A manually added item always stores a number, and the edit
   // form recalculates expiresAt from whatever shelf life the item carries — so
   // an imported item with a null one had its expiry date quietly pushed out
   // the first time anybody edited it.
-  const shelfLifeDays = fromFile ?? SHELF_LIFE_DEFAULTS[data.locationType] ?? 30;
+  const { days: shelfLifeDays, source: shelfLifeSource } = resolveRowShelfLife(data);
 
   return {
     name: data.name,
@@ -73,6 +100,7 @@ export const buildInventoryDoc = (data) => {
     addedAt: serverTimestamp(),
     expiresAt: data.expiresAt ?? calcExpiresAt(data.locationType, shelfLifeDays),
     shelfLifeDays,
+    shelfLifeSource,
     notes: data.notes || '',
     source: 'csv-import',
     purchaseHistory: [

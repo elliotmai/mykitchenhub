@@ -12,7 +12,7 @@ import useCSVImport, {
   chunk,
   buildInventoryDoc,
 } from '../useCSVImport';
-import { SHELF_LIFE_DEFAULTS } from '../useInventory';
+import { SHELF_LIFE_DEFAULTS, isCustomShelfLife } from '../useInventory';
 import { AuthProvider } from '../useAuth';
 import * as fs from '../../test-utils/mocks/firestore';
 import * as authMock from '../../test-utils/mocks/auth';
@@ -129,11 +129,97 @@ describe('buildInventoryDoc', () => {
     expect(buildInventoryDoc(validRow({ expiresAt }).data).shelfLifeDays).toBe(10);
   });
 
-  it('falls back to the shelf-life default for the location type', () => {
-    const doc = buildInventoryDoc(validRow({ locationType: 'freezer' }).data);
-    const daysOut = Math.round((doc.expiresAt - new Date()) / (1000 * 60 * 60 * 24));
+  it('uses the ingredient table, not a blanket per-location default', () => {
+    // Imports used to get the location default — seven days for anything in
+    // the fridge — so imported chicken outlived imported milk by five days
+    // and neither matched what the same item got when added by hand.
+    const doc = buildInventoryDoc(
+      validRow({ name: 'Chicken Breast', normalized: 'chicken breast' }).data
+    );
 
-    expect(daysOut).toBe(180);
+    expect(doc.shelfLifeDays).toBe(2);
+    expect(Math.round((doc.expiresAt - new Date()) / 86400000)).toBe(2);
+  });
+
+  it('falls back to the location default for an ingredient it has never heard of', () => {
+    const doc = buildInventoryDoc(
+      validRow({ name: 'Marmite', normalized: 'marmite', locationType: 'freezer' }).data
+    );
+
+    expect(doc.shelfLifeDays).toBe(180);
+    expect(Math.round((doc.expiresAt - new Date()) / 86400000)).toBe(180);
+  });
+
+  // -------------------------------------------------------------------------
+  // shelfLifeSource
+  //
+  // Without it `isCustomShelfLife` has to guess by comparing the stored number
+  // against what the table would have produced — so a file that deliberately
+  // said "milk, 7 days" was indistinguishable from our own guess of 7, and the
+  // next rename or move silently rewrote the cook's expiry date.
+  // -------------------------------------------------------------------------
+
+  it('marks a shelf life the file chose as the cook’s own', () => {
+    const doc = buildInventoryDoc(validRow({ shelfLifeDays: 21 }).data);
+
+    expect(doc.shelfLifeDays).toBe(21);
+    expect(doc.shelfLifeSource).toBe('custom');
+    expect(isCustomShelfLife(doc)).toBe(true);
+  });
+
+  it('marks a shelf life the file chose as custom even when it matches ours', () => {
+    // Milk keeps 7 days in the fridge, which is also what we would have
+    // picked. Inference alone cannot tell these apart; the field can.
+    const doc = buildInventoryDoc(validRow({ shelfLifeDays: 7 }).data);
+
+    expect(doc.shelfLifeSource).toBe('custom');
+    expect(isCustomShelfLife(doc)).toBe(true);
+  });
+
+  it('marks an expiry date the file supplied as the cook’s own', () => {
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    const doc = buildInventoryDoc(validRow({ expiresAt }).data);
+
+    expect(doc.shelfLifeSource).toBe('custom');
+    expect(isCustomShelfLife(doc)).toBe(true);
+  });
+
+  it('marks a shelf life we picked as ours, so a move can still extend it', () => {
+    const doc = buildInventoryDoc(validRow().data);
+
+    expect(doc.shelfLifeSource).toBe('default');
+    expect(isCustomShelfLife(doc)).toBe(false);
+  });
+
+  // The mirror of the table in
+  // functions/src/csvImport/__tests__/importInventoryFromCSV.test.js. Both
+  // importers write the same documents and a cook cannot tell which one ran,
+  // but the frontend hook is ESM and the function is CommonJS, so the contract
+  // is written out on both sides rather than executed once. Change one, change
+  // the other.
+  it.each([
+    ['an ingredient the table knows', { name: 'Chicken Breast' }, { days: 2, source: 'default' }],
+    ['a shelf life from the file', { shelfLifeDays: 21 }, { days: 21, source: 'custom' }],
+    [
+      'an ingredient nobody has heard of',
+      { name: 'Marmite', locationType: 'pantry' },
+      { days: 90, source: 'default' },
+    ],
+  ])('agrees with the Cloud Function importer about %s', (_label, row, expected) => {
+    const doc = buildInventoryDoc(validRow(row).data);
+
+    expect({ days: doc.shelfLifeDays, source: doc.shelfLifeSource }).toEqual(expected);
+  });
+
+  it('never writes a null shelf life beside a real expiry date', () => {
+    // The document used to carry `shelfLifeDays: null` next to a calculated
+    // `expiresAt`, so the two disagreed from the moment it was written.
+    const doc = buildInventoryDoc(validRow().data);
+
+    expect(typeof doc.shelfLifeDays).toBe('number');
+    expect(doc.shelfLifeDays).toBeGreaterThan(0);
   });
 
   it.each(['fridge', 'freezer', 'pantry'])(
@@ -142,9 +228,27 @@ describe('buildInventoryDoc', () => {
       // The edit form recalculates expiresAt from the item's shelfLifeDays. A
       // null one made it fall back to the default, counted from the day of the
       // edit — every edit pushed an imported item's expiry further out.
-      const doc = buildInventoryDoc(validRow({ locationType }).data);
+      //
+      // Named for something the ingredient table has never heard of, so the
+      // per-location default is genuinely what applies; a known ingredient
+      // gets its own number instead, which is the point of the table.
+      const doc = buildInventoryDoc(
+        validRow({ name: 'Marmite', normalized: 'marmite', locationType }).data
+      );
 
       expect(doc.shelfLifeDays).toBe(SHELF_LIFE_DEFAULTS[locationType]);
+      expect(Math.round((doc.expiresAt - new Date()) / (1000 * 60 * 60 * 24))).toBe(
+        doc.shelfLifeDays
+      );
+    }
+  );
+
+  it.each(['fridge', 'freezer', 'pantry'])(
+    'stores an expiry that agrees with the shelf life beside it, in the %s',
+    (locationType) => {
+      const doc = buildInventoryDoc(validRow({ locationType }).data);
+
+      expect(typeof doc.shelfLifeDays).toBe('number');
       expect(Math.round((doc.expiresAt - new Date()) / (1000 * 60 * 60 * 24))).toBe(
         doc.shelfLifeDays
       );

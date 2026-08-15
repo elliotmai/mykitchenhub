@@ -18,6 +18,7 @@ import useInventory, {
   isCustomShelfLife,
   resolveShelfLifeDays,
 } from '../useInventory';
+import { buildInventoryDoc } from '../useCSVImport';
 import { AuthProvider } from '../useAuth';
 import * as fs from '../../test-utils/mocks/firestore';
 import * as authMock from '../../test-utils/mocks/auth';
@@ -707,6 +708,36 @@ describe('useInventory.updateItem', () => {
     });
 
     expect(fs.updateDoc.mock.calls[0][1]).not.toHaveProperty('expiresAt');
+  });
+
+  it('does not rewrite an imported item’s expiry when it is renamed', async () => {
+    // The harm shelfLifeSource exists to prevent, end to end. A CSV row that
+    // said "milk keeps 7 days" produced a document indistinguishable from one
+    // we had guessed at, because 7 is also what the table says — so this
+    // rename recalculated the expiry and threw the cook's date away.
+    const imported = buildInventoryDoc({
+      name: 'Milk',
+      normalized: 'milk',
+      quantity: 1,
+      unit: 'gal',
+      locationId: 'loc-fridge',
+      locationType: 'fridge',
+      shelfLifeDays: 7,
+      expiresAt: null,
+      notes: '',
+    });
+
+    const { result } = await renderInventory([
+      makeItem({ id: 'item-1', ...imported, expiresAt: daysFromNow(7) }),
+    ]);
+
+    await act(async () => {
+      await result.current.updateItem('item-1', { name: 'Whole Milk' });
+    });
+
+    const [, patch] = fs.updateDoc.mock.calls[0];
+    expect(patch).not.toHaveProperty('shelfLifeDays');
+    expect(patch).not.toHaveProperty('shelfLifeSource');
   });
 
   it('leaves the expiry alone for edits that do not affect shelf life', async () => {

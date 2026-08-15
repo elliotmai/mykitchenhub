@@ -65,29 +65,80 @@ describe('ingredient shelf life table', () => {
     expect(implausible).toEqual([]);
   });
 
-  it('agrees with the frontend copy of the table for shared ingredients', () => {
-    // src/hooks/useIngredientMetadata.js keeps its own copy so the UI can
-    // calculate expiry offline. Where both know an ingredient, they must agree.
-    const frontendSource = require('fs').readFileSync(
-      require('path').join(__dirname, '../../../../src/hooks/useIngredientMetadata.js'),
-      'utf8'
+});
+
+// ---------------------------------------------------------------------------
+// Parity with the frontend copy
+//
+// src/hooks/useIngredientMetadata.js keeps its own copy of this table so the
+// UI can calculate expiry offline. Two copies of the same data only stay
+// honest if something checks them, and this is that something.
+//
+// The check used to look for `'name':` in the frontend source. The frontend
+// file quotes only the keys that need it, so `milk:` never matched and 30 of
+// the 38 shared ingredients — every single-word one — went uncompared. It also
+// only looked at ingredients the backend had, so the frontend silently held a
+// third of the table and the app fell back to a blanket per-location default
+// for everything missing.
+// ---------------------------------------------------------------------------
+
+/** The frontend's table, parsed out of its source (the file is ESM). */
+const readFrontendTable = () => {
+  const source = require('fs').readFileSync(
+    require('path').join(__dirname, '../../../../src/hooks/useIngredientMetadata.js'),
+    'utf8'
+  );
+
+  const start = source.indexOf('const ingredientShelfLife = {');
+  const end = source.indexOf('\n};', start);
+  if (start === -1 || end === -1) {
+    throw new Error('Could not find the ingredientShelfLife literal in the frontend hook');
+  }
+
+  const parsed = {};
+  for (const line of source.slice(start, end).split('\n')) {
+    const entry = line.match(/^\s*'?([a-z][a-z ]*)'?:\s*\{(.+)\},?\s*$/);
+    if (!entry) continue;
+
+    const values = {};
+    for (const pair of entry[2].split(',')) {
+      const [key, raw] = pair.split(':').map((part) => part.trim());
+      if (raw === undefined) continue;
+      values[key] = raw === 'null' ? null : Number(raw);
+    }
+    parsed[entry[1]] = values;
+  }
+  return parsed;
+};
+
+describe('ingredient shelf life parity with the frontend', () => {
+  const frontend = readFrontendTable();
+
+  it('parses a table worth comparing', () => {
+    // Guards the parser itself: a regex that silently matched nothing would
+    // turn every assertion below into a no-op, which is exactly how the
+    // previous version of this check passed while comparing eight ingredients.
+    expect(Object.keys(frontend).length).toBe(Object.keys(table).length);
+    expect(frontend.milk).toEqual({ fridge: 7, freezer: 90, pantry: null });
+  });
+
+  it('knows exactly the same ingredients on both sides', () => {
+    const backendOnly = Object.keys(table).filter((name) => !(name in frontend));
+    const frontendOnly = Object.keys(frontend).filter((name) => !(name in table));
+
+    // An ingredient the backend knows and the frontend does not is not
+    // harmless: the app quietly falls back to the location default, so the
+    // same jar of honey expires in 90 days in the browser and 730 on the
+    // server.
+    expect({ backendOnly, frontendOnly }).toEqual({ backendOnly: [], frontendOnly: [] });
+  });
+
+  it('agrees on every ingredient, in every location', () => {
+    const disagreements = Object.entries(table).flatMap(([name, entry]) =>
+      LOCATIONS.filter((loc) => frontend[name] && frontend[name][loc] !== entry[loc]).map(
+        (loc) => `${name}.${loc}: backend ${entry[loc]}, frontend ${frontend[name][loc]}`
+      )
     );
-
-    const disagreements = Object.entries(table)
-      .filter(([name]) => frontendSource.includes(`'${name}':`))
-      .flatMap(([name, entry]) => {
-        const line = frontendSource
-          .split('\n')
-          .find((l) => l.trim().startsWith(`'${name}':`));
-        if (!line) return [];
-
-        return LOCATIONS.filter((loc) => {
-          const match = line.match(new RegExp(`${loc}:\\s*(null|\\d+)`));
-          if (!match) return false;
-          const frontendValue = match[1] === 'null' ? null : Number(match[1]);
-          return frontendValue !== entry[loc];
-        }).map((loc) => `${name}.${loc}: backend ${entry[loc]}`);
-      });
 
     expect(disagreements).toEqual([]);
   });
