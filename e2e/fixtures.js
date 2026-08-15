@@ -37,10 +37,14 @@ const login = async (page) => {
   await page.getByPlaceholder('••••••••').first().fill(TEST_USER.password);
   await page.getByRole('button', { name: 'Sign In' }).click();
 
-  // `domcontentloaded`, not the default `load`: waiting for `load` waits on
-  // Firestore's long-lived connection, which the dashboard opens as soon as it
-  // mounts. That connection stays open, so `load` can never settle and the
-  // whole run dies here with "66 did not run".
+  // `domcontentloaded` rather than the default `load`, per the navigation rule
+  // in TESTING.md: `load` waits on Firestore's long-lived connection, which the
+  // dashboard opens as soon as it mounts.
+  //
+  // That is not the whole story on a loaded CI runner, where this still times
+  // out waiting for a navigation that never starts — the sign-in itself has not
+  // finished. Every spec but this one and auth.spec.js reuses the shared
+  // storage state precisely to avoid paying for a login.
   await page.waitForURL(/\/dashboard/, { waitUntil: 'domcontentloaded', timeout: 30_000 });
 };
 
