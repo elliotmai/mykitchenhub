@@ -8,7 +8,7 @@
 // checks at 1280px would assert nothing, because every violation they look for
 // only exists when the viewport is narrow.
 
-const { test, expect } = require('./fixtures');
+const { test, expect, chooseCSV, CSV_HEADER } = require('./fixtures');
 
 /**
  * Apple's HIG and Android's Material both settle on ~44px as the smallest
@@ -230,5 +230,32 @@ test.describe('mobile navigation', () => {
         return Math.round(versionBox.y + versionBox.height - barBox.y);
       })
       .toBeLessThanOrEqual(0);
+  });
+});
+
+// Lives here rather than in csv-import.spec.js because it is a layout check,
+// and only the mobile project runs at a phone viewport. It sat in that spec
+// behind `test.skip(!mobile)` — and once 9.1 narrowed the mobile project to
+// the specs where width changes the answer, csv-import stopped running on a
+// phone at all, so the skip became permanent and the check never ran again.
+//
+// The page-level sweep above cannot cover this: the thing that overflows is a
+// modal holding 40 preview rows, which only exists once a file is chosen.
+test.describe('csv import on a phone', () => {
+  test('keeps the preview inside the screen', async ({ authedPage: page }) => {
+    await page.goto('/inventory', { waitUntil: 'domcontentloaded' });
+
+    const rows = Array.from(
+      { length: 40 },
+      (_, i) => `Wide Item Name Number ${i},${i + 1},ea,Pantry`
+    );
+    const modal = await chooseCSV(page, [CSV_HEADER, ...rows].join('\n'), 'phone.csv');
+
+    await expect(modal.getByText('40 ready to import')).toBeVisible();
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+    );
+    expect(overflow).toBeLessThanOrEqual(1);
   });
 });
