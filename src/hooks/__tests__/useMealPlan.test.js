@@ -15,6 +15,8 @@ import useMealPlan, {
   buildShoppingList,
   groupBatchTasks,
   planInventoryDecrements,
+  isUpcoming,
+  isWritableEntry,
   MEAL_TYPES,
 } from '../useMealPlan';
 import { AuthProvider } from '../useAuth';
@@ -1064,5 +1066,126 @@ describe('changing weeks', () => {
     // Otherwise last week's shopping list is still on screen under next week's
     // heading until the new snapshot lands.
     expect(result.current.plan).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The seams: entries other sections write into this collection.
+//
+// These fixtures are copied from the writers themselves, not from the factory —
+// a factory both sides share would agree with itself no matter how wrong it was.
+// ---------------------------------------------------------------------------
+
+/** Verbatim from addToMealPlan in src/hooks/useRecipeSuggestions.js (Phase 6). */
+const wastePreventionEntry = (overrides = {}) => ({
+  id: 'wp-1',
+  date: dayKey(0),
+  mealType: 'dinner',
+  recipeId: 'recipe-abc',
+  recipeName: 'Spinach Frittata',
+  servings: 2,
+  status: 'planned',
+  source: 'waste-prevention',
+  createdAt: { seconds: 1, nanoseconds: 0 },
+  cookedAt: null,
+  usesIngredients: [{ name: 'Spinach', normalized: 'spinach', quantity: 1, unit: 'bag' }],
+  batchGroup: null,
+  notes: '',
+  planId: null,
+  ...overrides,
+});
+
+/**
+ * Verbatim from the "writing an entry from another feature" block in
+ * firestore/SCHEMA_DOCUMENTATION.md — what Phase 5 is told to write.
+ */
+const helloFreshEntry = (overrides = {}) => ({
+  id: 'hf-1',
+  date: dayKey(2),
+  mealType: 'dinner',
+  recipeId: 'recipe-abc',
+  recipeName: 'Sheet Pan Salmon',
+  servings: 2,
+  status: 'planned',
+  source: 'hellofresh',
+  createdAt: { seconds: 1, nanoseconds: 0 },
+  cookedAt: null,
+  usesIngredients: [],
+  batchGroup: null,
+  notes: '',
+  planId: null,
+  ...overrides,
+});
+
+describe('a meal the waste-prevention button scheduled', () => {
+  it('is a meal the board treats as still to cook', () => {
+    expect(isUpcoming(wastePreventionEntry())).toBe(true);
+    expect(isWritableEntry(wastePreventionEntry())).toBe(true);
+  });
+
+  it('reaches the shopping list with its unit intact', () => {
+    expect(buildShoppingList([wastePreventionEntry()], [])).toEqual([
+      expect.objectContaining({ normalized: 'spinach', quantity: 1, unit: 'bag' }),
+    ]);
+  });
+
+  it('is covered by the very item it was scheduled to rescue', () => {
+    // Phase 6 copies the inventory item's own unit into usesIngredients, so
+    // the unit-aware list has to match it rather than send the cook shopping.
+    const list = buildShoppingList(
+      [wastePreventionEntry()],
+      [makeItem({ name: 'Spinach', normalized: 'spinach', quantity: 1, unit: 'bag' })]
+    );
+
+    expect(list[0].haveInInventory).toBe(true);
+  });
+
+  it('empties that item when the meal is cooked', () => {
+    const patches = planInventoryDecrements(wastePreventionEntry(), [
+      makeItem({ id: 'item-spinach', name: 'Spinach', normalized: 'spinach', quantity: 1 }),
+    ]);
+
+    expect(patches).toEqual([{ id: 'item-spinach', name: 'Spinach', quantity: 0 }]);
+  });
+
+  it('renders on its day alongside meals from every other section', async () => {
+    // Anchored to the week the board opens on, so this does not depend on
+    // which day of the week the suite happens to run.
+    const monday = toDayKey(startOfWeek());
+    const wednesday = shiftDayKey(monday, 2);
+
+    const { result } = await renderMealPlan({
+      entries: [
+        wastePreventionEntry({ date: monday }),
+        helloFreshEntry({ date: wednesday }),
+        makeMealPlanEntry({ id: 'mine', date: monday, mealType: 'lunch', source: 'manual' }),
+      ],
+    });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.entriesByDay[monday].map((e) => e.source)).toEqual([
+      'manual',
+      'waste-prevention',
+    ]);
+    expect(result.current.entriesByDay[wednesday].map((e) => e.source)).toEqual(['hellofresh']);
+  });
+});
+
+describe('a meal a HelloFresh delivery scheduled', () => {
+  it('is renderable and cookable even with no ingredients attached', () => {
+    expect(isWritableEntry(helloFreshEntry())).toBe(true);
+    expect(buildShoppingList([helloFreshEntry()], [])).toEqual([]);
+    expect(planInventoryDecrements(helloFreshEntry(), [makeItem()])).toEqual([]);
+  });
+
+  it('batches with a waste-prevention meal that shares an ingredient', () => {
+    const shared = [{ name: 'Spinach', normalized: 'spinach', quantity: 1, unit: 'bag' }];
+    const tips = groupBatchTasks([
+      wastePreventionEntry(),
+      helloFreshEntry({ recipeName: 'Delivered Box Meal', usesIngredients: shared }),
+    ]);
+
+    expect(tips).toHaveLength(1);
+    expect(tips[0].title).toMatch(/Prep Spinach once/);
   });
 });
