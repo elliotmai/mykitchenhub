@@ -66,7 +66,6 @@ const ChartFrame = ({
                       <tr key={`${rowIndex}-${String(row[0])}`}>
                         <th scope="row">{row[0]}</th>
                         {row.slice(1).map((cell, index) => (
-                          // eslint-disable-next-line react/no-array-index-key
                           <td key={index}>{cell}</td>
                         ))}
                       </tr>
