@@ -249,7 +249,55 @@ describe('Dashboard', () => {
     });
 
     expect(screen.getByText('No meals planned for this week yet.')).toBeInTheDocument();
-    expect(screen.getAllByTestId('stat-card-value')[3]).toHaveTextContent('0');
+    // A dash, not a zero: "no meals planned" and "we could not read your meal
+    // plan" are different things to tell someone deciding what to cook.
+    expect(screen.getAllByTestId('stat-card-value')[3]).toHaveTextContent('—');
+    expect(screen.getByText(/failed to load your meal plan/i)).toBeInTheDocument();
+  });
+
+  it('dashes the recipe tile when the library cannot be read', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    fs.getCountFromServer.mockRejectedValue(new Error('unsupported'));
+    fs.getDocs.mockRejectedValue(new Error('permission-denied'));
+
+    renderWithProviders(<Dashboard />, { route: '/dashboard' });
+    await waitFor(() => expect(fs.__listenerCount(INVENTORY_PATH)).toBeGreaterThan(0));
+    await act(async () => {
+      fs.__emit(INVENTORY_PATH, []);
+      fs.__emit(ENTRIES_PATH, []);
+    });
+
+    await waitFor(() => expect(screen.getAllByTestId('stat-card-value')[2]).toHaveTextContent('—'));
+    expect(screen.getByText(/failed to load recipes/i)).toBeInTheDocument();
+    // The tiles that did load still show their numbers.
+    expect(screen.getAllByTestId('stat-card-value')[0]).toHaveTextContent('0');
+  });
+
+  it('names every source that failed, not just the first', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    fs.getCountFromServer.mockRejectedValue(new Error('unsupported'));
+    fs.getDocs.mockRejectedValue(new Error('permission-denied'));
+
+    renderWithProviders(<Dashboard />, { route: '/dashboard' });
+    await waitFor(() => expect(fs.__listenerCount(INVENTORY_PATH)).toBeGreaterThan(0));
+    await act(async () => {
+      fs.__emitError(INVENTORY_PATH, new Error('permission-denied'));
+      fs.__emitError(ENTRIES_PATH, new Error('permission-denied'));
+    });
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          /failed to load inventory\. failed to load recipes\. failed to load your meal plan\./i
+        )
+      ).toBeInTheDocument()
+    );
+    expect(screen.getAllByTestId('stat-card-value').map((el) => el.textContent)).toEqual([
+      '—',
+      '—',
+      '—',
+      '—',
+    ]);
   });
 
   it('warns when inventory itself fails, since every stat depends on it', async () => {
