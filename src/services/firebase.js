@@ -52,10 +52,17 @@ export const functions = getFunctions(app);
 // point that build at the real project.
 if (process.env.REACT_APP_USE_EMULATORS === 'true') {
   console.log('🔧 Connecting to Firebase emulators...');
-  connectAuthEmulator(auth, 'http://localhost:9099');
-  connectFirestoreEmulator(db, 'localhost', 8080);
-  connectStorageEmulator(storage, 'localhost', 9199);
-  connectFunctionsEmulator(functions, 'localhost', 5001);
+
+  // 127.0.0.1, never "localhost". The emulators bind to 127.0.0.1 only and say
+  // so on startup ("Port 9099 is available on 127.0.0.1 but not ::1"). On a
+  // host with IPv6 the browser resolves "localhost" to ::1 first, finds nothing
+  // listening, and every call fails — sign-in included, which strands the E2E
+  // suite on the login page. Machines without IPv6 fall back to 127.0.0.1 and
+  // hide the problem, so this only ever broke on CI runners.
+  connectAuthEmulator(auth, 'http://127.0.0.1:9099');
+  connectFirestoreEmulator(db, '127.0.0.1', 8080);
+  connectStorageEmulator(storage, '127.0.0.1', 9199);
+  connectFunctionsEmulator(functions, '127.0.0.1', 5001);
 }
 
 // Export the app instance for advanced use cases
