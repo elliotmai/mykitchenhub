@@ -127,4 +127,33 @@ describe('app shell', () => {
     authMock.__setUser(null);
     expect(() => visit('/login')).not.toThrow();
   });
+
+  // -------------------------------------------------------------------------
+  // The chunk reload guard, and why booting must not touch it
+  //
+  // lazyWithRetry reloads the page once when a route's chunk is missing, on the
+  // theory that a deploy renamed it and the new index.html knows the new name.
+  // A session flag is what stops that becoming a loop when the chunk is simply
+  // gone for good.
+  //
+  // App used to clear that flag from its mount effect, reasoning that the app
+  // had booted so the stale chunk was behind it. But booting proves nothing
+  // about the chunk: effects run after paint, and the chunk's rejection lands a
+  // network round trip later. So the reload cleared the guard, the chunk failed
+  // again, and the page reloaded again, for as long as the chunk stayed
+  // missing. It is now cleared by a chunk that actually loads.
+  // -------------------------------------------------------------------------
+  it('leaves the chunk reload guard alone while booting, so a missing chunk cannot loop', async () => {
+    authMock.__setUser(null);
+    sessionStorage.setItem('mykitchenhub.chunkReload', '1');
+
+    visit('/login');
+
+    // Waiting gets us past the mount effects, which is where the clear was.
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument()
+    );
+
+    expect(sessionStorage.getItem('mykitchenhub.chunkReload')).toBe('1');
+  });
 });

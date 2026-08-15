@@ -20,7 +20,7 @@ import { AppLayout } from './components/Layout';
 import { ProtectedRoute, PublicOnlyRoute } from './components/Auth';
 
 // Route-level code splitting
-import { lazyWithRetry, clearChunkReloadGuard } from './utils/lazyWithRetry';
+import { lazyWithRetry } from './utils/lazyWithRetry';
 
 // PWA Components
 import InstallPrompt from './components/InstallPrompt';
@@ -139,10 +139,10 @@ const App = () => {
 
   // Register service worker on mount
   useEffect(() => {
-    // The app booted, so whatever stale chunk forced a reload is behind us.
-    // Arming the guard again means the *next* deploy also gets its one reload.
-    clearChunkReloadGuard();
-
+    // The chunk reload guard is re-armed by lazyWithRetry, on a chunk that
+    // actually loads. It used to be cleared here instead — but the app booting
+    // does not mean the chunk did, and clearing it on mount turned a
+    // permanently missing chunk into an endless reload loop.
     serviceWorkerRegistration.register({
       onUpdate: (wb) => {
         // New content is available - store the workbox instance

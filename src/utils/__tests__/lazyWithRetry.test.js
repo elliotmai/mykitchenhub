@@ -89,9 +89,31 @@ describe('lazyWithRetry', () => {
     expect(reload).not.toHaveBeenCalled();
   });
 
-  it('re-arms the guard once the app has booted, so the next deploy gets its reload', () => {
+  it('re-arms the guard when a chunk actually arrives, so the next deploy gets its reload', async () => {
+    sessionStorage.setItem('mykitchenhub.chunkReload', '1');
+
+    renderLazy(async () => chunkModule);
+
+    expect(await screen.findByText('the page')).toBeInTheDocument();
+    expect(sessionStorage.getItem('mykitchenhub.chunkReload')).toBeNull();
+  });
+
+  it('can still be re-armed by hand', () => {
     sessionStorage.setItem('mykitchenhub.chunkReload', '1');
     clearChunkReloadGuard();
+    expect(sessionStorage.getItem('mykitchenhub.chunkReload')).toBeNull();
+  });
+
+  it('lets a working page clear the guard a broken one set', async () => {
+    // The other half of the same rule: once anything loads, the next deploy is
+    // entitled to its own single reload.
+    renderLazy(jest.fn().mockRejectedValue(staleChunkError()));
+    await waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+    expect(sessionStorage.getItem('mykitchenhub.chunkReload')).toBe('1');
+
+    renderLazy(async () => chunkModule);
+    expect(await screen.findByText('the page')).toBeInTheDocument();
+
     expect(sessionStorage.getItem('mykitchenhub.chunkReload')).toBeNull();
   });
 });

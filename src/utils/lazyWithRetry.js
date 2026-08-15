@@ -45,23 +45,42 @@ export const lazyWithRetry = (factory, name = 'page') =>
       // here is worth one more attempt: the module either arrives or it does
       // not, and asking twice costs nothing when it is already cached.
       shouldRetry: (err) => !isStaleChunkError(err),
-    }).catch((err) => {
-      console.error(`Failed to load the ${name} page:`, err);
-
-      // A stale chunk cannot be fixed by asking again — the file is gone. One
-      // reload picks up the index.html that knows the new name. The session
-      // flag is what stops that becoming a reload loop when something else is
-      // wrong: reload once, and if the next attempt fails too, let the error
-      // reach the ErrorBoundary where a person can see it.
-      if (isStaleChunkError(err) && !sessionStorage.getItem(RELOADED_KEY)) {
-        sessionStorage.setItem(RELOADED_KEY, '1');
-        window.location.reload();
-        // Never resolves; the reload is already underway.
-        return new Promise(() => {});
-      }
-
-      throw err;
     })
+      .then((module) => {
+        // Re-arm the guard here, on a chunk that actually arrived — not when
+        // the app boots.
+        //
+        // App.jsx used to clear it from a mount effect, which defeated it
+        // completely: React runs effects after paint, and a chunk's rejection
+        // arrives a network round trip later, so the guard was always cleared
+        // before the failure it existed to survive. A chunk that is
+        // permanently gone — a bad deploy, a purged CDN — then reloaded,
+        // booted, cleared the guard, failed and reloaded again, without end.
+        // An infinite reload loop is a good deal worse than the blank panel
+        // this was written to avoid.
+        //
+        // A chunk that loads is the only thing that actually proves the stale
+        // build is behind us, so it is the only thing that re-arms the reload.
+        clearChunkReloadGuard();
+        return module;
+      })
+      .catch((err) => {
+        console.error(`Failed to load the ${name} page:`, err);
+
+        // A stale chunk cannot be fixed by asking again — the file is gone. One
+        // reload picks up the index.html that knows the new name. The session
+        // flag is what stops that becoming a reload loop when something else is
+        // wrong: reload once, and if the next attempt fails too, let the error
+        // reach the ErrorBoundary where a person can see it.
+        if (isStaleChunkError(err) && !sessionStorage.getItem(RELOADED_KEY)) {
+          sessionStorage.setItem(RELOADED_KEY, '1');
+          window.location.reload();
+          // Never resolves; the reload is already underway.
+          return new Promise(() => {});
+        }
+
+        throw err;
+      })
   );
 
 /** Clears the reload guard once a page has loaded successfully. */

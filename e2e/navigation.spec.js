@@ -24,6 +24,47 @@ test.describe('navigation', () => {
     });
   }
 
+  // Splitting the routes into chunks (roadmap 9.2) makes each page a separate
+  // network request that can fail after the app is already running. When one
+  // does, and retrying it does not help, the cook must be told — a page that
+  // renders the chrome and then nothing at all inside it is the worst outcome,
+  // because it looks like the app working and having no content.
+  test('says so when a page chunk cannot be downloaded, instead of showing an empty panel', async ({
+    authedPage: page,
+  }) => {
+    // /analytics is a good target: it is behind the drawer, so getting there is
+    // a client-side navigation that triggers the dynamic import, and its chunk
+    // is not already in memory from the dashboard.
+    await page.route(/\/static\/js\/.*\.chunk\.js/, (route) =>
+      route.fulfill({ status: 503, body: '' })
+    );
+
+    await page.getByRole('button', { name: 'Toggle sidebar' }).click();
+    await page
+      .getByRole('navigation', { name: 'Main navigation' })
+      .getByRole('link', { name: 'Analytics' })
+      .click();
+
+    // Whatever it settles on — the retry succeeding from cache, or the error
+    // screen — it must not be a shell with an empty content area.
+    await expect
+      .poll(
+        async () => {
+          const crashed = await page.getByText('Something went wrong').isVisible();
+          if (crashed) return 'told the cook';
+
+          const heading = await page
+            .getByRole('heading', { name: /analytics/i })
+            .first()
+            .isVisible()
+            .catch(() => false);
+          return heading ? 'rendered the page' : 'blank';
+        },
+        { timeout: 20_000 }
+      )
+      .not.toBe('blank');
+  });
+
   test('sends an unknown URL back to the dashboard', async ({ authedPage: page }) => {
     await page.goto('/no-such-page', { waitUntil: 'domcontentloaded' });
 
