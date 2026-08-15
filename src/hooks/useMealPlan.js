@@ -77,6 +77,14 @@ export const buildWeekDays = (weekStart, today = toDayKey(new Date())) =>
 export const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'];
 const MEAL_ORDER = Object.fromEntries(MEAL_TYPES.map((t, i) => [t, i]));
 
+/**
+ * Is this meal still going to be cooked?
+ *
+ * `skipped` is part of the contract other sections write, so it has to mean
+ * something here: a skipped meal buys no groceries and joins no batch session.
+ */
+export const isUpcoming = (entry) => entry?.status !== 'cooked' && entry?.status !== 'skipped';
+
 /** Sort entries the way a day is actually eaten. */
 export const sortEntries = (entries) =>
   [...entries].sort((a, b) => (MEAL_ORDER[a.mealType] ?? 9) - (MEAL_ORDER[b.mealType] ?? 9));
@@ -91,52 +99,110 @@ const normalize = (value) =>
     .toLowerCase();
 
 /**
- * What still needs buying for the meals on the board.
+ * Two quantities only add up when they are counted the same way.
  *
- * Sums each ingredient across every meal that has not been cooked yet, then
- * subtracts what is already in the kitchen. Items fully covered by inventory
- * stay on the list marked `haveInInventory` so nothing silently disappears.
+ * "2 cups flour" plus "200 g flour" is not "202 cups flour", so the list is
+ * keyed on ingredient *and* unit — and a jar stocked in one unit never counts
+ * as covering a recipe measured in another. Mirrors deriveShoppingList in
+ * functions/src/mealPlan/parsePlan.js, which builds the same list server-side.
  */
-export const buildShoppingList = (entries = [], inventoryItems = []) => {
-  const stock = new Map();
+const shoppingKey = (name, unit) => `${normalize(name)}|${normalize(unit)}`;
+
+/**
+ * Index the kitchen so a lookup can tell "a different measure" from
+ * "no measure recorded".
+ */
+const indexStock = (inventoryItems) => {
+  const byNameAndUnit = new Map();
+  const unitlessByName = new Map();
+  const byName = new Map();
+
   inventoryItems.forEach((item) => {
-    const key = normalize(item.normalized || item.name);
-    stock.set(key, (stock.get(key) ?? 0) + Number(item.quantity || 0));
+    const name = normalize(item.normalized || item.name);
+    const unit = normalize(item.unit);
+    const quantity = Number(item.quantity || 0);
+    const add = (map, key) => map.set(key, (map.get(key) ?? 0) + quantity);
+
+    add(byNameAndUnit, shoppingKey(name, unit));
+    if (!byName.has(name)) byName.set(name, []);
+    byName.get(name).push({ quantity, unit: item.unit || '' });
+    if (!unit) add(unitlessByName, name);
   });
 
+  /**
+   * What the kitchen has of this ingredient, split by whether it can be counted
+   * against the recipe.
+   *
+   * `onHand` is stock measured the same way the recipe asks for — four gallons
+   * of salmon do not cover one fillet, so that goes in `otherUnits` instead.
+   * An item stored with no unit at all is a third case: that is a gap in the
+   * record rather than a different substance, so it counts toward `onHand`.
+   */
+  return (name, unit) => {
+    const key = normalize(name);
+    const held = byName.get(key) || [];
+    const wanted = normalize(unit);
+
+    if (!wanted) {
+      return { onHand: held.reduce((sum, entry) => sum + entry.quantity, 0), otherUnits: [] };
+    }
+
+    const onHand =
+      (byNameAndUnit.get(shoppingKey(key, wanted)) ?? 0) + (unitlessByName.get(key) ?? 0);
+    const otherUnits = held.filter(
+      (entry) => normalize(entry.unit) && normalize(entry.unit) !== wanted
+    );
+
+    return { onHand, otherUnits };
+  };
+};
+
+/**
+ * What still needs buying for the meals on the board.
+ *
+ * Sums each ingredient across every meal still to be cooked, then subtracts
+ * what is already in the kitchen. Items fully covered by inventory stay on the
+ * list marked `haveInInventory` so nothing silently disappears; `onHand` says
+ * how much of a partly-covered item the kitchen already has.
+ */
+export const buildShoppingList = (entries = [], inventoryItems = []) => {
+  const onHandFor = indexStock(inventoryItems);
+
   const needed = new Map();
-  entries
-    .filter((entry) => entry.status !== 'cooked')
-    .forEach((entry) => {
-      (entry.usesIngredients || []).forEach((ingredient) => {
-        const key = normalize(ingredient.normalized || ingredient.name);
-        if (!key) return;
-        const existing = needed.get(key);
-        const quantity = Number(ingredient.quantity || 0);
-        if (existing) {
-          existing.quantity += quantity;
-        } else {
-          needed.set(key, {
-            name: ingredient.name || key,
-            normalized: key,
-            quantity,
-            unit: ingredient.unit || '',
-          });
-        }
-      });
+  entries.filter(isUpcoming).forEach((entry) => {
+    (entry.usesIngredients || []).forEach((ingredient) => {
+      const normalized = normalize(ingredient.normalized || ingredient.name);
+      if (!normalized) return;
+      const unit = ingredient.unit || '';
+      const key = shoppingKey(normalized, unit);
+      const existing = needed.get(key);
+      const quantity = Number(ingredient.quantity || 0);
+      if (existing) {
+        existing.quantity += quantity;
+      } else {
+        needed.set(key, {
+          key,
+          name: ingredient.name || normalized,
+          normalized,
+          quantity,
+          unit,
+        });
+      }
     });
+  });
 
   return [...needed.values()]
     .map((item) => {
-      const onHand = stock.get(item.normalized) ?? 0;
+      const { onHand, otherUnits } = onHandFor(item.normalized, item.unit);
       return {
         ...item,
         quantity: Math.round(item.quantity * 100) / 100,
         onHand,
+        otherUnits,
         haveInInventory: onHand >= item.quantity && item.quantity > 0,
       };
     })
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => a.name.localeCompare(b.name) || a.unit.localeCompare(b.unit));
 };
 
 // ---------------------------------------------------------------------------
@@ -151,7 +217,7 @@ export const buildShoppingList = (entries = [], inventoryItems = []) => {
  * is the case where prepping once actually saves a second session at the stove.
  */
 export const groupBatchTasks = (entries = []) => {
-  const planned = entries.filter((entry) => entry.status !== 'cooked');
+  const planned = entries.filter(isUpcoming);
   const groups = [];
   const grouped = new Set();
 
@@ -189,6 +255,9 @@ export const groupBatchTasks = (entries = []) => {
   byIngredient.forEach(({ name, entries: members }, key) => {
     const days = new Set(members.map((m) => m.date));
     if (members.length < 2 || days.size < 2) return;
+    // "Prep onion once — it's used in Curry and Curry" is the same meal twice,
+    // not a cooking session worth planning.
+    if (new Set(members.map((m) => m.recipeName)).size < 2) return;
     groups.push({
       group: key,
       title: `Prep ${name} once`,
@@ -213,20 +282,56 @@ export const groupBatchTasks = (entries = []) => {
  * half-stocked kitchen shouldn't block the cook from logging dinner.
  */
 export const planInventoryDecrements = (entry, inventoryItems = []) => {
-  const patches = [];
+  // Total each item's usage before subtracting anything. A recipe can list the
+  // same ingredient twice ("1 tbsp butter for the pan, 2 tbsp for the sauce"),
+  // and computing both patches against the item's *original* quantity would let
+  // the second write win — quietly putting the butter back.
+  const usedByItem = new Map();
+
   (entry?.usesIngredients || []).forEach((ingredient) => {
     const key = normalize(ingredient.normalized || ingredient.name);
     if (!key) return;
-    const match = inventoryItems.find((item) => normalize(item.normalized || item.name) === key);
-    if (!match) return;
     const used = Number(ingredient.quantity || 0);
     if (!used) return;
-    const next = Math.max(0, Math.round((Number(match.quantity || 0) - used) * 100) / 100);
-    if (next === Number(match.quantity)) return;
-    patches.push({ id: match.id, name: match.name, quantity: next });
+    const match = inventoryItems.find((item) => normalize(item.normalized || item.name) === key);
+    if (!match) return;
+    const running = usedByItem.get(match.id);
+    if (running) running.used += used;
+    else usedByItem.set(match.id, { match, used });
   });
+
+  const patches = [];
+  usedByItem.forEach(({ match, used }, id) => {
+    const next = Math.max(0, Math.round((Number(match.quantity || 0) - used) * 100) / 100);
+    // Already at zero, or nothing to take — no point spending a write.
+    if (next === Number(match.quantity)) return;
+    patches.push({ id, name: match.name, quantity: next });
+  });
+
   return patches;
 };
+
+// ---------------------------------------------------------------------------
+// Generated plans
+// ---------------------------------------------------------------------------
+
+/** `YYYY-MM-DD`, the only date shape the day cards and the rules accept. */
+const DAY_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Would the security rules accept this generated meal?
+ *
+ * A model can name a day in the wrong format or leave a meal unnamed. Writing
+ * that produces a rejected document — or worse, one Firestore stores today and
+ * refuses once production rules are on — so it is dropped before the write.
+ */
+export const isWritableEntry = (entry) =>
+  Boolean(
+    entry &&
+    typeof entry.date === 'string' &&
+    DAY_KEY_PATTERN.test(entry.date) &&
+    String(entry.recipeName ?? '').trim()
+  );
 
 // ---------------------------------------------------------------------------
 // Hook
@@ -288,6 +393,10 @@ const useMealPlan = () => {
       return;
     }
 
+    // Drop last week's document before the new one arrives, so the shopping
+    // list and batch tips never belong to a week that is no longer on screen.
+    setPlan(null);
+
     const planRef = doc(db, 'users', user.uid, 'mealPlans', weekStart);
     const unsubscribe = onSnapshot(
       planRef,
@@ -323,9 +432,17 @@ const useMealPlan = () => {
   );
 
   const batchTips = useMemo(() => {
-    const aiTips = (plan?.batchCooking || []).map((tip) => ({ ...tip, fromAi: true }));
-    const seen = new Set(aiTips.map((tip) => tip.group));
-    const derived = groupBatchTasks(weekEntries).filter((tip) => !seen.has(tip.group));
+    // A stored tip is whatever the planner wrote — it can repeat a group or
+    // omit one entirely, so give every tip a key of its own to render by.
+    const aiTips = (plan?.batchCooking || [])
+      .filter((tip) => tip && tip.title)
+      .map((tip, index) => ({ ...tip, key: `ai-${tip.group || index}-${index}`, fromAi: true }));
+
+    const seen = new Set(aiTips.map((tip) => tip.group).filter(Boolean));
+    const derived = groupBatchTasks(weekEntries)
+      .filter((tip) => !seen.has(tip.group))
+      .map((tip) => ({ ...tip, key: `derived-${tip.group}` }));
+
     return [...aiTips, ...derived];
   }, [plan, weekEntries]);
 
@@ -413,11 +530,21 @@ const useMealPlan = () => {
    *
    * The inventory writes go through useInventory.updateItem, which patches
    * only `quantity` — leaving `addedAt` alone, as the rules require.
+   *
+   * Cooking is not repeatable: a second call on an already-cooked meal would
+   * take the ingredients out a second time, so it stops before the write.
    */
   const markCooked = useCallback(
     async (entry) => {
       if (!user?.uid) return { success: false, error: 'Not authenticated' };
       if (!entry?.id) return { success: false, error: 'Unknown meal.' };
+
+      // Trust the board over the caller's copy — the entry a card was rendered
+      // with can be a snapshot behind.
+      const current = entries.find((candidate) => candidate.id === entry.id) || entry;
+      if (current.status === 'cooked') {
+        return { success: true, alreadyCooked: true, decremented: [], inventoryError: null };
+      }
 
       const decrements = planInventoryDecrements(entry, inventoryItems);
 
@@ -444,7 +571,7 @@ const useMealPlan = () => {
         return { success: false, error: err.message };
       }
     },
-    [user?.uid, inventoryItems, updateItem]
+    [user?.uid, entries, inventoryItems, updateItem]
   );
 
   /**
@@ -465,8 +592,12 @@ const useMealPlan = () => {
       const response = await callable({ weekStart, days: 7 });
       const result = response?.data || {};
       const generated = result.plan;
+      // The function validates its own output, but this client is what actually
+      // writes — so anything the rules would reject is dropped here rather than
+      // failing the whole batch on one bad meal.
+      const writable = (generated?.entries || []).filter(isWritableEntry);
 
-      if (!generated?.entries?.length) {
+      if (!writable.length) {
         setGenerating(false);
         const message = result?.warning || 'The planner did not return any meals. Try again.';
         setError(message);
@@ -482,13 +613,13 @@ const useMealPlan = () => {
       );
 
       await Promise.all(
-        generated.entries.map((entry) =>
+        writable.map((entry) =>
           addDoc(collection(db, 'users', user.uid, 'mealPlanEntries'), {
             date: entry.date,
-            mealType: entry.mealType || 'dinner',
+            mealType: MEAL_TYPES.includes(entry.mealType) ? entry.mealType : 'dinner',
             recipeId: entry.recipeId ?? null,
-            recipeName: entry.recipeName,
-            servings: Number(entry.servings) || 2,
+            recipeName: String(entry.recipeName).trim(),
+            servings: Math.max(1, Math.round(Number(entry.servings) || 2)),
             status: 'planned',
             source: 'ai',
             createdAt: serverTimestamp(),
@@ -501,22 +632,23 @@ const useMealPlan = () => {
         )
       );
 
-      await setDoc(
-        doc(db, 'users', user.uid, 'mealPlans', weekStart),
-        {
-          weekStart,
-          createdAt: serverTimestamp(),
-          source: 'ai',
-          status: 'active',
-          generatedAt: serverTimestamp(),
-          model: generated.model ?? null,
-          degraded: Boolean(generated.degraded),
-          shoppingList: generated.shoppingList || [],
-          batchCooking: generated.batchCooking || [],
-          notes: generated.notes || '',
-        },
-        { merge: true }
-      );
+      // `createdAt` is immutable once the week exists — the rules compare it
+      // against the stored value on every update, so re-stamping it here would
+      // make regenerating a plan fail. Only a brand new week carries one.
+      const planPatch = {
+        weekStart,
+        source: 'ai',
+        status: 'active',
+        generatedAt: serverTimestamp(),
+        model: generated.model ?? null,
+        degraded: Boolean(generated.degraded),
+        shoppingList: generated.shoppingList || [],
+        batchCooking: generated.batchCooking || [],
+        notes: generated.notes || '',
+      };
+      if (!plan) planPatch.createdAt = serverTimestamp();
+
+      await setDoc(doc(db, 'users', user.uid, 'mealPlans', weekStart), planPatch, { merge: true });
 
       setGenerating(false);
       return {
@@ -531,7 +663,7 @@ const useMealPlan = () => {
       setError(message);
       return { success: false, error: message };
     }
-  }, [user?.uid, weekStart, entries]);
+  }, [user?.uid, weekStart, entries, plan]);
 
   const goToWeek = useCallback((offsetWeeks) => {
     setWeekStart((current) => shiftDayKey(current, offsetWeeks * 7));

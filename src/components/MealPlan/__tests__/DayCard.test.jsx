@@ -177,3 +177,52 @@ describe('DayCard drag and drop', () => {
     expect(screen.getByTestId('meal-entry-entry-1')).toHaveAttribute('draggable', 'false');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Regressions
+// ---------------------------------------------------------------------------
+
+describe('a meal that is no longer for dinner', () => {
+  it('shows a skipped meal as settled rather than still on the menu', () => {
+    renderDay({ entries: [makeMealPlanEntry({ recipeName: 'Chilli', status: 'skipped' })] });
+
+    expect(screen.getByText('Skipped')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Cooked/ })).not.toBeInTheDocument();
+  });
+
+  it('cannot be dragged to another day', () => {
+    const { container } = renderDay({
+      entries: [makeMealPlanEntry({ id: 'e1', status: 'skipped' })],
+    });
+
+    expect(container.querySelector('[data-testid="meal-entry-e1"]')).toHaveAttribute(
+      'draggable',
+      'false'
+    );
+  });
+
+  it.each(['cooked', 'skipped'])('can still be removed from the board when %s', async (status) => {
+    const onRemove = jest.fn();
+    renderDay({ entries: [makeMealPlanEntry({ recipeName: 'Chilli', status })], onRemove });
+
+    // Logging the wrong meal, or scheduling a recipe that has since been
+    // deleted, otherwise leaves a card with no way off the board.
+    await userEvent.click(screen.getByRole('button', { name: 'Remove Chilli' }));
+    expect(onRemove).toHaveBeenCalled();
+  });
+});
+
+describe('while one meal is being logged', () => {
+  const twoMeals = [
+    makeMealPlanEntry({ id: 'a', recipeName: 'Chilli' }),
+    makeMealPlanEntry({ id: 'b', recipeName: 'Soup' }),
+  ];
+
+  it('only that meal’s button waits', () => {
+    renderDay({ entries: twoMeals, busyEntryId: 'a' });
+
+    const buttons = screen.getAllByRole('button', { name: /Cooked/ });
+    expect(buttons[0]).toBeDisabled();
+    expect(buttons[1]).toBeEnabled();
+  });
+});

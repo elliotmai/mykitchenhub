@@ -457,6 +457,25 @@ describe('inventory items', () => {
     );
   });
 
+  // "Mark as Cooked" is the one place the meal plan writes to the kitchen. It
+  // patches `quantity` and nothing else, which is what keeps it inside the
+  // addedAt rule — see markCooked in src/hooks/useMealPlan.js.
+  it('accepts the quantity-only patch marking a meal cooked makes', async () => {
+    await seed((db) => db.doc(itemPath(OWNER, 'cooked-from')).set(validItem({ quantity: 5 })));
+
+    await assertSucceeds(
+      as(OWNER).doc(itemPath(OWNER, 'cooked-from')).update({ quantity: 3 })
+    );
+  });
+
+  it('accepts a decrement that empties the jar, but not one that goes past it', async () => {
+    await seed((db) => db.doc(itemPath(OWNER, 'last-of-it')).set(validItem({ quantity: 2 })));
+
+    // planInventoryDecrements floors at zero for exactly this reason.
+    await assertSucceeds(as(OWNER).doc(itemPath(OWNER, 'last-of-it')).update({ quantity: 0 }));
+    await assertFails(as(OWNER).doc(itemPath(OWNER, 'last-of-it')).update({ quantity: -1 }));
+  });
+
   it('rejects an unknown location type', async () => {
     await assertFails(
       as(OWNER)
@@ -981,6 +1000,61 @@ describe('meal plan entries', () => {
     await seed((db) => db.doc(entryPath(OWNER)).set(validMealPlanEntry()));
     await assertSucceeds(as(OWNER).doc(entryPath(OWNER)).delete());
   });
+
+  // Copied from the "Writing an entry from another feature" block in
+  // SCHEMA_DOCUMENTATION.md. If this stops passing, that snippet is a lie and
+  // Phase 5 and Phase 6 will find out the hard way.
+  const documentedForeignWrite = (source) => ({
+    date: '2026-08-15',
+    mealType: 'dinner',
+    recipeId: 'recipe-abc',
+    recipeName: 'Sheet Pan Salmon',
+    servings: 2,
+    status: 'planned',
+    source,
+    createdAt: new Date().toISOString(),
+    cookedAt: null,
+    usesIngredients: [],
+    batchGroup: null,
+    notes: '',
+    planId: null,
+  });
+
+  it.each(['hellofresh', 'waste-prevention'])(
+    'accepts the write the schema documents for a %s meal, field for field',
+    async (source) => {
+      await assertSucceeds(
+        as(OWNER).doc(entryPath(OWNER, `doc-${source}`)).set(documentedForeignWrite(source))
+      );
+    }
+  );
+
+  it('lets a meal another feature scheduled be marked cooked here', async () => {
+    const entry = documentedForeignWrite('hellofresh');
+    await seed((db) => db.doc(entryPath(OWNER, 'hf-cook')).set(entry));
+
+    await assertSucceeds(
+      as(OWNER)
+        .doc(entryPath(OWNER, 'hf-cook'))
+        .update({ status: 'cooked', cookedAt: new Date().toISOString() })
+    );
+  });
+
+  it('lets a meal another feature scheduled be dragged to another day', async () => {
+    const entry = documentedForeignWrite('waste-prevention');
+    await seed((db) => db.doc(entryPath(OWNER, 'wp-move')).set(entry));
+
+    // The reschedule patch is `{ date }` alone — no createdAt, which is exactly
+    // what the rule pins.
+    await assertSucceeds(
+      as(OWNER).doc(entryPath(OWNER, 'wp-move')).update({ date: '2026-08-17' })
+    );
+  });
+
+  it('lets a meal be skipped, which the schema allows and the board renders', async () => {
+    await seed((db) => db.doc(entryPath(OWNER, 'skip')).set(validMealPlanEntry()));
+    await assertSucceeds(as(OWNER).doc(entryPath(OWNER, 'skip')).update({ status: 'skipped' }));
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1052,6 +1126,66 @@ describe('meal plan weeks', () => {
   it('refuses to let the creation date be rewritten', async () => {
     await seed((db) => db.doc(planPath(OWNER)).set(validMealPlan()));
     await assertFails(as(OWNER).doc(planPath(OWNER)).update({ createdAt: '1999-01-01' }));
+  });
+
+  // These two mirror generatePlan() in src/hooks/useMealPlan.js exactly. The
+  // hook writes the week with setDoc({ merge: true }); the difference between
+  // them is whether that payload carries a fresh createdAt.
+  it('accepts the merge write the app makes for a brand new week', async () => {
+    const { createdAt, ...rest } = validMealPlan();
+
+    await assertSucceeds(
+      as(OWNER)
+        .doc(planPath(OWNER, 'new-week'))
+        .set({ ...rest, createdAt: new Date().toISOString() }, { merge: true })
+    );
+  });
+
+  it('accepts the merge write the app makes when regenerating an existing week', async () => {
+    const existing = validMealPlan();
+    await seed((db) => db.doc(planPath(OWNER, 'existing-week')).set(existing));
+
+    // No createdAt in the payload: merge leaves the stored one in place, which
+    // is the only way past `request.resource.data.createdAt == resource.data.createdAt`.
+    const { createdAt, ...regenerated } = validMealPlan({ notes: 'Second try.' });
+
+    await assertSucceeds(
+      as(OWNER).doc(planPath(OWNER, 'existing-week')).set(regenerated, { merge: true })
+    );
+  });
+
+  it('refuses a regeneration that re-stamps createdAt, as the app used to', async () => {
+    await seed((db) => db.doc(planPath(OWNER, 'restamped')).set(validMealPlan()));
+
+    // Firestore's test mode lets this through today. Once step 10.2 turns
+    // production rules on, it is the difference between "Regenerate plan"
+    // working and failing every time.
+    await assertFails(
+      as(OWNER)
+        .doc(planPath(OWNER, 'restamped'))
+        .set({ ...validMealPlan(), createdAt: new Date(Date.now() + 1000).toISOString() }, { merge: true })
+    );
+  });
+
+  it('takes the onHand field the shopping list now carries', async () => {
+    await assertSucceeds(
+      as(OWNER)
+        .doc(planPath(OWNER, 'with-onhand'))
+        .set(
+          validMealPlan({
+            shoppingList: [
+              {
+                name: 'salmon',
+                normalized: 'salmon',
+                quantity: 2,
+                unit: 'fillet',
+                onHand: 1,
+                haveInInventory: false,
+              },
+            ],
+          })
+        )
+    );
   });
 
   it("keeps one user out of another user's plans", async () => {

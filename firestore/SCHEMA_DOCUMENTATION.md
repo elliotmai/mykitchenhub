@@ -41,13 +41,22 @@ This document describes the complete Firestore database structure for MyKitchenH
   
   helloFresh: {
     enabled: true,                 // Whether HelloFresh integration is active
-    deliveryDay: "monday",         // Day of week for deliveries
+    deliveryDay: "monday",         // Day of week for deliveries (see below)
     mealsPerWeek: 3,              // Number of meals per delivery
     lastDeliveryDate: Timestamp,   // Last delivery received
     nextDeliveryDate: Timestamp    // Expected next delivery
   }
 }
 ```
+
+**Delivery days:**
+
+`deliveryDay` is a weekday name (`"monday"` … `"sunday"`). A `deliveryDays`
+array is also accepted for several deliveries a week, holding either names or
+ISO weekday numbers (1 = Monday … 7 = Sunday; 0 also reads as Sunday). The meal
+planner reads both — see `readHelloFresh` in
+`functions/src/mealPlan/planContext.js` — and drops any value it cannot resolve
+rather than guessing a day.
 
 **Indexes Required:**
 - `email` (automatic from Firebase Auth)
@@ -534,7 +543,9 @@ await addDoc(collection(db, 'users', uid, 'mealPlanEntries'), {
 - `date` and `weekStart` are `YYYY-MM-DD` strings, never Timestamps — the UI keys
   days on them and a Timestamp would silently never match
 - `mealType` must be one of: "breakfast", "lunch", "dinner", "snack"
-- `status` must be one of: "planned", "cooked", "skipped"
+- `status` must be one of: "planned", "cooked", "skipped". A `skipped` meal is
+  settled like a cooked one: it buys no groceries, joins no batch cooking
+  session, and leaves its day open to the planner
 - `source` must be one of: "manual", "ai", "hellofresh", "waste-prevention"
 - `servings` must be > 0
 - `createdAt` cannot be rewritten; `date` may change (drag-and-drop rescheduling)
@@ -565,9 +576,10 @@ holds only what belongs to the week as a whole.
   shoppingList: [{
     name: "salmon",
     normalized: "salmon",
-    quantity: 2,
-    unit: "fillet",
-    haveInInventory: false
+    quantity: 2,                          // total the week needs, in `unit`
+    unit: "fillet",                       // quantities are only summed within one unit
+    onHand: 1,                            // how much the kitchen has, in the same unit
+    haveInInventory: false                // onHand >= quantity
   }],
 
   // 7.3 — batch cooking analysis
@@ -587,7 +599,10 @@ holds only what belongs to the week as a whole.
 - `weekStart` must be a `YYYY-MM-DD` string
 - `source` must be one of: "ai", "manual"
 - `status` must be one of: "draft", "active", "archived"
-- `createdAt` cannot be rewritten
+- `createdAt` cannot be rewritten. Regenerating a week is a merge write that
+  **omits** `createdAt` entirely — sending a fresh `serverTimestamp()` fails
+  `request.resource.data.createdAt == resource.data.createdAt` and the plan can
+  never be regenerated.
 
 ---
 

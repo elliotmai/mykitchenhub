@@ -6,12 +6,16 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Form, Modal, Spinner } from 'react-bootstrap';
-import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { collection, getDocs, query, limit } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import { MEAL_TYPES } from '../../hooks/useMealPlan';
 
-/** Recipes are written with `name`; older fixtures use `title`. Accept both. */
+/** Recipes are written with `name`; older legacy imports use `title`. Accept both. */
 export const recipeLabel = (recipe) => recipe?.name || recipe?.title || 'Untitled recipe';
+
+/** Alphabetical by the label the cook actually reads. */
+export const sortByLabel = (recipes) =>
+  [...recipes].sort((a, b) => recipeLabel(a).localeCompare(recipeLabel(b)));
 
 /** The ingredient shape a meal plan entry stores, from a recipe document. */
 export const recipeIngredients = (recipe) =>
@@ -50,10 +54,14 @@ const ScheduleMealModal = ({ show, onHide, onSave, date, days = [] }) => {
     const load = async () => {
       setLoadingRecipes(true);
       try {
-        const snapshot = await getDocs(
-          query(collection(db, 'recipes'), orderBy('name', 'asc'), limit(100))
-        );
-        if (!cancelled) setRecipes(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+        // Deliberately no orderBy('name'): Firestore drops documents that are
+        // missing the field entirely, so ordering server-side would hide every
+        // legacy recipe that only carries `title` — the very ones recipeLabel
+        // exists to handle. Sorting a bounded page here costs nothing.
+        const snapshot = await getDocs(query(collection(db, 'recipes'), limit(100)));
+        if (!cancelled) {
+          setRecipes(sortByLabel(snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))));
+        }
       } catch (err) {
         console.error('Error loading recipes:', err);
         if (!cancelled) setRecipes([]);

@@ -15,6 +15,8 @@ import useMealPlan, {
   buildShoppingList,
   groupBatchTasks,
   planInventoryDecrements,
+  isUpcoming,
+  isWritableEntry,
   MEAL_TYPES,
 } from '../useMealPlan';
 import { AuthProvider } from '../useAuth';
@@ -166,7 +168,7 @@ describe('buildShoppingList', () => {
   it('matches inventory case-insensitively', () => {
     const list = buildShoppingList(
       [salmonDinner()],
-      [makeItem({ name: 'SALMON', normalized: 'SALMON', quantity: 9 })]
+      [makeItem({ name: 'SALMON', normalized: 'SALMON', quantity: 9, unit: 'FILLET' })]
     );
 
     expect(list[0].haveInInventory).toBe(true);
@@ -761,5 +763,429 @@ describe('week navigation', () => {
 describe('MEAL_TYPES', () => {
   it('matches the meal types the security rules accept', () => {
     expect(MEAL_TYPES).toEqual(['breakfast', 'lunch', 'dinner', 'snack']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Regressions — each of these failed before the fix it names.
+// ---------------------------------------------------------------------------
+
+describe('a shopping list that counts units', () => {
+  const entryUsing = (ingredients) => makeMealPlanEntry({ usesIngredients: ingredients });
+
+  it('does not add cups of flour to grams of flour', () => {
+    const list = buildShoppingList([
+      entryUsing([{ name: 'Flour', normalized: 'flour', quantity: 2, unit: 'cup' }]),
+      entryUsing([{ name: 'Flour', normalized: 'flour', quantity: 200, unit: 'g' }]),
+    ]);
+
+    expect(list).toHaveLength(2);
+    expect(list.map((i) => `${i.quantity} ${i.unit}`)).toEqual(['2 cup', '200 g']);
+  });
+
+  it('does not let four gallons of salmon cover one fillet', () => {
+    const list = buildShoppingList(
+      [entryUsing([{ name: 'Salmon', normalized: 'salmon', quantity: 1, unit: 'fillet' }])],
+      [makeItem({ name: 'Salmon', normalized: 'salmon', quantity: 4, unit: 'gal' })]
+    );
+
+    expect(list[0].haveInInventory).toBe(false);
+    expect(list[0].onHand).toBe(0);
+  });
+
+  it('still says the salmon is in there, measured some other way', () => {
+    const list = buildShoppingList(
+      [entryUsing([{ name: 'Salmon', normalized: 'salmon', quantity: 1, unit: 'fillet' }])],
+      [makeItem({ name: 'Salmon', normalized: 'salmon', quantity: 4, unit: 'gal' })]
+    );
+
+    expect(list[0].otherUnits).toEqual([{ quantity: 4, unit: 'gal' }]);
+  });
+
+  it('counts stock recorded without a unit — a gap in the record, not a substitute', () => {
+    const list = buildShoppingList(
+      [entryUsing([{ name: 'Rice', normalized: 'rice', quantity: 2, unit: 'cup' }])],
+      [makeItem({ name: 'Rice', normalized: 'rice', quantity: 5, unit: '' })]
+    );
+
+    expect(list[0].haveInInventory).toBe(true);
+  });
+
+  it('reports how much of a partly-stocked ingredient is on hand', () => {
+    const list = buildShoppingList(
+      [entryUsing([{ name: 'Rice', normalized: 'rice', quantity: 5, unit: 'cup' }])],
+      [makeItem({ name: 'Rice', normalized: 'rice', quantity: 2, unit: 'cup' })]
+    );
+
+    expect(list[0]).toMatchObject({ onHand: 2, quantity: 5, haveInInventory: false });
+  });
+});
+
+describe('a meal the cook skipped', () => {
+  const skipped = () =>
+    makeMealPlanEntry({
+      id: 'skipped-1',
+      status: 'skipped',
+      date: dayKey(1),
+      usesIngredients: [{ name: 'Kale', normalized: 'kale', quantity: 1, unit: 'bunch' }],
+    });
+
+  it('buys no groceries', () => {
+    expect(buildShoppingList([skipped()], [])).toEqual([]);
+  });
+
+  it('joins no cooking session', () => {
+    const shared = [{ name: 'Kale', normalized: 'kale', quantity: 1, unit: 'bunch' }];
+    const tips = groupBatchTasks([
+      skipped(),
+      makeMealPlanEntry({ id: 'b', date: dayKey(3), recipeName: 'Soup', usesIngredients: shared }),
+    ]);
+
+    expect(tips).toEqual([]);
+  });
+});
+
+describe('batch tips', () => {
+  it('do not suggest cooking one meal together with itself', () => {
+    const shared = [{ name: 'Onion', normalized: 'onion', quantity: 1, unit: 'ea' }];
+    const tips = groupBatchTasks([
+      makeMealPlanEntry({ id: 'a', date: dayKey(0), recipeName: 'Curry', usesIngredients: shared }),
+      makeMealPlanEntry({ id: 'b', date: dayKey(1), recipeName: 'Curry', usesIngredients: shared }),
+    ]);
+
+    expect(tips).toEqual([]);
+  });
+
+  it('give every stored tip a key of its own, even without a group', async () => {
+    const weekStart = toDayKey(startOfWeek());
+    const { result } = await renderMealPlan();
+
+    await act(async () => {
+      fs.__emitDoc(
+        `users/${UID}/mealPlans/${weekStart}`,
+        weekStart,
+        makeMealPlan({
+          batchCooking: [
+            { group: '', title: 'Roast it all at once', detail: 'One tray.' },
+            { group: '', title: 'Chop everything first', detail: 'One board.' },
+          ],
+        })
+      );
+    });
+
+    await waitFor(() => expect(result.current.batchTips).toHaveLength(2));
+    const keys = result.current.batchTips.map((tip) => tip.key);
+    expect(new Set(keys).size).toBe(2);
+  });
+});
+
+describe('inventory decrements', () => {
+  it('total an ingredient a recipe lists twice instead of letting one write win', () => {
+    const patches = planInventoryDecrements(
+      makeMealPlanEntry({
+        usesIngredients: [
+          { name: 'Butter', normalized: 'butter', quantity: 1, unit: 'tbsp' },
+          { name: 'Butter', normalized: 'butter', quantity: 2, unit: 'tbsp' },
+        ],
+      }),
+      [makeItem({ id: 'item-butter', name: 'Butter', normalized: 'butter', quantity: 10 })]
+    );
+
+    expect(patches).toEqual([{ id: 'item-butter', name: 'Butter', quantity: 7 }]);
+  });
+
+  it('leave an item already at zero alone rather than spending a write', () => {
+    const patches = planInventoryDecrements(
+      makeMealPlanEntry({
+        usesIngredients: [{ name: 'Salmon', normalized: 'salmon', quantity: 2, unit: 'fillet' }],
+      }),
+      [makeItem({ id: 'item-salmon', normalized: 'salmon', quantity: 0 })]
+    );
+
+    expect(patches).toEqual([]);
+  });
+});
+
+describe('cooking the same meal twice', () => {
+  const entry = makeMealPlanEntry({
+    id: 'entry-cooked',
+    date: dayKey(0),
+    usesIngredients: [{ name: 'Salmon', normalized: 'salmon', quantity: 2, unit: 'fillet' }],
+  });
+
+  it('does not take the ingredients out a second time', async () => {
+    const { result } = await renderMealPlan({
+      entries: [{ ...entry, status: 'cooked' }],
+      inventory: [
+        makeItem({ id: 'item-salmon', name: 'Salmon', normalized: 'salmon', quantity: 5 }),
+      ],
+    });
+
+    let outcome;
+    await act(async () => {
+      outcome = await result.current.markCooked({ ...entry, status: 'cooked' });
+    });
+
+    expect(outcome).toMatchObject({ success: true, alreadyCooked: true, decremented: [] });
+    expect(fs.updateDoc).not.toHaveBeenCalled();
+  });
+
+  it('trusts the board over a card rendered before the last snapshot', async () => {
+    const { result } = await renderMealPlan({
+      entries: [{ ...entry, status: 'cooked' }],
+      inventory: [makeItem({ id: 'item-salmon', normalized: 'salmon', quantity: 5 })],
+    });
+
+    let outcome;
+    await act(async () => {
+      // The caller still holds the "planned" copy the card was drawn with.
+      outcome = await result.current.markCooked(entry);
+    });
+
+    expect(outcome.alreadyCooked).toBe(true);
+    expect(fs.updateDoc).not.toHaveBeenCalled();
+  });
+});
+
+describe('regenerating a week', () => {
+  const weekStart = toDayKey(startOfWeek());
+
+  const plan = (entries) => ({
+    plan: {
+      weekStart,
+      model: 'claude-opus-5',
+      degraded: false,
+      entries,
+      shoppingList: [],
+      batchCooking: [],
+    },
+  });
+
+  const oneGoodMeal = [
+    {
+      date: dayKey(0),
+      mealType: 'dinner',
+      recipeId: null,
+      recipeName: 'Spinach Frittata',
+      servings: 2,
+      usesIngredients: [],
+      batchGroup: null,
+    },
+  ];
+
+  const planDocPath = `users/${UID}/mealPlans/${weekStart}`;
+
+  const generate = async (result) => {
+    await act(async () => {
+      await result.current.generatePlan();
+    });
+    return fs.setDoc.mock.calls.find(([ref]) => fs.pathOf(ref) === planDocPath)[1];
+  };
+
+  it('stamps createdAt on a week that does not exist yet', async () => {
+    fns.__callable('generateMealPlan').mockResolvedValue({ data: plan(oneGoodMeal) });
+    const { result } = await renderMealPlan();
+
+    expect(await generate(result)).toMatchObject({
+      createdAt: { __sentinel: 'serverTimestamp' },
+    });
+  });
+
+  it('leaves createdAt alone once the week exists, which the rules require', async () => {
+    fns.__callable('generateMealPlan').mockResolvedValue({ data: plan(oneGoodMeal) });
+    const { result } = await renderMealPlan();
+
+    await act(async () => {
+      fs.__emitDoc(planDocPath, weekStart, makeMealPlan({ weekStart }));
+    });
+    await waitFor(() => expect(result.current.plan).toBeTruthy());
+
+    // `mealPlans` update pins createdAt: re-stamping it here fails the rule and
+    // the cook can never regenerate a week they already have.
+    expect(await generate(result)).not.toHaveProperty('createdAt');
+  });
+
+  it('drops a meal the model dated in a shape the rules reject', async () => {
+    fns.__callable('generateMealPlan').mockResolvedValue({
+      data: plan([...oneGoodMeal, { ...oneGoodMeal[0], date: '15/08/2026' }]),
+    });
+    const { result } = await renderMealPlan();
+
+    await act(async () => {
+      await result.current.generatePlan();
+    });
+
+    const written = fs.addDoc.mock.calls.filter(([ref]) => fs.pathOf(ref) === ENTRIES_PATH);
+    expect(written).toHaveLength(1);
+    expect(written[0][1].date).toBe(dayKey(0));
+  });
+
+  it('drops a meal the model left unnamed', async () => {
+    fns.__callable('generateMealPlan').mockResolvedValue({
+      data: plan([{ ...oneGoodMeal[0], recipeName: '   ' }]),
+    });
+    const { result } = await renderMealPlan();
+
+    let outcome;
+    await act(async () => {
+      outcome = await result.current.generatePlan();
+    });
+
+    expect(outcome.success).toBe(false);
+    expect(fs.addDoc).not.toHaveBeenCalled();
+  });
+
+  it('never writes a meal type or serving count the rules would reject', async () => {
+    fns.__callable('generateMealPlan').mockResolvedValue({
+      data: plan([{ ...oneGoodMeal[0], mealType: 'brunch', servings: 0 }]),
+    });
+    const { result } = await renderMealPlan();
+
+    await act(async () => {
+      await result.current.generatePlan();
+    });
+
+    const written = fs.addDoc.mock.calls.find(([ref]) => fs.pathOf(ref) === ENTRIES_PATH)[1];
+    expect(MEAL_TYPES).toContain(written.mealType);
+    expect(written.servings).toBeGreaterThan(0);
+  });
+});
+
+describe('changing weeks', () => {
+  it('drops the old week’s document before the new one arrives', async () => {
+    const thisWeek = toDayKey(startOfWeek());
+    const { result } = await renderMealPlan();
+
+    await act(async () => {
+      fs.__emitDoc(`users/${UID}/mealPlans/${thisWeek}`, thisWeek, makeMealPlan());
+    });
+    await waitFor(() => expect(result.current.plan).toBeTruthy());
+
+    act(() => result.current.goToWeek(1));
+
+    // Otherwise last week's shopping list is still on screen under next week's
+    // heading until the new snapshot lands.
+    expect(result.current.plan).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The seams: entries other sections write into this collection.
+//
+// These fixtures are copied from the writers themselves, not from the factory —
+// a factory both sides share would agree with itself no matter how wrong it was.
+// ---------------------------------------------------------------------------
+
+/** Verbatim from addToMealPlan in src/hooks/useRecipeSuggestions.js (Phase 6). */
+const wastePreventionEntry = (overrides = {}) => ({
+  id: 'wp-1',
+  date: dayKey(0),
+  mealType: 'dinner',
+  recipeId: 'recipe-abc',
+  recipeName: 'Spinach Frittata',
+  servings: 2,
+  status: 'planned',
+  source: 'waste-prevention',
+  createdAt: { seconds: 1, nanoseconds: 0 },
+  cookedAt: null,
+  usesIngredients: [{ name: 'Spinach', normalized: 'spinach', quantity: 1, unit: 'bag' }],
+  batchGroup: null,
+  notes: '',
+  planId: null,
+  ...overrides,
+});
+
+/**
+ * Verbatim from the "writing an entry from another feature" block in
+ * firestore/SCHEMA_DOCUMENTATION.md — what Phase 5 is told to write.
+ */
+const helloFreshEntry = (overrides = {}) => ({
+  id: 'hf-1',
+  date: dayKey(2),
+  mealType: 'dinner',
+  recipeId: 'recipe-abc',
+  recipeName: 'Sheet Pan Salmon',
+  servings: 2,
+  status: 'planned',
+  source: 'hellofresh',
+  createdAt: { seconds: 1, nanoseconds: 0 },
+  cookedAt: null,
+  usesIngredients: [],
+  batchGroup: null,
+  notes: '',
+  planId: null,
+  ...overrides,
+});
+
+describe('a meal the waste-prevention button scheduled', () => {
+  it('is a meal the board treats as still to cook', () => {
+    expect(isUpcoming(wastePreventionEntry())).toBe(true);
+    expect(isWritableEntry(wastePreventionEntry())).toBe(true);
+  });
+
+  it('reaches the shopping list with its unit intact', () => {
+    expect(buildShoppingList([wastePreventionEntry()], [])).toEqual([
+      expect.objectContaining({ normalized: 'spinach', quantity: 1, unit: 'bag' }),
+    ]);
+  });
+
+  it('is covered by the very item it was scheduled to rescue', () => {
+    // Phase 6 copies the inventory item's own unit into usesIngredients, so
+    // the unit-aware list has to match it rather than send the cook shopping.
+    const list = buildShoppingList(
+      [wastePreventionEntry()],
+      [makeItem({ name: 'Spinach', normalized: 'spinach', quantity: 1, unit: 'bag' })]
+    );
+
+    expect(list[0].haveInInventory).toBe(true);
+  });
+
+  it('empties that item when the meal is cooked', () => {
+    const patches = planInventoryDecrements(wastePreventionEntry(), [
+      makeItem({ id: 'item-spinach', name: 'Spinach', normalized: 'spinach', quantity: 1 }),
+    ]);
+
+    expect(patches).toEqual([{ id: 'item-spinach', name: 'Spinach', quantity: 0 }]);
+  });
+
+  it('renders on its day alongside meals from every other section', async () => {
+    // Anchored to the week the board opens on, so this does not depend on
+    // which day of the week the suite happens to run.
+    const monday = toDayKey(startOfWeek());
+    const wednesday = shiftDayKey(monday, 2);
+
+    const { result } = await renderMealPlan({
+      entries: [
+        wastePreventionEntry({ date: monday }),
+        helloFreshEntry({ date: wednesday }),
+        makeMealPlanEntry({ id: 'mine', date: monday, mealType: 'lunch', source: 'manual' }),
+      ],
+    });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.entriesByDay[monday].map((e) => e.source)).toEqual([
+      'manual',
+      'waste-prevention',
+    ]);
+    expect(result.current.entriesByDay[wednesday].map((e) => e.source)).toEqual(['hellofresh']);
+  });
+});
+
+describe('a meal a HelloFresh delivery scheduled', () => {
+  it('is renderable and cookable even with no ingredients attached', () => {
+    expect(isWritableEntry(helloFreshEntry())).toBe(true);
+    expect(buildShoppingList([helloFreshEntry()], [])).toEqual([]);
+    expect(planInventoryDecrements(helloFreshEntry(), [makeItem()])).toEqual([]);
+  });
+
+  it('batches with a waste-prevention meal that shares an ingredient', () => {
+    const shared = [{ name: 'Spinach', normalized: 'spinach', quantity: 1, unit: 'bag' }];
+    const tips = groupBatchTasks([
+      wastePreventionEntry(),
+      helloFreshEntry({ recipeName: 'Delivered Box Meal', usesIngredients: shared }),
+    ]);
+
+    expect(tips).toHaveLength(1);
+    expect(tips[0].title).toMatch(/Prep Spinach once/);
   });
 });

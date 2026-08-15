@@ -8,7 +8,7 @@ import { Layers } from 'lucide-react';
 /**
  * BatchCookingTips
  *
- * @param {array} tips - { group, title, detail, entryDates, fromAi }
+ * @param {array} tips - { key, group, title, detail, entryDates, fromAi }
  */
 const BatchCookingTips = ({ tips = [] }) => {
   if (tips.length === 0) return null;
@@ -22,8 +22,8 @@ const BatchCookingTips = ({ tips = [] }) => {
         </div>
 
         <ul className="list-unstyled mb-0 d-flex flex-column gap-3">
-          {tips.map((tip) => (
-            <li key={tip.group}>
+          {tips.map((tip, index) => (
+            <li key={tip.key ?? tip.group ?? index}>
               <div className="fw-semibold" style={{ fontSize: 'var(--mkh-font-size-small)' }}>
                 {tip.title}
               </div>

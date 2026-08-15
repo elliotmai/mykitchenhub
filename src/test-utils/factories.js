@@ -178,9 +178,17 @@ export const makeNotification = (overrides = {}) => ({
 // ---------------------------------------------------------------------------
 // recipes/{recipeId}
 // ---------------------------------------------------------------------------
-// The field names here are the ones firestore.rules requires on create:
-// `name` (not `title`), and a `source` drawn from the documented list — a
-// recipe keyed on `title` or sourced from 'manual'/'seed' is rejected.
+/**
+ * A recipe as the rules accept it.
+ *
+ * The field names are the ones `firestore.rules` requires on create: `name`
+ * (not `title`), and a `source` drawn from the documented list — a recipe
+ * keyed on `title` or sourced from 'manual'/'seed' is rejected.
+ *
+ * Legacy imports that carry only `title` still exist, which is why readers
+ * fall back to it. They are also why nothing queries this collection with
+ * `orderBy('name')`: Firestore drops documents missing the ordered field.
+ */
 export const makeRecipe = (overrides = {}) => {
   const name = overrides.name ?? 'Sheet Pan Salmon';
   return {

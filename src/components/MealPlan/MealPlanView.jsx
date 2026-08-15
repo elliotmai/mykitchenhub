@@ -52,17 +52,24 @@ const MealPlanView = () => {
   const { showSuccess, showError, showInfo } = useToast();
 
   const [addDay, setAddDay] = useState(null);
-  const [busy, setBusy] = useState(false);
+  const [busyEntryId, setBusyEntryId] = useState(null);
   const [notice, setNotice] = useState(null);
 
   const handleCook = useCallback(
     async (entry) => {
-      setBusy(true);
+      // Only this meal's button waits — a slow write shouldn't freeze the
+      // whole week.
+      setBusyEntryId(entry.id);
       const result = await markCooked(entry);
-      setBusy(false);
+      setBusyEntryId(null);
 
       if (!result.success) {
         showError(result.error || 'Could not mark that meal as cooked.');
+        return;
+      }
+
+      if (result.alreadyCooked) {
+        showInfo(`${entry.recipeName} was already logged as cooked.`);
         return;
       }
 
@@ -74,7 +81,7 @@ const MealPlanView = () => {
       );
       if (result.inventoryError) showError(result.inventoryError);
     },
-    [markCooked, showError, showSuccess]
+    [markCooked, showError, showSuccess, showInfo]
   );
 
   const handleRemove = useCallback(
@@ -86,24 +93,27 @@ const MealPlanView = () => {
     [removeMeal, showError, showInfo]
   );
 
-  const handleMove = useCallback(
-    async (entry, dayKey) => {
-      if (!dayKey || dayKey === entry.date) return;
-      const result = await rescheduleMeal(entry.id, dayKey);
-      if (!result.success) showError(result.error || 'Could not move that meal.');
-    },
-    [rescheduleMeal, showError]
-  );
-
-  const handleDropMeal = useCallback(
+  /**
+   * Move a meal to another day.
+   *
+   * Both paths to rescheduling land here: dropping a card onto a day, and the
+   * "Move to" select beside each meal — which is how this works with a keyboard
+   * or on a phone, where HTML5 drag events never fire.
+   */
+  const moveEntryTo = useCallback(
     async (entryId, dayKey) => {
       const entry = weekEntries.find((candidate) => candidate.id === entryId);
-      if (!entry || entry.date === dayKey) return;
+      // Dropping a meal back on the day it already occupies is a no-op, not a
+      // write — and an id from outside the board is not ours to move.
+      if (!entry || !dayKey || entry.date === dayKey) return;
+
       const result = await rescheduleMeal(entryId, dayKey);
       if (!result.success) showError(result.error || 'Could not move that meal.');
     },
     [weekEntries, rescheduleMeal, showError]
   );
+
+  const handleMove = useCallback((entry, dayKey) => moveEntryTo(entry.id, dayKey), [moveEntryTo]);
 
   const handleGenerate = useCallback(async () => {
     setNotice(null);
@@ -185,8 +195,8 @@ const MealPlanView = () => {
                   onCook={handleCook}
                   onRemove={handleRemove}
                   onMove={handleMove}
-                  onDropMeal={handleDropMeal}
-                  busy={busy}
+                  onDropMeal={moveEntryTo}
+                  busyEntryId={busyEntryId}
                 />
               </Col>
             ))}

@@ -14,6 +14,16 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.08.15.1',
+    date: 'August 2026',
+    items: [
+      '🛒 The shopping list is better at arithmetic. It no longer adds 2 cups of flour to 200g of flour and asks you to buy 202 cups, and when you already have some of something it tells you how much instead of quietly making you buy the lot again.',
+      '📅 “Generate plan” now leaves alone any night you have already sorted — a meal you added yourself, one from your HelloFresh box, or one you added from Waste Alerts — instead of putting a second dinner on top of it.',
+      '🍳 Ticking “Cooked” twice no longer takes the ingredients out of your kitchen twice.',
+      '🗑️ Ticked the wrong meal, or planned a recipe you have since deleted? You can now take a cooked meal back off the board.',
+    ],
+  },
+  {
     version: '2026.08.15',
     date: 'August 2026',
     items: [

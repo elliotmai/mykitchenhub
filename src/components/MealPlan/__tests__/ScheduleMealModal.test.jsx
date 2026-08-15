@@ -168,3 +168,51 @@ describe('ScheduleMealModal', () => {
     expect(await screen.findByLabelText('What are you cooking?')).toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Regressions
+// ---------------------------------------------------------------------------
+
+describe('the recipe library the picker can actually see', () => {
+  it('lists a legacy recipe that only carries `title`', async () => {
+    // Ordering by `name` server-side drops documents missing that field, so a
+    // library synced from legacy would show up empty however many recipes it has.
+    withRecipes([
+      makeRecipe({ id: 'r1', name: 'Sheet Pan Salmon' }),
+      { id: 'r2', title: 'Grandma’s Stew', ingredients: [] },
+    ]);
+    renderModal();
+
+    expect(await screen.findByRole('option', { name: 'Grandma’s Stew' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Sheet Pan Salmon' })).toBeInTheDocument();
+  });
+
+  it('sorts what it found by the name the cook reads', async () => {
+    withRecipes([
+      makeRecipe({ id: 'r1', name: 'Zucchini Bake' }),
+      { id: 'r2', title: 'Apple Crumble', ingredients: [] },
+      makeRecipe({ id: 'r3', name: 'Miso Soup' }),
+    ]);
+    renderModal();
+
+    await screen.findByRole('option', { name: 'Apple Crumble' });
+    const labels = [...screen.getByLabelText('Recipe').options]
+      .map((option) => option.textContent)
+      .filter((label) => label !== 'Something else…');
+
+    expect(labels).toEqual(['Apple Crumble', 'Miso Soup', 'Zucchini Bake']);
+  });
+
+  it('still lets a cook name a meal when the library is empty', async () => {
+    withRecipes([]);
+    const onSave = jest.fn(async () => ({ success: true }));
+    renderModal({ onSave });
+
+    await screen.findByRole('option', { name: 'Something else…' });
+    await userEvent.type(screen.getByLabelText('What are you cooking?'), 'Leftovers');
+    await userEvent.click(screen.getByRole('button', { name: 'Add to plan' }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
+    expect(onSave.mock.calls[0][0]).toMatchObject({ recipeName: 'Leftovers', usesIngredients: [] });
+  });
+});
