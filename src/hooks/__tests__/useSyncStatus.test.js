@@ -16,6 +16,7 @@ import * as fs from '../../test-utils/mocks/firestore';
 import * as fns from '../../test-utils/mocks/functions';
 import * as authMock from '../../test-utils/mocks/auth';
 import { makeUserProfile, makeSyncMetadata } from '../../test-utils/factories';
+import { expectHumanError } from '../../test-utils/humanErrors';
 
 const UID = 'test-uid';
 const SYNC_PATH = `syncMetadata/${SYNC_DOC_ID}`;
@@ -99,7 +100,7 @@ describe('useSyncStatus subscription', () => {
       fs.__emitError(SYNC_PATH, new Error('permission-denied'));
     });
 
-    expect(result.current.error).toMatch(/could not read/i);
+    expectHumanError(result.current.error, /sync status/i);
   });
 
   it('unsubscribes on unmount', async () => {

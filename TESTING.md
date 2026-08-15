@@ -163,9 +163,8 @@ Playwright drives a real production build (`serve -s build`) against real
 emulators, on desktop and mobile viewports. This is the only suite that exercises
 the actual bundle, the service worker, and the real security rules together.
 
-`e2e/global-setup.js` seeds a known account (`e2e-cook@example.com`) with three
-storage locations and one item per expiration state. `e2e/fixtures.js` provides
-an `authedPage` fixture that starts already signed in:
+`e2e/fixtures.js` provides an `authedPage` fixture that starts already signed
+in:
 
 ```js
 const { test, expect } = require('./fixtures');
@@ -174,6 +173,71 @@ test('does the thing', async ({ authedPage: page }) => {
   await page.goto('/inventory');
 });
 ```
+
+### One account per worker
+
+Every spec used to share a single seeded account, and every spec that wrote
+left its writes behind. That cost twice: the suite got slower as it ran,
+because each page load read a kitchen that had been growing since the first
+spec, and a spec asserting an exact count passed until a later section added a
+fixture that changed it — surfacing as a failure in a spec that had nothing to
+do with the change.
+
+`e2e/global-setup.js` now seeds one account per worker, each with the identical
+kitchen (three storage locations, one item per expiration state), plus a
+separate one for `auth.spec.js`. `e2e/accounts.js` derives which is which from
+`TEST_PARALLEL_INDEX`, the variable Playwright sets in every worker process.
+
+**You do not have to do anything to get this.** `e2e/firestore-admin.js`
+resolves the same account the same way, so `inventoryItems()`, `mealPlanEntry()`
+and friends already read the kitchen your browser is signed in to.
+
+**The one thing it does not isolate is recipes.** `recipes` is a single global
+collection by schema, not a per-user subcollection, so a recipe one worker
+creates is visible to all of them. A spec that creates a recipe still has to use
+a unique name.
+
+There is no `setup` project any more. Each worker signs itself in once, in a
+worker-scoped `storageState` fixture, and the logins run concurrently — so the
+wall-clock cost is the same single login it always was.
+
+A spec that needs to be signed *out* imports `signedOutTest` rather than `test`.
+A worker-scoped fixture cannot be overridden with `test.use()` from inside a
+file, so `test.use({ storageState: SIGNED_OUT_STATE })` on the normal test
+object is an error rather than a signed-out browser.
+
+### The empty kitchen, and no connection
+
+`e2e/empty-states.spec.js` covers the two states nobody writes a fixture for
+and everybody hits: the first five minutes after signing up, and a phone in a
+kitchen with thick walls.
+
+The `emptyPage` fixture signs in as `EMPTY_USER` — a cook with a profile and
+the default shelves and nothing on them, which is exactly what the sign-up
+function creates. It is shared across workers rather than per-worker, which is
+safe **only because those specs read**. If you add one that writes, give it a
+worker account instead.
+
+The offline tests use `context.setOffline(true)` and then navigate **by
+clicking**, not with `page.goto`. A goto is a full document request, so offline
+it depends on the service worker having activated — a different thing to test
+and a flakier one. Clicking is what a cook does and what a single-page app is
+for. Where a spec does need a document request offline, wait for
+`navigator.serviceWorker.controller` first.
+
+### What the mobile project runs
+
+Both browser projects used to run all 71 specs, which doubled the suite to pay
+for re-asserting, at 412px, business logic that has nothing to do with width.
+
+`mobile-chromium` now runs only the specs where being on a phone changes the
+answer: `mobile.spec.js` (tap targets, horizontal overflow and the bottom nav,
+across every page), `navigation.spec.js`, `auth.spec.js` and
+`whats-new.spec.js`. Everything else is desktop-only.
+
+If you add a spec whose subject is layout, tap size or navigation, add it to
+`testMatch` in `playwright.config.js`. If it is about what the app *does*,
+leave it out — the desktop run and the unit suite already cover that.
 
 ### Writing a spec that means something
 

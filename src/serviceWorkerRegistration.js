@@ -10,7 +10,7 @@ export function register(config) {
       return;
     }
 
-    window.addEventListener('load', () => {
+    const registerWorker = () => {
       const swUrl = `${process.env.PUBLIC_URL}/service-worker.js`;
 
       const wb = new Workbox(swUrl);
@@ -38,10 +38,19 @@ export function register(config) {
         }
       });
 
-      // Called when the new service worker takes control
+      // Called when the new service worker takes control.
+      //
+      // Only reload when this is an *update* taking over. The worker calls
+      // clientsClaim(), so the very first one to activate also fires this — and
+      // reloading there would throw away a page that had just finished loading,
+      // on everyone's first visit, for no reason. `isUpdate` is how workbox-window
+      // distinguishes the two.
       wb.addEventListener('controlling', (event) => {
-        console.log('New service worker controlling the page');
-        // Reload to ensure the new version is fully loaded
+        if (!event.isUpdate) {
+          console.log('Service worker took control for the first time');
+          return;
+        }
+        console.log('New service worker controlling the page; reloading');
         window.location.reload();
       });
 
@@ -88,7 +97,22 @@ export function register(config) {
         .catch((error) => {
           console.error('Service worker registration failed:', error);
         });
-    });
+    };
+
+    // Register now if the page has already finished loading — roadmap 9.1.
+    //
+    // This used to be an unconditional `addEventListener('load', ...)`. App.jsx
+    // calls register() from a useEffect, and React schedules effects after
+    // paint, so by the time this ran `load` had usually already fired. The
+    // listener was then attached to an event that would never happen again and
+    // the service worker was never registered at all — no precache, no offline,
+    // and an install prompt for an app that could not run offline. Nothing
+    // visibly broke, which is why it lasted.
+    if (document.readyState === 'complete') {
+      registerWorker();
+    } else {
+      window.addEventListener('load', registerWorker, { once: true });
+    }
   }
 }
 

@@ -2,7 +2,7 @@
 import { clientsClaim } from 'workbox-core';
 import { ExpirationPlugin } from 'workbox-expiration';
 import { precacheAndRoute, createHandlerBoundToURL } from 'workbox-precaching';
-import { registerRoute } from 'workbox-routing';
+import { registerRoute, setCatchHandler } from 'workbox-routing';
 import { StaleWhileRevalidate, CacheFirst, NetworkFirst } from 'workbox-strategies';
 import { CacheableResponsePlugin } from 'workbox-cacheable-response';
 import { BackgroundSyncPlugin } from 'workbox-background-sync';
@@ -47,22 +47,6 @@ registerRoute(
       new ExpirationPlugin({
         maxEntries: 100,
         maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
-      }),
-    ],
-  })
-);
-
-// Google Fonts - Cache First
-registerRoute(
-  ({ url }) =>
-    url.origin === 'https://fonts.googleapis.com' || url.origin === 'https://fonts.gstatic.com',
-  new CacheFirst({
-    cacheName: 'google-fonts-v1',
-    plugins: [
-      new CacheableResponsePlugin({ statuses: [0, 200] }),
-      new ExpirationPlugin({
-        maxEntries: 30,
-        maxAgeSeconds: 365 * 24 * 60 * 60, // 1 year
       }),
     ],
   })
@@ -156,7 +140,9 @@ self.addEventListener('activate', (event) => {
             // Delete old versions of our caches
             return (
               (cacheName.startsWith('static-assets-') && cacheName !== 'static-assets-v1') ||
-              (cacheName.startsWith('google-fonts-') && cacheName !== 'google-fonts-v1') ||
+              // Fonts are no longer fetched at all (src/styles/index.css), so every
+              // google-fonts cache is now stale, not just the older versions.
+              cacheName.startsWith('google-fonts-') ||
               (cacheName.startsWith('api-cache-') && cacheName !== 'api-cache-v1') ||
               (cacheName.startsWith('firebase-cache-') && cacheName !== 'firebase-cache-v1') ||
               (cacheName.startsWith('recipe-images-') && cacheName !== 'recipe-images-v1') ||
@@ -174,13 +160,27 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Show offline page when network fails for navigation requests
-self.addEventListener('fetch', (event) => {
-  if (event.request.mode === 'navigate') {
-    event.respondWith(
-      fetch(event.request).catch(() => {
-        return caches.match(OFFLINE_PAGE);
-      })
-    );
+// Offline fallback — roadmap 9.1
+//
+// This used to be a hand-written `fetch` listener that ran `fetch(request)` for
+// every navigation and fell back to the offline page. It did three things wrong.
+//
+// Workbox installs its own fetch listener the first time registerRoute() is
+// called, and that listener already answers navigations from the precached app
+// shell. Ours ran second, on an event that had already been responded to, so
+// every single navigation threw InvalidStateError inside the worker. It also
+// meant navigations went to the network first, throwing away the whole point of
+// precaching the shell — and because the shell was never the answer, the
+// offline page showed up in place of an app that was perfectly able to run
+// offline.
+//
+// setCatchHandler is the supported hook for the same intent: Workbox serves the
+// shell, and only if a route genuinely has no answer does the offline page
+// appear.
+setCatchHandler(async ({ request }) => {
+  if (request.destination === 'document') {
+    const cached = await caches.match(OFFLINE_PAGE);
+    if (cached) return cached;
   }
+  return Response.error();
 });

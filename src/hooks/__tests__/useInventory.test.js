@@ -23,6 +23,7 @@ import { AuthProvider } from '../useAuth';
 import * as fs from '../../test-utils/mocks/firestore';
 import * as authMock from '../../test-utils/mocks/auth';
 import { asDocs, makeItem, daysFromNow, makeUserProfile } from '../../test-utils/factories';
+import { expectHumanError } from '../../test-utils/humanErrors';
 
 const UID = 'test-uid';
 const INVENTORY_PATH = `users/${UID}/inventory`;
@@ -428,7 +429,7 @@ describe('useInventory subscription', () => {
       fs.__emitError(INVENTORY_PATH, new Error('permission-denied'));
     });
 
-    expect(result.current.error).toBe('Failed to load inventory');
+    expectHumanError(result.current.error, /kitchen/i);
     expect(result.current.loading).toBe(false);
   });
 
@@ -549,7 +550,8 @@ describe('useInventory.addItem', () => {
       response = await result.current.addItem(validItem);
     });
 
-    expect(response).toEqual({ success: false, error: 'quota exceeded' });
+    expect(response.success).toBe(false);
+    expectHumanError(response.error, /add that item/i);
   });
 });
 
@@ -829,6 +831,7 @@ describe('useInventory.deleteItem', () => {
       response = await result.current.deleteItem('item-1');
     });
 
-    expect(response).toEqual({ success: false, error: 'offline' });
+    expect(response.success).toBe(false);
+    expectHumanError(response.error, /remove that item/i);
   });
 });

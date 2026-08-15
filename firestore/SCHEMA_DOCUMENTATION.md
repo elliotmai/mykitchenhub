@@ -755,20 +755,44 @@ db.collection('recipes')
 4. Cache frequently accessed data (user preferences)
 5. Use subcollections for scalability (inventory, storage locations)
 
-### Indexes to Create
-```
-Collection: users/{userId}/inventory
-- locationType ASC, expiresAt ASC
-- locationId ASC, expiresAt ASC
-- normalized ASC
+### Indexes, and what each one is for
 
-Collection: recipes
-- source ASC, createdAt DESC
-- tags ARRAY, createdAt DESC
+`firestore/firestore.indexes.json` is the deployed list. It is JSON, so it
+cannot carry comments — this table is where a composite index says why it
+exists. **Add a row here whenever you add one there**, or the next person has no
+way to tell a load-bearing index from a leftover.
 
-Collection: users/{userId}/deliveries
-- deliveredAt DESC
-```
+Firestore creates a single-field index for every field automatically. A
+composite index is only needed when a query combines *different* fields — an
+equality or `array-contains` on one plus an `orderBy` on another. A range and an
+`orderBy` on the **same** field (`where('date','>=') … orderBy('date')`) needs
+nothing extra.
+
+| Index | Query that needs it | Where |
+| --- | --- | --- |
+| `recipes`: `source` ASC, `createdAt` DESC | `where('source','==','hellofresh')` + `orderBy('createdAt','desc')` | `src/hooks/useHelloFreshRecipes.js` |
+| `recipes`: `tags` CONTAINS, `createdAt` DESC | filtering the library by tag on the server | not yet issued — the recipes page filters tags in the browser |
+| `inventory`: `locationType` ASC, `expiresAt` ASC | expiring items within one kind of storage | not yet issued |
+| `inventory`: `locationId` ASC, `expiresAt` ASC | expiring items on one shelf | not yet issued |
+| `mealPlanEntries`: `date` ASC, `mealType` ASC | a day's meals in eating order, from the server | not yet issued — `sortEntries` orders in the browser |
+| `storageLocations`: `type` ASC, `order` ASC | locations of one type in display order | not yet issued |
+
+Queries the app issues today that need **no** composite index:
+
+| Query | Why it is covered |
+| --- | --- |
+| `mealPlanEntries` `date` range + `orderBy('date')` (`useMealPlan`) | range and order are the same field |
+| `inventory` `orderBy('name')` (`useInventory`) | single field |
+| `recipes` `orderBy('createdAt','desc')` (`useRecipes`) | single field |
+| `deliveries` `orderBy('deliveredAt','desc')` (`useDeliveries`) | single field |
+| `notifications` / `importHistory` `orderBy(...)` + `limit` | single field |
+| `inventory` `where('expiresAt','<=')` + `orderBy('expiresAt')` (`sendDailyWasteAlerts`) | range and order are the same field |
+| `recipes` `where('legacyId','==')` + `limit(1)` (`syncLegacyRecipes`) | single field |
+
+The six rows marked "not yet issued" were added ahead of the queries that would
+use them. They are cheap to keep — an unused index costs a little write
+throughput and nothing else — but do not assume an index exists because a
+similar one does. Check this table.
 
 ---
 

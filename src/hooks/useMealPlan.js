@@ -18,6 +18,7 @@ import {
   deleteDoc,
   setDoc,
   query,
+  where,
   orderBy,
   serverTimestamp,
 } from 'firebase/firestore';
@@ -25,6 +26,8 @@ import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../services/firebase';
 import { useAuth } from './useAuth';
 import useInventory from './useInventory';
+import { friendlyError } from '../utils/firebaseErrors';
+import { withRetry } from '../utils/retry';
 
 // ---------------------------------------------------------------------------
 // Day keys
@@ -366,8 +369,26 @@ const useMealPlan = () => {
       return;
     }
 
+    // Bounded to the week on screen — roadmap 9.2.
+    //
+    // This used to subscribe to every meal ever planned and filter to the
+    // current week in the browser. After a year of use that is ~1,000 documents
+    // read and held live to render seven day cards, growing every week and
+    // never shrinking. Nothing outside this hook sees the unfiltered list:
+    // every consumer goes through `entriesByDay`, and generatePlan matches on
+    // `planId === weekStart`.
+    //
+    // Day keys are ISO `YYYY-MM-DD` strings, so a lexicographic range is a
+    // chronological one. The range and the orderBy are on the same field, which
+    // the automatic single-field index already covers — no composite needed.
+    const weekEnd = shiftDayKey(weekStart, 6);
     const entriesRef = collection(db, 'users', user.uid, 'mealPlanEntries');
-    const q = query(entriesRef, orderBy('date', 'asc'));
+    const q = query(
+      entriesRef,
+      where('date', '>=', weekStart),
+      where('date', '<=', weekEnd),
+      orderBy('date', 'asc')
+    );
 
     const unsubscribe = onSnapshot(
       q,
@@ -378,13 +399,15 @@ const useMealPlan = () => {
       },
       (err) => {
         console.error('Error fetching meal plan:', err);
-        setError('Failed to load your meal plan');
+        setError(friendlyError(err, { action: 'load your meal plan' }));
         setLoading(false);
       }
     );
 
     return () => unsubscribe();
-  }, [user?.uid]);
+    // Re-subscribes when the cook moves week, which is the point: the query is
+    // now the week, not the whole history.
+  }, [user?.uid, weekStart]);
 
   // ── Week document listener ───────────────────────────────────────────────
   useEffect(() => {
@@ -487,7 +510,10 @@ const useMealPlan = () => {
         return { success: true };
       } catch (err) {
         console.error('Error scheduling meal:', err);
-        return { success: false, error: err.message };
+        return {
+          success: false,
+          error: friendlyError(err, { action: 'add that meal to your plan' }),
+        };
       }
     },
     [user?.uid]
@@ -505,7 +531,7 @@ const useMealPlan = () => {
         return { success: true };
       } catch (err) {
         console.error('Error rescheduling meal:', err);
-        return { success: false, error: err.message };
+        return { success: false, error: friendlyError(err, { action: 'move that meal' }) };
       }
     },
     [user?.uid]
@@ -519,7 +545,7 @@ const useMealPlan = () => {
         return { success: true };
       } catch (err) {
         console.error('Error removing meal:', err);
-        return { success: false, error: err.message };
+        return { success: false, error: friendlyError(err, { action: 'remove that meal' }) };
       }
     },
     [user?.uid]
@@ -568,7 +594,7 @@ const useMealPlan = () => {
         };
       } catch (err) {
         console.error('Error marking meal cooked:', err);
-        return { success: false, error: err.message };
+        return { success: false, error: friendlyError(err, { action: 'tick that meal off' }) };
       }
     },
     [user?.uid, entries, inventoryItems, updateItem]
@@ -589,7 +615,15 @@ const useMealPlan = () => {
 
     try {
       const callable = httpsCallable(functions, 'generateMealPlan');
-      const response = await callable({ weekStart, days: 7 });
+      // Retried on a transient failure — roadmap 9.3. Generating a week costs
+      // a Claude call and the cook is watching a spinner for it; giving up on
+      // a dropped connection means paying for it twice, by hand.
+      //
+      // Safe because the callable only *returns* a plan. Everything that
+      // writes — deleting the previous generation, adding the new entries —
+      // happens below, after this has settled, so a second attempt cannot
+      // double up anything.
+      const response = await withRetry(() => callable({ weekStart, days: 7 }));
       const result = response?.data || {};
       const generated = result.plan;
       // The function validates its own output, but this client is what actually

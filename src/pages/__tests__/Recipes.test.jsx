@@ -143,7 +143,7 @@ describe('Recipes page — cooking', () => {
 
     await user.click(screen.getByRole('button', { name: /I cooked Sheet Pan Salmon/i }));
 
-    expect(await screen.findByText(/offline/)).toBeInTheDocument();
+    expect(await screen.findByText(/couldn.t record that cook/i)).toBeInTheDocument();
   });
 });
 
@@ -239,7 +239,7 @@ describe('Recipes page — deleting', () => {
     await user.click(screen.getByRole('button', { name: /Delete Sheet Pan Salmon/i }));
     await confirmDelete(user);
 
-    expect(await screen.findByText(/permission-denied/)).toBeInTheDocument();
+    expect(await screen.findByText(/couldn.t delete that recipe/i)).toBeInTheDocument();
   });
 });
 
@@ -262,6 +262,6 @@ describe('Recipes page — failures', () => {
       fs.__emitError('recipes', new Error('permission-denied'));
     });
 
-    expect(screen.getByText(/failed to load recipes/i)).toBeInTheDocument();
+    expect(screen.getByText(/couldn.t load your recipes/i)).toBeInTheDocument();
   });
 });

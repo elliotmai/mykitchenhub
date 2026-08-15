@@ -17,6 +17,8 @@ import {
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
+import { authErrorMessage, friendlyError } from '../utils/firebaseErrors';
+import { withRetry } from '../utils/retry';
 
 /**
  * Auth Context
@@ -93,17 +95,25 @@ export const AuthProvider = ({ children }) => {
         throw new Error('REACT_APP_FIREBASE_FUNCTIONS_URL not configured');
       }
 
-      const response = await fetch(`${functionsUrl}/onUserCreated`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId,
-          email,
-          displayName: displayName || email.split('@')[0],
-        }),
-      });
+      // Signing up is the one moment a cook cannot retry for themselves — a
+      // failure here leaves an auth account with no kitchen behind it. The
+      // function is idempotent (it setDocs a known user id), so retrying a
+      // dropped connection is safe and worth doing before falling back.
+      const response = await withRetry(
+        () =>
+          fetch(`${functionsUrl}/onUserCreated`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              userId,
+              email,
+              displayName: displayName || email.split('@')[0],
+            }),
+          }),
+        { onRetry: ({ attempt }) => console.warn(`Retrying user setup (attempt ${attempt})`) }
+      );
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -150,10 +160,13 @@ export const AuthProvider = ({ children }) => {
             preferences: [],
             allergies: [],
           },
-          helloFresh: {
-            linked: false,
-            deliveryDays: [1, 3, 5],
-          },
+        },
+        // Top level, not nested under preferences: firestore.rules lists
+        // `helloFresh` among the fields a user document must have, and the
+        // nested copy meant this fallback wrote a profile the rules reject.
+        helloFresh: {
+          linked: false,
+          deliveryDays: [1, 3, 5],
         },
         stats: {
           totalRecipes: 0,
@@ -166,11 +179,15 @@ export const AuthProvider = ({ children }) => {
       setUserProfile(fallbackData);
 
       // Create basic storage locations as fallback
+      // `label`, not `name`. firestore.rules requires `label`, and the list and
+      // the location dropdown both render it — the `name` spelling gave a
+      // fallback-provisioned kitchen four shelves with no titles on them.
+      // Kept in step with functions/src/data/defaultLocations.js.
       const defaultLocations = [
-        { name: 'Main Fridge', type: 'fridge', icon: '🧊', color: '#3498db', order: 1 },
-        { name: 'Freezer', type: 'freezer', icon: '❄️', color: '#9b59b6', order: 2 },
-        { name: 'Pantry', type: 'pantry', icon: '🏺', color: '#e67e22', order: 3 },
-        { name: 'Counter', type: 'pantry', icon: '🍞', color: '#f39c12', order: 4 },
+        { label: 'Main Fridge', type: 'fridge', icon: '🧊', color: '#3498db', order: 1 },
+        { label: 'Freezer', type: 'freezer', icon: '❄️', color: '#9b59b6', order: 2 },
+        { label: 'Pantry', type: 'pantry', icon: '🏺', color: '#e67e22', order: 3 },
+        { label: 'Counter', type: 'pantry', icon: '🍞', color: '#f39c12', order: 4 },
       ];
 
       for (const location of defaultLocations) {
@@ -214,8 +231,9 @@ export const AuthProvider = ({ children }) => {
 
       return { success: true, user: newUser };
     } catch (err) {
-      setError(err.message);
-      return { success: false, error: getAuthErrorMessage(err.code) };
+      const message = authErrorMessage(err?.code);
+      setError(message);
+      return { success: false, error: message };
     }
   }, []);
 
@@ -228,8 +246,9 @@ export const AuthProvider = ({ children }) => {
       const { user: loggedInUser } = await signInWithEmailAndPassword(auth, email, password);
       return { success: true, user: loggedInUser };
     } catch (err) {
-      setError(err.message);
-      return { success: false, error: getAuthErrorMessage(err.code) };
+      const message = authErrorMessage(err?.code);
+      setError(message);
+      return { success: false, error: message };
     }
   }, []);
 
@@ -242,8 +261,9 @@ export const AuthProvider = ({ children }) => {
       await signOut(auth);
       return { success: true };
     } catch (err) {
-      setError(err.message);
-      return { success: false, error: err.message };
+      const message = friendlyError(err, { action: 'sign you out' });
+      setError(message);
+      return { success: false, error: message };
     }
   }, []);
 
@@ -256,8 +276,9 @@ export const AuthProvider = ({ children }) => {
       await sendPasswordResetEmail(auth, email);
       return { success: true };
     } catch (err) {
-      setError(err.message);
-      return { success: false, error: getAuthErrorMessage(err.code) };
+      const message = authErrorMessage(err?.code);
+      setError(message);
+      return { success: false, error: message };
     }
   }, []);
 
@@ -281,7 +302,7 @@ export const AuthProvider = ({ children }) => {
         setUserProfile((prev) => ({ ...prev, ...updates }));
         return { success: true };
       } catch (err) {
-        return { success: false, error: err.message };
+        return { success: false, error: friendlyError(err, { action: 'save your profile' }) };
       }
     },
     [user]
@@ -308,7 +329,7 @@ export const AuthProvider = ({ children }) => {
 
         return { success: true };
       } catch (err) {
-        return { success: false, error: getAuthErrorMessage(err.code) };
+        return { success: false, error: authErrorMessage(err?.code) };
       }
     },
     [user]
@@ -331,7 +352,7 @@ export const AuthProvider = ({ children }) => {
 
         return { success: true };
       } catch (err) {
-        return { success: false, error: getAuthErrorMessage(err.code) };
+        return { success: false, error: authErrorMessage(err?.code) };
       }
     },
     [user]
@@ -356,29 +377,6 @@ export const AuthProvider = ({ children }) => {
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-};
-
-/**
- * Get user-friendly error messages for Firebase Auth errors
- */
-const getAuthErrorMessage = (errorCode) => {
-  const errorMessages = {
-    'auth/email-already-in-use':
-      'This email is already registered. Please log in or use a different email.',
-    'auth/invalid-email': 'Please enter a valid email address.',
-    'auth/operation-not-allowed':
-      'Email/password accounts are not enabled. Please contact support.',
-    'auth/weak-password': 'Password is too weak. Please use at least 6 characters.',
-    'auth/user-disabled': 'This account has been disabled. Please contact support.',
-    'auth/user-not-found': 'No account found with this email. Please sign up first.',
-    'auth/wrong-password': 'Incorrect password. Please try again.',
-    'auth/too-many-requests': 'Too many failed attempts. Please try again later.',
-    'auth/network-request-failed': 'Network error. Please check your connection.',
-    'auth/invalid-credential': 'Invalid email or password. Please try again.',
-    'auth/requires-recent-login': 'Please log out and log back in to perform this action.',
-  };
-
-  return errorMessages[errorCode] || 'An unexpected error occurred. Please try again.';
 };
 
 export default useAuth;

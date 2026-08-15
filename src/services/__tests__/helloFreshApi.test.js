@@ -128,6 +128,32 @@ describe('importFromUrl', () => {
     });
   });
 
+  it('rides out a dropped connection rather than losing the pasted link', async () => {
+    // Roadmap 9.3. By the time this runs the cook has already found the recipe
+    // and pasted the link; a one-second signal blip should not send them back
+    // to the start. Both endpoints only read and transform, so a second attempt
+    // cannot duplicate anything.
+    global.fetch
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValue(okResponse({ status: 'success', recipe, warnings: [] }));
+
+    const result = await importFromUrl('https://www.hellofresh.com/recipes/x');
+
+    expect(result.recipe).toEqual(recipe);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry an answer, only a failure to get one', async () => {
+    // "That is not a HelloFresh recipe" is a response, not a dropped call.
+    global.fetch.mockResolvedValue(
+      errorResponse(404, { status: 'error', code: 'recipe-not-found', message: 'Nope.' })
+    );
+
+    await importFromUrl('https://www.hellofresh.com/recipes/x').catch(() => {});
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
   it('reports a transport failure as a network problem', async () => {
     global.fetch.mockRejectedValue(new TypeError('Failed to fetch'));
 

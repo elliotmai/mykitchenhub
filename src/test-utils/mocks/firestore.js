@@ -96,6 +96,15 @@ export const connectFirestoreEmulator = jest.fn();
 export const initializeFirestore = jest.fn(() => ({ __path: '', __refType: 'firestore' }));
 export const enableIndexedDbPersistence = jest.fn(() => Promise.resolve());
 
+// Offline cache builders (src/services/firebase.js). They only ever get handed
+// straight back to initializeFirestore, so recording the call is enough.
+export const persistentLocalCache = jest.fn((settings) => ({
+  __cache: 'persistent',
+  ...settings,
+}));
+export const persistentMultipleTabManager = jest.fn(() => ({ __tabManager: 'multi' }));
+export const memoryLocalCache = jest.fn(() => ({ __cache: 'memory' }));
+
 export const collection = jest.fn((base, ...segments) =>
   makeRef(joinFrom(base, segments), 'collection')
 );

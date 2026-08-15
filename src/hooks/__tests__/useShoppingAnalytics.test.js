@@ -25,6 +25,7 @@ import {
   makePurchase,
   makeUserProfile,
 } from '../../test-utils/factories';
+import { expectHumanError } from '../../test-utils/humanErrors';
 
 const UID = 'test-uid';
 const INVENTORY_PATH = `users/${UID}/inventory`;
@@ -602,7 +603,8 @@ describe('useShoppingAnalytics', () => {
         outcome = await result.current.recordPurchase('item-1', { quantity: 1 });
       });
 
-      expect(outcome).toEqual({ success: false, error: 'permission-denied' });
+      expect(outcome.success).toBe(false);
+      expectHumanError(outcome.error, /record that purchase/i);
     });
   });
 });

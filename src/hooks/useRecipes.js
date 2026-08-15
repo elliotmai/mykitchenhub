@@ -28,6 +28,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useAuth } from './useAuth';
+import { friendlyError } from '../utils/firebaseErrors';
 
 // ---------------------------------------------------------------------------
 // Contract constants — these mirror firestore.rules exactly.
@@ -312,7 +313,7 @@ const useRecipes = () => {
       },
       (err) => {
         console.error('Error fetching recipes:', err);
-        setError('Failed to load recipes');
+        setError(friendlyError(err, { action: 'load your recipes' }));
         setLoading(false);
       }
     );
@@ -341,7 +342,7 @@ const useRecipes = () => {
         return { success: true, id: ref?.id };
       } catch (err) {
         console.error('Error adding recipe:', err);
-        return { success: false, error: err.message };
+        return { success: false, error: friendlyError(err, { action: 'save that recipe' }) };
       }
     },
     [user?.uid]
@@ -382,7 +383,7 @@ const useRecipes = () => {
         return { success: true };
       } catch (err) {
         console.error('Error updating recipe:', err);
-        return { success: false, error: err.message };
+        return { success: false, error: friendlyError(err, { action: 'save your changes' }) };
       }
     },
     [user?.uid, recipes]
@@ -408,7 +409,7 @@ const useRecipes = () => {
         return { success: true };
       } catch (err) {
         console.error('Error deleting recipe:', err);
-        return { success: false, error: err.message };
+        return { success: false, error: friendlyError(err, { action: 'delete that recipe' }) };
       }
     },
     [user?.uid, recipes]
@@ -429,7 +430,7 @@ const useRecipes = () => {
         return { success: true };
       } catch (err) {
         console.error('Error recording a cook:', err);
-        return { success: false, error: err.message };
+        return { success: false, error: friendlyError(err, { action: 'record that cook' }) };
       }
     },
     [user?.uid]

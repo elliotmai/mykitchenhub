@@ -17,6 +17,7 @@ import {
 import { db } from '../services/firebase';
 import { useAuth } from './useAuth';
 import { lookupShelfLife } from './useIngredientMetadata';
+import { friendlyError } from '../utils/firebaseErrors';
 
 // ---------------------------------------------------------------------------
 // Shelf life defaults (days) by location type
@@ -303,7 +304,7 @@ const useInventory = () => {
       },
       (err) => {
         console.error('Error fetching inventory:', err);
-        setError('Failed to load inventory');
+        setError(friendlyError(err, { action: 'load your kitchen' }));
         setLoading(false);
       }
     );
@@ -371,7 +372,7 @@ const useInventory = () => {
         return { success: true };
       } catch (err) {
         console.error('Error adding inventory item:', err);
-        return { success: false, error: err.message };
+        return { success: false, error: friendlyError(err, { action: 'add that item' }) };
       }
     },
     [user?.uid]
@@ -436,7 +437,7 @@ const useInventory = () => {
         return { success: true };
       } catch (err) {
         console.error('Error updating inventory item:', err);
-        return { success: false, error: err.message };
+        return { success: false, error: friendlyError(err, { action: 'save that item' }) };
       }
     },
     [user?.uid, items]
@@ -454,7 +455,7 @@ const useInventory = () => {
         return { success: true };
       } catch (err) {
         console.error('Error deleting inventory item:', err);
-        return { success: false, error: err.message };
+        return { success: false, error: friendlyError(err, { action: 'remove that item' }) };
       }
     },
     [user?.uid]

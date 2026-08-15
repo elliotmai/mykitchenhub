@@ -14,6 +14,19 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.08.15.3',
+    date: 'August 2026',
+    items: [
+      '📱 The app now has a row of buttons along the bottom on your phone — kitchen, recipes, and what needs eating are one tap away instead of three.',
+      '👆 Every button, link and box is now big enough to hit with a thumb, including the fiddly little ones.',
+      '⚡ Opening the app is quicker: it now downloads only the page you asked for instead of all eight at once.',
+      '📶 It keeps working when the signal drops. Your kitchen is still there to look at, and anything you add is saved as soon as you are back.',
+      '🔔 The bell at the top finally shows how many things are about to go off. It had been stuck on nothing this whole time.',
+      '💬 When something goes wrong it now says what happened in plain English, instead of showing a code only a developer could read.',
+      '📷 Recipe photos are shrunk before they are saved, so adding one does not eat your data.',
+    ],
+  },
+  {
     version: '2026.08.15.2',
     date: 'August 2026',
     items: [

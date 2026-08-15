@@ -97,7 +97,13 @@ test.describe('inventory', () => {
     await expect(confirm).toBeVisible();
     await confirm.getByRole('button', { name: /^delete$/i }).click();
 
-    await expect(page.getByText(itemName)).not.toBeVisible();
+    // Wait for the dialog to actually go before looking for the item. Its own
+    // message quotes the item name, so a page-wide getByText matches both the
+    // card and the dialog asking about it — which fails on a strict-mode
+    // violation rather than on anything being wrong.
+    await expect(confirm).toBeHidden();
+
+    await expect(card).toHaveCount(0);
     await expectStoredInFirestore(itemName, false);
   });
 });

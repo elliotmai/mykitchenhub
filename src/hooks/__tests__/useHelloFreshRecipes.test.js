@@ -8,6 +8,7 @@ import { AuthProvider } from '../useAuth';
 import * as fs from '../../test-utils/mocks/firestore';
 import * as authMock from '../../test-utils/mocks/auth';
 import { asDocs, makeHelloFreshRecipe, makeUserProfile } from '../../test-utils/factories';
+import { expectHumanError } from '../../test-utils/humanErrors';
 
 const wrapper = ({ children }) => <AuthProvider>{children}</AuthProvider>;
 
@@ -51,7 +52,7 @@ it('reports a failure rather than showing an empty picker', async () => {
     fs.__emitError('recipes');
   });
 
-  expect(result.current.error).toMatch(/failed to load/i);
+  expectHumanError(result.current.error, /imported recipes/i);
   expect(result.current.loading).toBe(false);
 });
 

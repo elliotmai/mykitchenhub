@@ -152,7 +152,7 @@ describe('WasteAlerts page', () => {
       fs.__emit(`users/${UID}/storageLocations`, asDocs(LOCATIONS));
     });
 
-    expect(await screen.findByText(/Failed to load recipe suggestions/)).toBeInTheDocument();
+    expect(await screen.findByText(/couldn.t find recipe ideas/i)).toBeInTheDocument();
   });
 
   it('says so when past alerts will not load', async () => {
@@ -171,7 +171,7 @@ describe('WasteAlerts page', () => {
       fs.__emitError(`users/${UID}/notifications`, new Error('permission denied'));
     });
 
-    expect(await screen.findByText(/Failed to load notifications/)).toBeInTheDocument();
+    expect(await screen.findByText(/couldn.t load your alerts/i)).toBeInTheDocument();
     // The at-risk list is independent of that failure and must survive it.
     expect(screen.getByTestId('freezer-suggestions')).toBeInTheDocument();
   });
@@ -257,6 +257,6 @@ describe('WasteAlerts page', () => {
       fs.__emitError(`users/${UID}/inventory`, new Error('permission-denied'));
     });
 
-    expect(await screen.findByText('Failed to load inventory')).toBeInTheDocument();
+    expect(await screen.findByText(/couldn.t load your kitchen/i)).toBeInTheDocument();
   });
 });

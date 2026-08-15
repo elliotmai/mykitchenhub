@@ -31,6 +31,7 @@ import {
   hasExplicitShelfLife,
   resolveShelfLifeDays,
 } from './useInventory';
+import { friendlyError } from '../utils/firebaseErrors';
 
 /** Firestore's hard limit on writes in a single batch. */
 export const BATCH_SIZE = 500;
@@ -218,13 +219,15 @@ const useCSVImport = () => {
       } catch (err) {
         console.error('Error importing CSV rows:', err);
 
+        const reason = friendlyError(err, { action: 'finish that import' });
+
         const historyId = await recordImport({
           fileName,
           itemsImported: processed,
           itemsSkipped: skipped + (rows.length - processed),
           status: processed > 0 ? 'partial' : 'failed',
           errorCount: errors.length + 1,
-          errors: [...loggedErrors, { row: 0, message: err.message }].slice(0, MAX_LOGGED_ERRORS),
+          errors: [...loggedErrors, { row: 0, message: reason }].slice(0, MAX_LOGGED_ERRORS),
         });
 
         return {
@@ -232,10 +235,12 @@ const useCSVImport = () => {
           imported: processed,
           skipped,
           historyId,
+          // A part-finished import is the case worth being precise about: the
+          // cook needs to know how much landed before deciding what to retry.
           error:
             processed > 0
-              ? `Imported ${processed} of ${rows.length} items before failing: ${err.message}`
-              : err.message,
+              ? `Imported ${processed} of ${rows.length} items, then stopped. ${reason}`
+              : reason,
         };
       } finally {
         setImporting(false);

@@ -177,6 +177,75 @@ describe('signup', () => {
     });
   });
 
+  // ---------------------------------------------------------------------------
+  // The fallback path — roadmap 9.4
+  //
+  // When the Cloud Function is unreachable, signup provisions the kitchen from
+  // the browser instead. That copy of the shape had drifted from
+  // firestore.rules in two ways that only bite later: the kitchen it built
+  // rendered with blank location names, and every document it wrote would be
+  // rejected the moment step 10.2 turns production rules on.
+  // ---------------------------------------------------------------------------
+  describe('when the Cloud Function is unreachable', () => {
+    /** Fails the provisioning call however many times withRetry attempts it. */
+    const withFailingSetup = () => {
+      global.fetch = jest.fn(async () => ({
+        ok: false,
+        json: async () => ({ error: 'boom' }),
+      }));
+    };
+
+    const signUpAndCollectWrites = async () => {
+      withFailingSetup();
+      authMock.__setUser(null);
+      const { result } = renderAuth();
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      await act(async () => {
+        await result.current.signup('new@example.com', 'hunter2', 'New Cook');
+      });
+
+      return fs.setDoc.mock.calls.map(([ref, data]) => ({ path: fs.pathOf(ref), data }));
+    };
+
+    it('writes storage locations under `label`, the field the rules require', async () => {
+      const writes = await signUpAndCollectWrites();
+      const locations = writes.filter((w) => w.path.includes('/storageLocations/'));
+
+      expect(locations.length).toBeGreaterThan(0);
+      locations.forEach(({ data }) => {
+        expect(data).toHaveProperty('label');
+        expect(data.label).toBeTruthy();
+        // `name` is what the drift wrote; the list and dropdown both read
+        // `label`, so a fallback kitchen showed nameless shelves.
+        expect(data).not.toHaveProperty('name');
+      });
+    });
+
+    it('writes every field firestore.rules requires of a storage location', async () => {
+      const writes = await signUpAndCollectWrites();
+      const locations = writes.filter((w) => w.path.includes('/storageLocations/'));
+
+      locations.forEach(({ data }) => {
+        ['label', 'type', 'icon', 'color', 'order', 'isDefault', 'createdAt'].forEach((field) => {
+          expect(data).toHaveProperty(field);
+        });
+        expect(['fridge', 'freezer', 'pantry']).toContain(data.type);
+      });
+    });
+
+    it('puts helloFresh at the top level of the user document, where the rules look', async () => {
+      const writes = await signUpAndCollectWrites();
+      const profile = writes.find((w) => /^users\/[^/]+$/.test(w.path));
+
+      expect(profile).toBeDefined();
+      ['email', 'createdAt', 'preferences', 'helloFresh'].forEach((field) => {
+        expect(profile.data).toHaveProperty(field);
+      });
+      expect(profile.data.preferences).not.toHaveProperty('helloFresh');
+    });
+  });
+
   it('surfaces an already-registered email as a clear message', async () => {
     authMock.__setUser(null);
     authMock.createUserWithEmailAndPassword.mockRejectedValueOnce(

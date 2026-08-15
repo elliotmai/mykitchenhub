@@ -9,7 +9,6 @@
 
 const fs = require('fs');
 const { defineConfig, devices } = require('@playwright/test');
-const { STORAGE_STATE } = require('./e2e/storage-state');
 
 const PORT = process.env.E2E_PORT || 3000;
 const BASE_URL = `http://127.0.0.1:${PORT}`;
@@ -27,16 +26,18 @@ module.exports = defineConfig({
   testDir: './e2e',
   globalSetup: require.resolve('./e2e/global-setup'),
 
-  // Specs share one seeded account, so anything that writes must use a unique
-  // item name. With that rule held, they can safely run in parallel.
+  // Each worker signs in as its own seeded account (e2e/accounts.js), so specs
+  // no longer write into a kitchen the others are reading. The one exception is
+  // the `recipes` collection, which the schema makes global — a spec that
+  // creates a recipe must still use a unique name.
   fullyParallel: true,
   workers: process.env.CI ? 2 : 3,
 
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
 
-  // Signing in is done once by the `setup` project, so a spec's own budget only
-  // has to cover navigation and interaction.
+  // Signing in is done once per worker by the storageState fixture, so a spec's
+  // own budget only has to cover navigation and interaction.
   timeout: 60_000,
   expect: { timeout: 10_000 },
 
@@ -56,21 +57,34 @@ module.exports = defineConfig({
 
   projects: [
     {
-      // Signs in once and writes e2e/.auth/user.json.
-      name: 'setup',
-      testMatch: /auth\.setup\.js/,
-    },
-    {
       name: 'desktop-chromium',
-      use: { ...devices['Desktop Chrome'], launchOptions, storageState: STORAGE_STATE },
-      dependencies: ['setup'],
+      // mobile.spec.js is the one spec that only means anything on a phone —
+      // its whole subject is the layout, tap sizes and bottom bar that exist
+      // below the breakpoint. Running it at 1280px asserts nothing and fails
+      // on the nav bar it cannot find.
+      testIgnore: /mobile\.spec\.js/,
+      use: { ...devices['Desktop Chrome'], launchOptions },
     },
     {
       // The app is mobile-first (roadmap 9.1), so the mobile viewport is a
-      // first-class target rather than an afterthought.
+      // first-class target — but only for the specs where being on a phone
+      // changes the answer.
+      //
+      // Both projects used to run all 71 specs, which doubled the suite to pay
+      // for re-asserting, at 412px, business logic that has nothing to do with
+      // width: that a CSV row validates, that a shelf life is computed, that a
+      // meal lands in Firestore. Those are already covered by the desktop run
+      // and by 1500 unit tests.
+      //
+      // What genuinely differs on a phone is layout, tap size and navigation —
+      // and mobile.spec.js checks those across every page. Alongside it:
+      // navigation.spec.js (the routes render inside the mobile shell),
+      // auth.spec.js (the login form is the first thing a phone sees), and
+      // whats-new.spec.js (a modal whose footer is what the emulator banner
+      // used to sit on top of).
       name: 'mobile-chromium',
-      use: { ...devices['Pixel 7'], launchOptions, storageState: STORAGE_STATE },
-      dependencies: ['setup'],
+      testMatch: /(mobile|navigation|auth|whats-new)\.spec\.js/,
+      use: { ...devices['Pixel 7'], launchOptions },
     },
   ],
 

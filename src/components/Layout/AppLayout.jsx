@@ -4,8 +4,10 @@
 
 import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
+import useWasteAlerts from '../../hooks/useWasteAlerts';
 import Navbar from './Navbar';
 import Sidebar from './Sidebar';
+import MobileNav from './MobileNav';
 import Footer from './Footer';
 import { WhatsNew } from '../Common';
 import './AppLayout.css';
@@ -20,10 +22,17 @@ import './AppLayout.css';
  * - Scrollable main content area
  * - Footer at bottom of content
  *
- * @param {number} alertCount - Number of alerts to show in nav
+ * The alert count is worked out here rather than passed in. App.jsx used to
+ * render `<AppLayout alertCount={0} />` — a literal that had been there since
+ * the layout was written, so the bell badge and the sidebar banner could never
+ * appear however much food was going off (roadmap 9.4). Reading the same hook
+ * the waste alerts page reads means the three places that show the number
+ * cannot drift apart.
  */
-const AppLayout = ({ alertCount = 0 }) => {
+const AppLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { counts } = useWasteAlerts();
+  const alertCount = counts.total;
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
   const closeSidebar = () => setSidebarOpen(false);
@@ -43,6 +52,11 @@ const AppLayout = ({ alertCount = 0 }) => {
         </div>
         <Footer />
       </main>
+
+      {/* Bottom tab bar — phones only, hidden above the sidebar breakpoint.
+          The four pages a cook moves between are one tap away; "More" opens
+          the same drawer the hamburger does. */}
+      <MobileNav onOpenMore={toggleSidebar} alertCount={alertCount} />
 
       {/* Accumulating "What's New" popup */}
       <WhatsNew />

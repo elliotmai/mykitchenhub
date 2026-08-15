@@ -25,6 +25,7 @@ import { db } from '../services/firebase';
 import { useAuth } from './useAuth';
 import { byExpirySoonestFirst } from './useInventory';
 import { toDayKey } from './useMealPlan';
+import { friendlyError } from '../utils/firebaseErrors';
 
 /** Recipes pulled per lookup — plenty for matching, small enough to stay cheap. */
 export const RECIPE_FETCH_LIMIT = 200;
@@ -179,7 +180,7 @@ const useRecipeSuggestions = (expiringItems = []) => {
       } catch (err) {
         if (cancelled) return;
         console.error('Error loading recipes for suggestions:', err);
-        setError('Failed to load recipe suggestions');
+        setError(friendlyError(err, { action: 'find recipe ideas' }));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -238,7 +239,10 @@ const useRecipeSuggestions = (expiringItems = []) => {
         return { success: true };
       } catch (err) {
         console.error('Error adding recipe to meal plan:', err);
-        return { success: false, error: err.message };
+        return {
+          success: false,
+          error: friendlyError(err, { action: 'add that recipe to your plan' }),
+        };
       }
     },
     [user?.uid]

@@ -4,7 +4,13 @@
 
 import { initializeApp } from 'firebase/app';
 import { getAuth, connectAuthEmulator } from 'firebase/auth';
-import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
+import {
+  getFirestore,
+  initializeFirestore,
+  connectFirestoreEmulator,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from 'firebase/firestore';
 import { getStorage, connectStorageEmulator } from 'firebase/storage';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 
@@ -45,7 +51,34 @@ const app = initializeApp(firebaseConfig);
 
 // Initialize services
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+
+/**
+ * Firestore, with an on-disk cache — roadmap 9.3 ("handle offline").
+ *
+ * The default cache lives in memory only, so a phone that loses signal showed
+ * empty lists and spinners for data it had displayed a second earlier, and a
+ * tap on "Add" hung until the connection came back. A persistent cache serves
+ * those reads from IndexedDB and queues the writes until the network returns.
+ *
+ * `persistentMultipleTabManager` is what makes that safe with the app open in
+ * more than one tab; without it the second tab silently gets no persistence.
+ *
+ * IndexedDB is unavailable in some contexts — private windows on older Safari,
+ * and jsdom under the unit suite. Falling back to the in-memory default there
+ * keeps the app working rather than failing to boot over a cache.
+ */
+const startFirestore = () => {
+  try {
+    return initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    });
+  } catch (err) {
+    console.warn('Offline cache unavailable; continuing without it.', err);
+    return getFirestore(app);
+  }
+};
+
+export const db = startFirestore();
 export const storage = getStorage(app);
 export const functions = getFunctions(app);
 

@@ -17,6 +17,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useAuth } from './useAuth';
+import { friendlyError } from '../utils/firebaseErrors';
 
 /**
  * useStorageLocations Hook
@@ -58,7 +59,7 @@ const useStorageLocations = () => {
       },
       (err) => {
         console.error('Error fetching storage locations:', err);
-        setError('Failed to load storage locations');
+        setError(friendlyError(err, { action: 'load your storage locations' }));
         setLoading(false);
       }
     );
@@ -91,7 +92,10 @@ const useStorageLocations = () => {
         return { success: true };
       } catch (err) {
         console.error('Error creating storage location:', err);
-        return { success: false, error: err.message };
+        return {
+          success: false,
+          error: friendlyError(err, { action: 'add that storage location' }),
+        };
       }
     },
     [user?.uid, locations]
@@ -113,7 +117,10 @@ const useStorageLocations = () => {
         return { success: true };
       } catch (err) {
         console.error('Error updating storage location:', err);
-        return { success: false, error: err.message };
+        return {
+          success: false,
+          error: friendlyError(err, { action: 'save that storage location' }),
+        };
       }
     },
     [user?.uid]
@@ -152,7 +159,10 @@ const useStorageLocations = () => {
         return { success: true };
       } catch (err) {
         console.error('Error deleting storage location:', err);
-        return { success: false, error: err.message };
+        return {
+          success: false,
+          error: friendlyError(err, { action: 'remove that storage location' }),
+        };
       }
     },
     [user?.uid, locations]

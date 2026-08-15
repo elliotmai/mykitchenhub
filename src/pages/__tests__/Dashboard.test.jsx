@@ -256,7 +256,7 @@ describe('Dashboard', () => {
     // A dash, not a zero: "no meals planned" and "we could not read your meal
     // plan" are different things to tell someone deciding what to cook.
     expect(screen.getAllByTestId('stat-card-value')[3]).toHaveTextContent('—');
-    expect(screen.getByText(/failed to load your meal plan/i)).toBeInTheDocument();
+    expect(screen.getByText(/couldn.t load your meal plan/i)).toBeInTheDocument();
   });
 
   it('dashes the recipe tile when the library cannot be read', async () => {
@@ -272,7 +272,7 @@ describe('Dashboard', () => {
     });
 
     await waitFor(() => expect(screen.getAllByTestId('stat-card-value')[2]).toHaveTextContent('—'));
-    expect(screen.getByText(/failed to load recipes/i)).toBeInTheDocument();
+    expect(screen.getByText(/couldn.t load your recipes/i)).toBeInTheDocument();
     // The tiles that did load still show their numbers.
     expect(screen.getAllByTestId('stat-card-value')[0]).toHaveTextContent('0');
   });
@@ -292,7 +292,7 @@ describe('Dashboard', () => {
     await waitFor(() =>
       expect(
         screen.getByText(
-          /failed to load inventory\. failed to load recipes\. failed to load your meal plan\./i
+          /couldn.t load your kitchen\..*couldn.t load your recipes\..*couldn.t load your meal plan\./i
         )
       ).toBeInTheDocument()
     );
@@ -315,7 +315,7 @@ describe('Dashboard', () => {
     });
 
     expect(
-      screen.getByText(/failed to load inventory\. the numbers below may be out of date/i)
+      screen.getByText(/couldn.t load your kitchen.*the numbers below may be out of date/i)
     ).toBeInTheDocument();
   });
 

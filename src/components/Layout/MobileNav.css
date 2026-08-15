@@ -1,0 +1,115 @@
+/* ==========================================================================
+   Mobile bottom navigation — roadmap 9.1
+   ========================================================================== */
+
+.mobile-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: var(--mkh-z-fixed);
+  background-color: var(--mkh-bg-card);
+  border-top: 1px solid var(--mkh-border);
+  /* Above the home indicator on a notched phone. src/pwa-safe-area.css sets
+     the fallback for browsers without env(). */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  box-shadow: 0 -1px 3px rgb(0 0 0 / 8%);
+}
+
+/* Desktop keeps the permanent sidebar; a second copy of the same links there
+   would be noise, so the bar simply does not exist above the breakpoint. */
+@media (min-width: 992px) {
+  .mobile-nav {
+    display: none;
+  }
+}
+
+.mobile-nav__list {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-around;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mobile-nav__item {
+  flex: 1 1 0;
+  /* 0 lets a long label shrink its tab instead of pushing the row wider than
+     the screen — the horizontal-overflow check in e2e/mobile.spec.js is what
+     would otherwise catch this on a 320px phone. */
+  min-width: 0;
+}
+
+.mobile-nav__link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+  /* The 44px floor, stated here rather than left to touch-targets.css: this
+     bar is the one place where the whole control *is* the tap target. */
+  min-height: 56px;
+  padding: var(--mkh-spacing-xs) 2px;
+  border: none;
+  background: none;
+  color: var(--mkh-text-secondary);
+  text-decoration: none;
+  transition: color var(--mkh-transition-fast);
+}
+
+.mobile-nav__link:hover,
+.mobile-nav__link:focus-visible {
+  color: var(--mkh-primary);
+}
+
+.mobile-nav__link--active {
+  color: var(--mkh-primary);
+  font-weight: var(--mkh-font-weight-semibold);
+}
+
+.mobile-nav__icon-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobile-nav__label {
+  font-size: var(--mkh-font-size-tiny);
+  line-height: 1.1;
+  /* Truncate rather than wrap: a two-line label makes one tab taller than the
+     rest and the whole bar jumps. */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-nav__badge {
+  position: absolute;
+  top: -4px;
+  right: -8px;
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: var(--mkh-radius-full);
+  background-color: var(--mkh-danger-text);
+  color: #fff;
+  font-size: 10px;
+  font-weight: var(--mkh-font-weight-semibold);
+  line-height: 16px;
+  text-align: center;
+}
+
+/* --------------------------------------------------------------------------
+   Room for the bar
+
+   Without this the bar sits on top of whatever is at the bottom of the page —
+   the footer, the last row of a list, the submit button of a long form.
+   -------------------------------------------------------------------------- */
+@media (max-width: 991.98px) {
+  .app-layout__main {
+    padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  }
+}

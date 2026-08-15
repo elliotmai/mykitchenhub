@@ -25,6 +25,7 @@ import { AuthProvider } from '../useAuth';
 import * as fs from '../../test-utils/mocks/firestore';
 import * as authMock from '../../test-utils/mocks/auth';
 import { asDocs, makeRecipe, makeUserProfile, daysFromNow } from '../../test-utils/factories';
+import { expectHumanError } from '../../test-utils/humanErrors';
 
 const UID = 'test-uid';
 const RECIPES_PATH = 'recipes';
@@ -454,7 +455,7 @@ describe('useRecipes subscription', () => {
       fs.__emitError(RECIPES_PATH, new Error('permission-denied'));
     });
 
-    expect(result.current.error).toBe('Failed to load recipes');
+    expectHumanError(result.current.error, /recipes/i);
     expect(result.current.loading).toBe(false);
   });
 
@@ -554,7 +555,8 @@ describe('useRecipes.addRecipe', () => {
       response = await result.current.addRecipe(input);
     });
 
-    expect(response).toEqual({ success: false, error: 'permission-denied' });
+    expect(response.success).toBe(false);
+    expectHumanError(response.error, /save that recipe/i);
   });
 });
 
@@ -677,7 +679,8 @@ describe('useRecipes.deleteRecipe', () => {
       response = await result.current.deleteRecipe('r1');
     });
 
-    expect(response).toEqual({ success: false, error: 'offline' });
+    expect(response.success).toBe(false);
+    expectHumanError(response.error, /delete that recipe/i);
   });
 });
 
@@ -716,7 +719,8 @@ describe('useRecipes.markCooked', () => {
       response = await result.current.markCooked('r1');
     });
 
-    expect(response).toEqual({ success: false, error: 'offline' });
+    expect(response.success).toBe(false);
+    expectHumanError(response.error, /record that cook/i);
   });
 });
 

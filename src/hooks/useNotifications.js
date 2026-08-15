@@ -19,6 +19,7 @@ import {
 
 import { db } from '../services/firebase';
 import { useAuth } from './useAuth';
+import { friendlyError } from '../utils/firebaseErrors';
 
 /** How many notifications to keep on screen. */
 export const NOTIFICATION_PAGE_SIZE = 25;
@@ -48,7 +49,7 @@ const useNotifications = ({ type = null, max = NOTIFICATION_PAGE_SIZE } = {}) =>
       },
       (err) => {
         console.error('Error fetching notifications:', err);
-        setError('Failed to load notifications');
+        setError(friendlyError(err, { action: 'load your alerts' }));
         setLoading(false);
       }
     );
@@ -73,7 +74,7 @@ const useNotifications = ({ type = null, max = NOTIFICATION_PAGE_SIZE } = {}) =>
         return { success: true };
       } catch (err) {
         console.error('Error marking notification read:', err);
-        return { success: false, error: err.message };
+        return { success: false, error: friendlyError(err, { action: 'mark that as read' }) };
       }
     },
     [user?.uid]
@@ -87,7 +88,7 @@ const useNotifications = ({ type = null, max = NOTIFICATION_PAGE_SIZE } = {}) =>
         return { success: true };
       } catch (err) {
         console.error('Error dismissing notification:', err);
-        return { success: false, error: err.message };
+        return { success: false, error: friendlyError(err, { action: 'dismiss that alert' }) };
       }
     },
     [user?.uid]

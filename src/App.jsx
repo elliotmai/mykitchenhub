@@ -2,7 +2,7 @@
 // Main application component with routing and authentication
 // MyKitchenHub - Recipe & Inventory Management PWA
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 // Styles
@@ -11,13 +11,16 @@ import './styles/index.css';
 
 // Providers
 import { AuthProvider } from './hooks/useAuth';
-import { ToastProvider, ErrorBoundary } from './components/Common';
+import { ToastProvider, ErrorBoundary, PageLoader } from './components/Common';
 
 // Layout
 import { AppLayout } from './components/Layout';
 
 // Auth Components
 import { ProtectedRoute, PublicOnlyRoute } from './components/Auth';
+
+// Route-level code splitting
+import { lazyWithRetry, clearChunkReloadGuard } from './utils/lazyWithRetry';
 
 // PWA Components
 import InstallPrompt from './components/InstallPrompt';
@@ -28,17 +31,34 @@ import OfflineIndicator from './components/OfflineIndicator';
 import * as serviceWorkerRegistration from './serviceWorkerRegistration';
 
 // Pages
-import {
-  Login,
-  Dashboard,
-  Inventory,
-  Recipes,
-  MealPlan,
-  HelloFresh,
-  Analytics,
-  Settings,
-  WasteAlerts,
-} from './pages';
+//
+// Login stays eager: it is what a signed-out visitor sees first, and making the
+// very first paint wait on a second network round trip is the one place code
+// splitting costs more than it saves.
+//
+// Imported from its own module rather than from './pages'. That barrel
+// re-exports all ten pages statically, so pulling Login through it drags every
+// other page into the initial chunk — and the lazy() calls below then resolve
+// to modules that are already there, splitting nothing at all.
+import Login from './pages/Login';
+
+// Everything behind the sign-in gate is split into its own chunk — roadmap 9.2.
+// All eight pages used to land in the initial bundle, so opening the app
+// downloaded and parsed the analytics charts, the CSV parser and the HelloFresh
+// importer before it could show the dashboard. Nobody visits eight pages in a
+// session; most visits are the dashboard and the inventory.
+//
+// `import()` here rather than in src/pages/index.js on purpose: that barrel is
+// what the unit suite imports synchronously, and a lazy barrel would make every
+// component test await a chunk that Jest does not split.
+const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'), 'Dashboard');
+const Inventory = lazyWithRetry(() => import('./pages/Inventory'), 'Inventory');
+const Recipes = lazyWithRetry(() => import('./pages/Recipes'), 'Recipes');
+const MealPlan = lazyWithRetry(() => import('./pages/MealPlan'), 'MealPlan');
+const HelloFresh = lazyWithRetry(() => import('./pages/HelloFresh'), 'HelloFresh');
+const Analytics = lazyWithRetry(() => import('./pages/Analytics'), 'Analytics');
+const Settings = lazyWithRetry(() => import('./pages/Settings'), 'Settings');
+const WasteAlerts = lazyWithRetry(() => import('./pages/WasteAlerts'), 'WasteAlerts');
 
 /**
  * App Routes Component
@@ -47,41 +67,47 @@ import {
  */
 const AppRoutes = () => {
   return (
-    <Routes>
-      {/* Public Routes */}
-      <Route
-        path="/login"
-        element={
-          <PublicOnlyRoute>
-            <Login />
-          </PublicOnlyRoute>
-        }
-      />
+    // One Suspense boundary around the whole route table rather than one per
+    // route: the fallback is the same in every case, and nesting it inside
+    // AppLayout would tear down the navbar and sidebar on each first visit to a
+    // page — the chrome should stay put while the page itself arrives.
+    <Suspense fallback={<PageLoader text="Loading…" />}>
+      <Routes>
+        {/* Public Routes */}
+        <Route
+          path="/login"
+          element={
+            <PublicOnlyRoute>
+              <Login />
+            </PublicOnlyRoute>
+          }
+        />
 
-      {/* Protected Routes with Layout */}
-      <Route
-        element={
-          <ProtectedRoute>
-            <AppLayout alertCount={0} />
-          </ProtectedRoute>
-        }
-      >
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/inventory" element={<Inventory />} />
-        <Route path="/recipes" element={<Recipes />} />
-        <Route path="/meal-plan" element={<MealPlan />} />
-        <Route path="/hellofresh" element={<HelloFresh />} />
-        <Route path="/analytics" element={<Analytics />} />
-        <Route path="/waste-alerts" element={<WasteAlerts />} />
-        <Route path="/settings" element={<Settings />} />
-      </Route>
+        {/* Protected Routes with Layout */}
+        <Route
+          element={
+            <ProtectedRoute>
+              <AppLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/inventory" element={<Inventory />} />
+          <Route path="/recipes" element={<Recipes />} />
+          <Route path="/meal-plan" element={<MealPlan />} />
+          <Route path="/hellofresh" element={<HelloFresh />} />
+          <Route path="/analytics" element={<Analytics />} />
+          <Route path="/waste-alerts" element={<WasteAlerts />} />
+          <Route path="/settings" element={<Settings />} />
+        </Route>
 
-      {/* Default Redirect */}
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        {/* Default Redirect */}
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
-      {/* 404 - Redirect to Dashboard */}
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
-    </Routes>
+        {/* 404 - Redirect to Dashboard */}
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </Suspense>
   );
 };
 
@@ -113,6 +139,10 @@ const App = () => {
 
   // Register service worker on mount
   useEffect(() => {
+    // The app booted, so whatever stale chunk forced a reload is behind us.
+    // Arming the guard again means the *next* deploy also gets its one reload.
+    clearChunkReloadGuard();
+
     serviceWorkerRegistration.register({
       onUpdate: (wb) => {
         // New content is available - store the workbox instance

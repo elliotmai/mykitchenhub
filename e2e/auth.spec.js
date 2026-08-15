@@ -1,9 +1,15 @@
 // Authentication and route protection, against a real build + emulators.
 //
-// This is the one spec that exercises signing in, so it opts out of the shared
-// signed-in storage state that every other spec relies on.
+// This is the one spec that exercises signing in, so it uses `signedOutTest`
+// rather than the usual `test`: the latter's storageState is worker-scoped, and
+// a spec cannot override a worker fixture from inside the file — nor should a
+// spec about the login form arrive already logged in.
+//
+// It also has its own account (e2e/accounts.js), because the wrong-password
+// test below earns real `auth/too-many-requests` lockouts and those should not
+// land on an account another worker is relying on.
 
-const { test, expect, login, TEST_USER } = require('./fixtures');
+const { signedOutTest: test, expect, login, TEST_USER } = require('./fixtures');
 const { SIGNED_OUT_STATE } = require('./storage-state');
 
 test.use({ storageState: SIGNED_OUT_STATE });

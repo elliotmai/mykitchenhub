@@ -1,0 +1,133 @@
+/* ==========================================================================
+   Touch targets — roadmap 9.1
+
+   Apple's HIG and Android's Material both land on ~44px as the smallest
+   comfortable tap target. e2e/mobile.spec.js measures every interactive
+   element on every page against that number and fails on anything under it,
+   so this file is what that test holds in place rather than decoration.
+
+   Scoped to coarse pointers and narrow viewports. On a desktop with a mouse a
+   40px button is fine and a 44px one is just fatter, so nothing here applies
+   there — which also keeps the desktop screenshots stable.
+
+   `(pointer: coarse)` catches a tablet held in landscape, which is wider than
+   the breakpoint but still tapped with a thumb.
+   ========================================================================== */
+
+@media (pointer: coarse), (max-width: 991.98px) {
+  /* ------------------------------------------------------------------------
+     Bootstrap's buttons
+
+     `.btn` is 40px tall by default and `.btn-sm` is 31px. Both are used all
+     over the app — "Import CSV", "Add Recipe", "Freeze All", the modal footers.
+     One rule covers every one of them, including the ones added later.
+     ------------------------------------------------------------------------ */
+  .btn,
+  .btn-sm,
+  .btn-lg,
+  button:not(.btn-close),
+  [role='button'],
+  input[type='button'],
+  input[type='submit'],
+  input[type='reset'] {
+    min-height: 44px;
+    /* Width as well as height. An icon-only button has no text to stretch it —
+       the "remove this meal" control on a day card is a 13px trash icon with
+       `p-0`, so height alone left it 13px wide and 44px tall. Harmless on a
+       button with a label, which is already wider than this. */
+    min-width: 44px;
+  }
+
+  /* Form controls are tapped to focus, and a 38px input is just as easy to
+     miss as a 38px button. */
+  .form-control,
+  .form-select,
+  input:not([type='checkbox']):not([type='radio']):not([type='hidden']),
+  select,
+  textarea {
+    min-height: 44px;
+  }
+
+  /* A checkbox or radio is drawn at 1em; the label next to it is the real
+     target, so give the pair enough height rather than a huge tick box. */
+  .form-check {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+
+  .form-check-input {
+    min-width: 22px;
+    min-height: 22px;
+  }
+
+  /* ------------------------------------------------------------------------
+     Icon-only controls
+
+     These have no text to stretch them, so they need width as well as height.
+     ------------------------------------------------------------------------ */
+  .app-navbar__toggle,
+  .app-navbar__icon-btn,
+  .app-navbar__user-btn,
+  .app-sidebar__close,
+  .btn-close {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* The brand is a link, so `button` above does not reach it. */
+  .app-navbar__brand {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* ------------------------------------------------------------------------
+     Navigation lists
+
+     Sidebar rows were 42px — close enough to look right and just short enough
+     to mis-tap the row above.
+     ------------------------------------------------------------------------ */
+  .app-sidebar__link,
+  .nav-link,
+  .list-group-item-action,
+  .dropdown-item {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+
+  /* ------------------------------------------------------------------------
+     Small text links
+
+     The footer's feedback link was 19px tall — a line of tiny text with no
+     padding at all. Padding rather than font-size: it stays visually quiet
+     while becoming something a thumb can actually land on.
+
+     `.touch-link` is the opt-in for a link that lives inside a sentence, where
+     turning it into a block would break the line. inline-flex keeps it in the
+     flow of the paragraph and only adds leading around it.
+     ------------------------------------------------------------------------ */
+  .app-footer__feedback,
+  .touch-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: var(--mkh-spacing-xs) 0;
+  }
+
+  /* ------------------------------------------------------------------------
+     Filter chips
+
+     The recipe tag filters were 20px pills. They stay pills — just ones you
+     can hit. The row wraps, so the extra height costs nothing but a little
+     vertical space on a page that scrolls anyway.
+     ------------------------------------------------------------------------ */
+  .badge.btn,
+  .recipe-list__tag,
+  .recipe-list__tag-filter {
+    min-height: 44px;
+    padding-inline: var(--mkh-spacing-md);
+  }
+}

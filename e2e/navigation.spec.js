@@ -70,4 +70,21 @@ test.describe('progressive web app', () => {
     expect(response.ok()).toBe(true);
     expect(response.headers()['content-type']).toContain('javascript');
   });
+
+  test('and the app actually registers it, so the precache exists', async ({
+    authedPage: page,
+  }) => {
+    // Shipping the file is not the same as using it. register() attached its
+    // listener to a `load` event that had already fired, so the worker was
+    // never registered — the file was served, the build job's check passed, and
+    // the app had no precache and no offline at all (roadmap 9.1).
+    await expect(page.locator('.app-footer__version')).toBeVisible();
+
+    await page.waitForFunction(() => navigator.serviceWorker?.controller != null, undefined, {
+      timeout: 30_000,
+    });
+
+    const scope = await page.evaluate(() => navigator.serviceWorker.controller.scriptURL);
+    expect(scope).toContain('/service-worker.js');
+  });
 });

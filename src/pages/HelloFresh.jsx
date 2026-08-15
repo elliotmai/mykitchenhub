@@ -183,7 +183,10 @@ const HelloFresh = () => {
         {!draft && recipes.length > 0 && (
           <p className="text-muted small mt-3 mb-0">
             {recipes.length} HelloFresh recipe{recipes.length === 1 ? '' : 's'} imported so far —{' '}
-            <Link to="/recipes">see them all</Link>.
+            <Link to="/recipes" className="touch-link">
+              see them all
+            </Link>
+            .
           </p>
         )}
       </section>

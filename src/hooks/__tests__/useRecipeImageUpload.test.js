@@ -12,6 +12,7 @@ import useRecipeImageUpload, {
   validateImage,
 } from '../useRecipeImageUpload';
 import * as storage from '../../test-utils/mocks/storage';
+import { expectHumanError } from '../../test-utils/humanErrors';
 
 /** A File-alike, since jsdom's File constructor cannot fake a large size. */
 const makeFile = ({ name = 'salmon.jpg', type = 'image/jpeg', size = 1024 } = {}) => ({
@@ -141,7 +142,7 @@ describe('useRecipeImageUpload.upload', () => {
     });
 
     expect(response.success).toBe(false);
-    expect(response.error).toMatch(/could not upload/i);
+    expectHumanError(response.error, /photo/i);
     expect(result.current.uploading).toBe(false);
   });
 
