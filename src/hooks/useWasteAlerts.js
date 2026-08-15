@@ -12,6 +12,8 @@ import useInventory, {
   byExpirySoonestFirst,
   getDaysUntilExpiration,
   getExpirationStatus,
+  isCustomShelfLife,
+  isExpiringWithin,
   resolveShelfLifeDays,
 } from './useInventory';
 import useStorageLocations from './useStorageLocations';
@@ -23,12 +25,28 @@ export const DEFAULT_ALERT_WINDOW_DAYS = 5;
 /** Freezing something that already keeps this long is not worth suggesting. */
 export const MIN_DAYS_GAINED_BY_FREEZING = 7;
 
+/** Below this much of something, splitting it in half is not a useful offer. */
+export const MIN_SPLITTABLE_QUANTITY = 2;
+
+/**
+ * How long this item will keep once frozen — the number the freeze action
+ * will actually write.
+ *
+ * A shelf life the cook typed in is theirs, and `useInventory.updateItem`
+ * carries it across a move rather than overwriting it. So the suggestion has
+ * to quote that same number: quoting the table's instead promised "+263 days"
+ * on a jar the cook had marked as keeping three, and freezing it then moved
+ * the date by three days, not 263.
+ */
+const daysOnceFrozen = (item) =>
+  isCustomShelfLife(item) ? Number(item.shelfLifeDays) : resolveShelfLifeDays(item.name, 'freezer');
+
 /**
  * Can this item be frozen, and what would it buy?
  *
- * Returns null when freezing makes no sense: the item is already frozen, the
- * shelf-life table says the ingredient does not freeze (lettuce turns to
- * slime), or the gain is too small to be worth a tap.
+ * Returns null when freezing makes no sense: the item is already frozen, it is
+ * already past its date, the shelf-life table says the ingredient does not
+ * freeze (lettuce turns to slime), or the gain is too small to be worth a tap.
  */
 export const getFreezerBenefit = (item) => {
   if (!item || item.locationType === 'freezer') return null;
@@ -36,18 +54,27 @@ export const getFreezerBenefit = (item) => {
   const known = lookupShelfLife(item.name, 'freezer');
   if (known === null) return null; // the table knows it, and says don't
 
-  const frozenDays = resolveShelfLifeDays(item.name, 'freezer');
   const daysLeft = getDaysUntilExpiration(item.expiresAt);
-  const remaining = daysLeft === null ? 0 : Math.max(daysLeft, 0);
-  const daysGained = frozenDays - remaining;
 
+  // Freezing preserves food; it does not un-expire it. Offering "+270 days" on
+  // a chicken breast that went off yesterday is both wrong and, because the
+  // list is sorted by days gained, the loudest thing on the page.
+  if (daysLeft === null || daysLeft < 0) return null;
+
+  const frozenDays = daysOnceFrozen(item);
+  if (!Number.isFinite(frozenDays)) return null;
+
+  const daysGained = frozenDays - daysLeft;
   if (daysGained < MIN_DAYS_GAINED_BY_FREEZING) return null;
 
-  return { frozenDays, daysLeft: remaining, daysGained };
+  return { frozenDays, daysLeft, daysGained };
 };
 
 /** Half of a quantity, rounded to something a kitchen scale could read. */
 export const halfOf = (quantity) => Math.round((Number(quantity) / 2) * 100) / 100;
+
+/** Is there enough of this to be worth splitting between now and the freezer? */
+export const canSplitQuantity = (quantity) => Number(quantity) >= MIN_SPLITTABLE_QUANTITY;
 
 /**
  * useWasteAlerts
@@ -60,15 +87,7 @@ const useWasteAlerts = ({ withinDays = DEFAULT_ALERT_WINDOW_DAYS } = {}) => {
   const { locations, loading: locationsLoading } = useStorageLocations();
 
   const expiringItems = useMemo(
-    () =>
-      items
-        .filter((item) => {
-          // Already-expired items have a negative day count, so they are
-          // caught by the same comparison.
-          const days = getDaysUntilExpiration(item.expiresAt);
-          return days !== null && days <= withinDays;
-        })
-        .sort(byExpirySoonestFirst),
+    () => items.filter((item) => isExpiringWithin(item, withinDays)).sort(byExpirySoonestFirst),
     [items, withinDays]
   );
 
@@ -122,6 +141,12 @@ const useWasteAlerts = ({ withinDays = DEFAULT_ALERT_WINDOW_DAYS } = {}) => {
       if (!freezerLocation) {
         return { success: false, error: 'Add a freezer in Settings first.' };
       }
+      // Say so rather than reporting a success that changed nothing:
+      // `updateItem` treats a re-sent location as no move, so the expiry would
+      // not budge and the cook would be left wondering what the tap did.
+      if (item?.locationType === 'freezer') {
+        return { success: false, error: 'That is already in the freezer.' };
+      }
       return updateItem(item.id, {
         locationId: freezerLocation.id,
         locationType: 'freezer',
@@ -140,9 +165,16 @@ const useWasteAlerts = ({ withinDays = DEFAULT_ALERT_WINDOW_DAYS } = {}) => {
         return { success: false, error: 'Add a freezer in Settings first.' };
       }
 
+      if (item?.locationType === 'freezer') {
+        return { success: false, error: 'That is already in the freezer.' };
+      }
+
       const quantity = Number(item.quantity);
       const half = halfOf(quantity);
-      if (!quantity || half <= 0 || quantity < 2) {
+      // Covers a quantity of 0, 1, a fraction, and anything unparseable — all
+      // of which would otherwise write a second document with a useless
+      // quantity, or one the create rule (`quantity > 0`) would reject.
+      if (!Number.isFinite(quantity) || !canSplitQuantity(quantity) || half <= 0) {
         return { success: false, error: 'There is not enough here to split. Freeze all instead.' };
       }
 
@@ -156,6 +188,10 @@ const useWasteAlerts = ({ withinDays = DEFAULT_ALERT_WINDOW_DAYS } = {}) => {
         locationId: freezerLocation.id,
         locationType: 'freezer',
         notes: item.notes,
+        // A shelf life the cook chose travels with the food they chose it for;
+        // without this the frozen half silently reverted to the table default
+        // and the two halves expired on different dates.
+        shelfLifeDays: isCustomShelfLife(item) ? Number(item.shelfLifeDays) : undefined,
       });
       if (!frozen?.success) return frozen;
 

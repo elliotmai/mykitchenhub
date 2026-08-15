@@ -4,11 +4,7 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import React from 'react';
 
-import useWasteAlerts, {
-  getFreezerBenefit,
-  halfOf,
-  MIN_DAYS_GAINED_BY_FREEZING,
-} from '../useWasteAlerts';
+import useWasteAlerts, { canSplitQuantity, getFreezerBenefit, halfOf } from '../useWasteAlerts';
 import { AuthProvider } from '../useAuth';
 import * as fs from '../../test-utils/mocks/firestore';
 import * as authMock from '../../test-utils/mocks/auth';
@@ -87,12 +83,67 @@ describe('getFreezerBenefit', () => {
     expect(benefit).toBeNull();
   });
 
-  it('treats an already-expired item as having nothing left', () => {
+  it('does not offer to rescue food that has already gone off', () => {
+    // This used to return a benefit of the full frozen shelf life, because an
+    // expired item was counted as having "0 days left" — which made it the
+    // biggest gain on the page and sorted it to the top. Freezing preserves
+    // food; it cannot un-expire it.
+    expect(
+      getFreezerBenefit(
+        makeItem({ name: 'Milk', locationType: 'fridge', expiresAt: daysFromNow(-3) })
+      )
+    ).toBeNull();
+  });
+
+  it('says nothing about an item with no expiry date at all', () => {
+    expect(
+      getFreezerBenefit(makeItem({ name: 'Milk', locationType: 'fridge', expiresAt: null }))
+    ).toBeNull();
+  });
+
+  it('quotes the shelf life the cook chose, not the one the table would pick', () => {
+    // updateItem carries a custom shelf life across a move rather than
+    // overwriting it, so a badge quoting milk's 90 frozen days promised 88
+    // days that freezing would never deliver.
     const benefit = getFreezerBenefit(
-      makeItem({ name: 'Milk', locationType: 'fridge', expiresAt: daysFromNow(-3) })
+      makeItem({
+        name: 'Milk',
+        locationType: 'fridge',
+        expiresAt: daysFromNow(2),
+        shelfLifeDays: 30,
+        shelfLifeSource: 'custom',
+      })
     );
-    expect(benefit.daysLeft).toBe(0);
-    expect(benefit.daysGained).toBeGreaterThanOrEqual(MIN_DAYS_GAINED_BY_FREEZING);
+
+    expect(benefit).toMatchObject({ frozenDays: 30, daysLeft: 2, daysGained: 28 });
+  });
+
+  it('stays quiet when the cook’s own shelf life leaves nothing to gain', () => {
+    expect(
+      getFreezerBenefit(
+        makeItem({
+          name: 'Milk',
+          locationType: 'fridge',
+          expiresAt: daysFromNow(2),
+          shelfLifeDays: 3,
+          shelfLifeSource: 'custom',
+        })
+      )
+    ).toBeNull();
+  });
+});
+
+describe('canSplitQuantity', () => {
+  it.each([
+    [4, true],
+    [2, true],
+    [1.99, false],
+    [1, false],
+    [0, false],
+    ['4', true],
+    ['plenty', false],
+  ])('says %p can be split: %p', (quantity, expected) => {
+    expect(canSplitQuantity(quantity)).toBe(expected);
   });
 });
 
@@ -237,6 +288,28 @@ describe('useWasteAlerts.freezeAll', () => {
     expect(response).toEqual({ success: false, error: 'Add a freezer in Settings first.' });
     expect(fs.updateDoc).not.toHaveBeenCalled();
   });
+
+  it('says so rather than reporting a success that changed nothing', async () => {
+    // `updateItem` sees no move when the location is re-sent, so this used to
+    // resolve `{ success: true }` having written nothing the cook could see.
+    const { result } = await renderAlerts([
+      makeItem({
+        id: 'item-1',
+        name: 'Peas',
+        locationId: 'loc-freezer',
+        locationType: 'freezer',
+        expiresAt: daysFromNow(1),
+      }),
+    ]);
+
+    let response;
+    await act(async () => {
+      response = await result.current.freezeAll(result.current.expiringItems[0]);
+    });
+
+    expect(response).toEqual({ success: false, error: 'That is already in the freezer.' });
+    expect(fs.updateDoc).not.toHaveBeenCalled();
+  });
 });
 
 describe('useWasteAlerts.freezeHalf', () => {
@@ -285,6 +358,74 @@ describe('useWasteAlerts.freezeHalf', () => {
 
     expect(response.success).toBe(false);
     expect(response.error).toMatch(/Freeze all instead/);
+    expect(fs.addDoc).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['none of it', 0],
+    ['exactly one', 1],
+    ['a fraction', 0.5],
+    ['an unparseable quantity', 'some'],
+  ])('refuses to split %s', async (_label, quantity) => {
+    const { result } = await renderAlerts([
+      makeItem({ id: 'item-1', name: 'Chicken Breast', quantity, expiresAt: daysFromNow(1) }),
+    ]);
+
+    let response;
+    await act(async () => {
+      response = await result.current.freezeHalf(result.current.expiringItems[0]);
+    });
+
+    expect(response.success).toBe(false);
+    expect(response.error).toMatch(/Freeze all instead/);
+    // Nothing written either way: a second document with quantity 0 would be
+    // rejected by the create rule, and a NaN quantity would corrupt both halves.
+    expect(fs.addDoc).not.toHaveBeenCalled();
+    expect(fs.updateDoc).not.toHaveBeenCalled();
+  });
+
+  it('gives the frozen half the shelf life the cook chose for the whole', async () => {
+    // Without this the new document fell back to the table's 270 frozen days
+    // for chicken, so the two halves of one pack expired months apart.
+    const { result } = await renderAlerts([
+      makeItem({
+        id: 'item-1',
+        name: 'Chicken Breast',
+        quantity: 4,
+        locationType: 'fridge',
+        expiresAt: daysFromNow(1),
+        shelfLifeDays: 45,
+        shelfLifeSource: 'custom',
+      }),
+    ]);
+
+    await act(async () => {
+      await result.current.freezeHalf(result.current.expiringItems[0]);
+    });
+
+    const [, written] = fs.addDoc.mock.calls[0];
+    expect(written.shelfLifeDays).toBe(45);
+    expect(written.shelfLifeSource).toBe('custom');
+  });
+
+  it('refuses to split something that is already frozen', async () => {
+    const { result } = await renderAlerts([
+      makeItem({
+        id: 'item-1',
+        name: 'Peas',
+        quantity: 4,
+        locationId: 'loc-freezer',
+        locationType: 'freezer',
+        expiresAt: daysFromNow(1),
+      }),
+    ]);
+
+    let response;
+    await act(async () => {
+      response = await result.current.freezeHalf(result.current.expiringItems[0]);
+    });
+
+    expect(response).toEqual({ success: false, error: 'That is already in the freezer.' });
     expect(fs.addDoc).not.toHaveBeenCalled();
   });
 

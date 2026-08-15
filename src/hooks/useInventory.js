@@ -106,10 +106,36 @@ export const toDate = (value) => {
   return Number.isNaN(date.getTime()) ? null : date;
 };
 
-export const getDaysUntilExpiration = (expiresAt) => {
-  const exp = toDate(expiresAt);
-  if (!exp) return null;
-  return Math.ceil((exp - new Date()) / (1000 * 60 * 60 * 24));
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+/** Local midnight on the day `value` falls in, or null if it is not a date. */
+export const startOfDay = (value) => {
+  const date = toDate(value);
+  if (!date) return null;
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
+/**
+ * Whole days from today until an expiry, counted by calendar day.
+ *
+ * Deliberately *not* `(expiry - now) / 24h`. Food expires on a date, not at a
+ * moment: milk stamped for today is "today" at 09:00 and still "today" at
+ * 23:59. Rolling-24h arithmetic called that "tomorrow" for all but the last
+ * hour of the day, so the app and the daily alert
+ * (functions/src/wasteAlerts/alertMessage.js, which has always counted
+ * calendar days) described the same item differently.
+ *
+ * Both sides are floored to local midnight before subtracting, so the answer
+ * does not depend on the time of day the page happens to be open, and an item
+ * added in one timezone reads correctly in another — it is compared against
+ * the reader's own calendar. `Math.round` absorbs the 23- or 25-hour day a DST
+ * changeover produces, which would otherwise round the wrong way.
+ */
+export const getDaysUntilExpiration = (expiresAt, now = new Date()) => {
+  const expiry = startOfDay(expiresAt);
+  if (!expiry) return null;
+  return Math.round((expiry - startOfDay(now)) / MS_PER_DAY);
 };
 
 // ---------------------------------------------------------------------------
@@ -191,6 +217,21 @@ export const getExpirationBadgeStyle = (expiresAt) => {
   };
 };
 
+/**
+ * Is this item inside the "use it or lose it" window?
+ *
+ * The single definition of that window. The waste-alerts page, the dashboard's
+ * expiring count and `useInventory.getExpiringItems` each used to spell it out
+ * themselves, and one of the three compared raw timestamps while the other two
+ * went through the status table — so the same item could be counted on one
+ * screen and not the other. Already-expired items have a negative day count and
+ * are caught by the same comparison.
+ */
+export const isExpiringWithin = (item, withinDays = 5) => {
+  const days = getDaysUntilExpiration(item?.expiresAt);
+  return days !== null && days <= withinDays;
+};
+
 /** Soonest-first, so the thing most at risk of being thrown away is on top. */
 export const byExpirySoonestFirst = (a, b) => {
   const aDate = toDate(a?.expiresAt);
@@ -205,11 +246,16 @@ export const byExpirySoonestFirst = (a, b) => {
 // Helper: human-readable expiration label
 // ---------------------------------------------------------------------------
 export const getExpirationLabel = (expiresAt) => {
-  if (!expiresAt) return 'No expiry';
-  const now = new Date();
-  const exp = expiresAt?.toDate ? expiresAt.toDate() : new Date(expiresAt);
-  const days = Math.ceil((exp - now) / (1000 * 60 * 60 * 24));
+  const exp = toDate(expiresAt);
+  // An unparseable date is no more useful than a missing one, and saying so
+  // beats the "Expired NaNd ago" the old inline arithmetic produced.
+  if (!exp) return 'No expiry';
 
+  // Shares getDaysUntilExpiration rather than repeating the arithmetic: this
+  // label used to have its own rolling-24h copy, so the card could read
+  // "Expires tomorrow" while the badge beside it was already colour-coded
+  // critical for today.
+  const days = getDaysUntilExpiration(exp);
   if (days < 0) return `Expired ${Math.abs(days)}d ago`;
   if (days === 0) return 'Expires today';
   if (days === 1) return 'Expires tomorrow';
@@ -421,16 +467,8 @@ const useInventory = () => {
   );
 
   const getExpiringItems = useCallback(
-    (withinDays = 5) => {
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() + withinDays);
-      return items
-        .filter((i) => {
-          const exp = toDate(i.expiresAt);
-          return exp !== null && exp <= cutoff;
-        })
-        .sort(byExpirySoonestFirst);
-    },
+    (withinDays = 5) =>
+      items.filter((i) => isExpiringWithin(i, withinDays)).sort(byExpirySoonestFirst),
     [items]
   );
 

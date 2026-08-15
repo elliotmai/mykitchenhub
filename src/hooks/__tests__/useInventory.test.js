@@ -94,6 +94,139 @@ describe('getExpirationLabel', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Day boundaries
+//
+// Expiry is a date, not a moment: a carton stamped for today is "today" all
+// day. These are the cases the original rolling-24-hour arithmetic got wrong,
+// and the ones a refactor is most likely to break again.
+// ---------------------------------------------------------------------------
+
+describe('expiry day boundaries', () => {
+  /** A local wall-clock Date, so assertions do not depend on the suite's TZ. */
+  const at = (year, month, day, hour = 0, minute = 0) =>
+    new Date(year, month - 1, day, hour, minute, 0, 0);
+
+  const withClock = (now, assertions) => {
+    jest.useFakeTimers();
+    jest.setSystemTime(now);
+    try {
+      assertions();
+    } finally {
+      jest.useRealTimers();
+    }
+  };
+
+  it('still says "today" at one minute to midnight', () => {
+    withClock(at(2026, 8, 15, 10, 0), () => {
+      const tonight = at(2026, 8, 15, 23, 59);
+      expect(getDaysUntilExpiration(tonight)).toBe(0);
+      expect(getExpirationLabel(tonight)).toBe('Expires today');
+      expect(getExpirationStatus(tonight)).toBe('critical');
+    });
+  });
+
+  it('calls yesterday evening expired, not "today"', () => {
+    // Rolling-24h arithmetic rounded this to 0 and rendered "Expires today"
+    // for food whose date had already passed.
+    withClock(at(2026, 8, 15, 10, 0), () => {
+      const lastNight = at(2026, 8, 14, 23, 0);
+      expect(getDaysUntilExpiration(lastNight)).toBe(-1);
+      expect(getExpirationLabel(lastNight)).toBe('Expired 1d ago');
+      expect(getExpirationStatus(lastNight)).toBe('expired');
+    });
+  });
+
+  it('calls tomorrow "tomorrow" whatever time of day either falls at', () => {
+    withClock(at(2026, 8, 15, 1, 0), () => {
+      // 46 hours away, but the next calendar day.
+      expect(getExpirationLabel(at(2026, 8, 16, 23, 0))).toBe('Expires tomorrow');
+    });
+  });
+
+  it('gives the same answer whatever time the page is open', () => {
+    const expiry = at(2026, 8, 18, 15, 0);
+    const answers = [0, 6, 12, 18, 23].map((hour) => {
+      let days;
+      withClock(at(2026, 8, 15, hour, 30), () => {
+        days = getDaysUntilExpiration(expiry);
+      });
+      return days;
+    });
+
+    expect(answers).toEqual([3, 3, 3, 3, 3]);
+  });
+
+  it('counts a spring-forward day as one day', () => {
+    // 2026-03-08 is the US spring-forward: 23 hours long. Counting elapsed
+    // milliseconds would make "tomorrow" land 0.96 days out.
+    const original = process.env.TZ;
+    process.env.TZ = 'America/New_York';
+    try {
+      withClock(at(2026, 3, 7, 20, 0), () => {
+        expect(getDaysUntilExpiration(at(2026, 3, 8, 20, 0))).toBe(1);
+        expect(getExpirationLabel(at(2026, 3, 8, 20, 0))).toBe('Expires tomorrow');
+      });
+      withClock(at(2026, 3, 8, 20, 0), () => {
+        expect(getDaysUntilExpiration(at(2026, 3, 9, 20, 0))).toBe(1);
+      });
+    } finally {
+      process.env.TZ = original;
+    }
+  });
+
+  it('counts a fall-back day as one day', () => {
+    // 2026-11-01 is 25 hours long in New York.
+    const original = process.env.TZ;
+    process.env.TZ = 'America/New_York';
+    try {
+      withClock(at(2026, 10, 31, 20, 0), () => {
+        expect(getDaysUntilExpiration(at(2026, 11, 1, 20, 0))).toBe(1);
+      });
+    } finally {
+      process.env.TZ = original;
+    }
+  });
+
+  it('reads an expiry stamped in another timezone against the reader"s calendar', () => {
+    // The item was added at 22:00 in Sydney; the cook reading it is in New
+    // York, where that instant is still the previous morning.
+    const stampedInSydney = new Date('2026-08-16T12:00:00Z'); // 22:00 AEST, 08:00 EDT
+    const original = process.env.TZ;
+    process.env.TZ = 'America/New_York';
+    try {
+      withClock(new Date('2026-08-16T13:00:00Z'), () => {
+        expect(getDaysUntilExpiration(stampedInSydney)).toBe(0);
+        expect(getExpirationLabel(stampedInSydney)).toBe('Expires today');
+      });
+    } finally {
+      process.env.TZ = original;
+    }
+  });
+
+  it('agrees with the wording the daily alert function uses', () => {
+    // A transcription of daysUntil() from
+    // functions/src/wasteAlerts/alertMessage.js, which has always counted
+    // calendar days. The app used to count rolling hours, so a notification
+    // could read "spinach (today)" beside a card reading "Expires tomorrow".
+    const asTheAlertCountsIt = (expiry, now) => {
+      const midnight = (d) => {
+        const c = new Date(d);
+        c.setHours(0, 0, 0, 0);
+        return c;
+      };
+      return Math.round((midnight(expiry) - midnight(now)) / 86400000);
+    };
+
+    const now = at(2026, 8, 15, 9, 0);
+    withClock(now, () => {
+      [at(2026, 8, 15, 22, 0), at(2026, 8, 17, 6, 0), at(2026, 8, 14, 23, 30)].forEach((expiry) => {
+        expect(getDaysUntilExpiration(expiry)).toBe(asTheAlertCountsIt(expiry, now));
+      });
+    });
+  });
+});
+
 describe('calcExpiresAt', () => {
   it('uses the per-location default when no shelf life is given', () => {
     const expires = calcExpiresAt('fridge');

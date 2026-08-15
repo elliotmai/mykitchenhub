@@ -9,9 +9,9 @@ import { Alert, Badge, Button, Card, ListGroup, Spinner } from 'react-bootstrap'
 import { Snowflake } from 'lucide-react';
 
 import { getExpirationLabel } from '../../hooks/useInventory';
-
-/** Items with less than this much left cannot sensibly be split. */
-export const MIN_SPLITTABLE_QUANTITY = 2;
+// The same threshold the hook enforces. Keeping a second copy here meant the
+// button could be enabled for a quantity `freezeHalf` would then refuse.
+import { canSplitQuantity } from '../../hooks/useWasteAlerts';
 
 /**
  * FreezerSuggestions
@@ -67,7 +67,7 @@ const FreezerSuggestions = ({
           <ListGroup variant="flush">
             {suggestions.map(({ item, daysGained, frozenDays }) => {
               const busy = busyId === item.id;
-              const canSplit = Number(item.quantity) >= MIN_SPLITTABLE_QUANTITY;
+              const canSplit = canSplitQuantity(item.quantity);
 
               return (
                 <ListGroup.Item key={item.id} data-testid="freezer-suggestion">
