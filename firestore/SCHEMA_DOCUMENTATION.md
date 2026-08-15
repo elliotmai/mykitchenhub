@@ -65,6 +65,15 @@ rather than guessing a day.
 - Users can read/update their own document
 - Users cannot change `email` or `createdAt` after creation
 - Users cannot delete their own document
+- `email`, `createdAt` and `preferences` are re-checked on update. A `setDoc`
+  without `{ merge: true }` replaces the document, so without that check an
+  update could leave a profile with no `preferences` — a state `create` would
+  have refused
+- A top-level `helloFresh` is required on **create only**, deliberately not on
+  update: `onUserCreate` writes the profile through the admin SDK with
+  `helloFresh` nested under `preferences` and no top-level key, so requiring it
+  on update would freeze every profile the Cloud Function created — including
+  against the `useDeliveries` write that adds the top-level key
 
 ---
 
@@ -429,7 +438,15 @@ even unchanged — is rejected, so the edit form disables the name field.
 - All authenticated users can read recipes
 - Authenticated users can create recipes
 - Users can update recipes (e.g., increment timesCooked)
-- Users can only delete recipes where `source: "user-created"`
+- Users can only delete recipes where `source: "user-created"` **and
+  `createdBy` is their own uid**. `source` alone says a cook wrote it, not
+  *which* cook — and `recipes` is one shared library, so checking only `source`
+  let any signed-in user delete any other cook's recipe. Recipes carrying no
+  `createdBy` (seeded, legacy, synced) are therefore undeletable from the
+  client, which is the safe direction
+- `createdBy` cannot be set to another user's uid on create. The delete rule
+  trusts it, so a create that could name a different owner would attribute a
+  document to a cook who never wrote it. A create that omits it is still legal
 - **`source` is immutable.** The delete rule trusts it, so an update that could
   rewrite it would be a two-write route to deleting any recipe at all —
   including the ~500 imported from "Let's Eat". `src/hooks/useRecipes.js` has

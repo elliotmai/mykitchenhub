@@ -34,8 +34,23 @@ service cloud.firestore {
       allow create: if isOwner(userId) 
         && hasRequiredFields(['email', 'createdAt', 'preferences', 'helloFresh']);
       
-      // Users can update their own profile
+      // Users can update their own profile.
+      //
+      // The field set is re-checked for the same reason it is on every other
+      // collection: `request.resource` is the *resulting* document, so a
+      // `setDoc` without `{ merge: true }` is an update that can leave a
+      // profile with no `preferences` at all — a state `create` would have
+      // rejected. Settings then renders a profile it cannot read.
+      //
+      // `helloFresh` is deliberately NOT required here even though `create`
+      // requires it. onUserCreate (functions/src/triggers/onUserCreate.js)
+      // writes the Cloud Function's profile with helloFresh nested under
+      // `preferences` and no top-level key, and the admin SDK bypasses rules —
+      // so every profile created that way would be frozen out of every update,
+      // including the one useDeliveries makes to add the top-level key. Requiring
+      // it would reject a legitimate write, which is worse than not requiring it.
       allow update: if isOwner(userId)
+        && hasRequiredFields(['email', 'createdAt', 'preferences'])
         // Prevent changing createdAt or email
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.email == resource.data.email;
@@ -287,8 +302,14 @@ service cloud.firestore {
                                               'hellofresh']
         && request.resource.data.difficulty in ['easy', 'medium', 'hard']
         && request.resource.data.servings > 0
-        && request.resource.data.timesCooked >= 0;
-      
+        && request.resource.data.timesCooked >= 0
+        // A recipe may only be attributed to the cook adding it. The delete
+        // rule below trusts `createdBy`, so letting it be set to someone else's
+        // uid would hand them a document they never wrote. Defaulting to the
+        // caller's own uid keeps a create that omits the field legal — it just
+        // cannot name a different owner.
+        && request.resource.data.get('createdBy', request.auth.uid) == request.auth.uid;
+
       // Users can update recipes (for incrementing timesCooked, etc.).
       //
       // `recipes` is deliberately a shared library: anyone signed in may fix a
@@ -317,9 +338,22 @@ service cloud.firestore {
         && request.resource.data.servings > 0
         && request.resource.data.timesCooked >= 0;
 
-      // Only allow deletion if user created the recipe
+      // Only allow deletion if user created the recipe.
+      //
+      // `source == 'user-created'` alone does not say *which* cook created it.
+      // `recipes` is one shared library, so without the `createdBy` check any
+      // signed-in user could delete any other cook's recipe — the one
+      // irreversible thing this collection allows. The hook's own error message
+      // ("Only recipes you added yourself can be deleted") has always claimed
+      // this; it was never actually enforced.
+      //
+      // `get(…, null)` because seeded and legacy-synced recipes carry no
+      // `createdBy`. Those compare unequal to any uid and so are undeletable
+      // from the client, which is the safe direction: nobody added them, so
+      // nobody may remove them for everyone else.
       allow delete: if isAuthenticated()
-        && resource.data.source == 'user-created';
+        && resource.data.source == 'user-created'
+        && resource.data.get('createdBy', null) == request.auth.uid;
     }
     
     // ============================================

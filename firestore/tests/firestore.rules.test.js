@@ -264,6 +264,60 @@ describe('users collection', () => {
     await seed((db) => db.doc(`users/${OWNER}`).set(validUser()));
     await assertFails(as(OWNER).doc(`users/${OWNER}`).delete());
   });
+
+  // -------------------------------------------------------------------------
+  // 10.2 — update must not be a way around create's field check. A `setDoc`
+  // without `{ merge: true }` replaces the document, so without the same
+  // `hasRequiredFields` guard on update, a profile could reach a state that
+  // `create` would have refused outright.
+  // -------------------------------------------------------------------------
+
+  it('refuses an update that strips preferences off the profile', async () => {
+    const profile = validUser();
+    await seed((db) => db.doc(`users/${OWNER}`).set(profile));
+
+    // Every immutable field is honoured here — only `preferences` is missing,
+    // and that alone must be enough to refuse the write.
+    const { preferences, ...withoutPreferences } = profile;
+    await assertFails(as(OWNER).doc(`users/${OWNER}`).set(withoutPreferences));
+  });
+
+  it('refuses an update that empties the profile down to its immutable fields', async () => {
+    const profile = validUser();
+    await seed((db) => db.doc(`users/${OWNER}`).set(profile));
+
+    await assertFails(
+      as(OWNER)
+        .doc(`users/${OWNER}`)
+        .set({ email: profile.email, createdAt: profile.createdAt })
+    );
+  });
+
+  it('still lets a profile written by onUserCreate be updated', async () => {
+    // The Cloud Function writes helloFresh nested under `preferences` and no
+    // top-level key, and the admin SDK bypasses these rules — so profiles
+    // shaped like this exist. Requiring a top-level `helloFresh` on update
+    // would freeze every one of them, including the write useDeliveries makes
+    // to add that very key. Rejecting a legitimate write is the worse failure.
+    const { helloFresh, ...asOnUserCreateWritesIt } = validUser();
+    await seed((db) => db.doc(`users/${OWNER}`).set(asOnUserCreateWritesIt));
+
+    await assertSucceeds(
+      as(OWNER).doc(`users/${OWNER}`).update({ displayName: 'Chef Eli' })
+    );
+    await assertSucceeds(
+      as(OWNER).doc(`users/${OWNER}`).update({ 'helloFresh.enabled': true })
+    );
+  });
+
+  it('lets a partial merge through, because the merged result is still whole', async () => {
+    const profile = validUser();
+    await seed((db) => db.doc(`users/${OWNER}`).set(profile));
+
+    await assertSucceeds(
+      as(OWNER).doc(`users/${OWNER}`).set({ displayName: 'Chef Eli' }, { merge: true })
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1477,7 +1531,9 @@ describe('recipes', () => {
   });
 
   it('only allows deleting user-created recipes', async () => {
-    await seed((db) => db.doc('recipes/mine').set(validRecipe({ source: 'user-created' })));
+    await seed((db) =>
+      db.doc('recipes/mine').set(validRecipe({ source: 'user-created', createdBy: OWNER }))
+    );
     await seed((db) => db.doc('recipes/synced').set(validRecipe({ source: 'legacy' })));
 
     await assertSucceeds(as(OWNER).doc('recipes/mine').delete());
@@ -1486,8 +1542,52 @@ describe('recipes', () => {
 
   // -------------------------------------------------------------------------
   // 10.2 — `recipes` is a shared library, so "you may only delete your own"
-  // rests entirely on `source`. These are the tests that make that true.
+  // rests on `source` *and* `createdBy`. `source` alone says a cook wrote it,
+  // not which cook: with only that check, any signed-in user could delete any
+  // other cook's recipe. These are the tests that make that true.
   // -------------------------------------------------------------------------
+
+  it("refuses to let one cook delete another cook's recipe", async () => {
+    await seed((db) =>
+      db.doc('recipes/mine').set(validRecipe({ source: 'user-created', createdBy: OWNER }))
+    );
+
+    await assertFails(as(INTRUDER).doc('recipes/mine').delete());
+
+    // Still there, and still the owner's.
+    const after = await as(OWNER).doc('recipes/mine').get();
+    expect(after.exists).toBe(true);
+    expect(after.data().createdBy).toBe(OWNER);
+  });
+
+  it('refuses to delete a user-created recipe that names no owner', async () => {
+    // Seeded and legacy-synced recipes carry no `createdBy`. Nobody added them
+    // from the app, so nobody may remove them for everyone else.
+    await seed((db) => db.doc('recipes/seeded').set(validRecipe({ source: 'user-created' })));
+
+    await assertFails(as(OWNER).doc('recipes/seeded').delete());
+    await assertFails(as(INTRUDER).doc('recipes/seeded').delete());
+  });
+
+  it('refuses to let a cook file a new recipe under someone else’s name', async () => {
+    // `createdBy` is what the delete rule trusts, so a create must not be able
+    // to attribute a document to a cook who never wrote it.
+    await assertFails(
+      as(INTRUDER).doc('recipes/forged').set(validRecipe({ createdBy: OWNER }))
+    );
+  });
+
+  it('accepts a create that claims the caller as author', async () => {
+    await assertSucceeds(
+      as(OWNER).doc('recipes/honest').set(validRecipe({ createdBy: OWNER }))
+    );
+  });
+
+  it('still accepts a create that names no author at all', async () => {
+    // Nothing in the app omits it today, but omitting it is not an attack —
+    // it just produces a recipe the client cannot delete.
+    await assertSucceeds(as(OWNER).doc('recipes/anon').set(validRecipe()));
+  });
 
   it('refuses to let a recipe be relabelled as user-created', async () => {
     await seed((db) => db.doc('recipes/synced').set(validRecipe({ source: 'legacy' })));
