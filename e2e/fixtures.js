@@ -37,7 +37,11 @@ const login = async (page) => {
   await page.getByPlaceholder('••••••••').first().fill(TEST_USER.password);
   await page.getByRole('button', { name: 'Sign In' }).click();
 
-  await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
+  // `domcontentloaded`, not the default `load`: `load` waits on Firestore's
+  // long-lived connection, which never settles while the dashboard's listeners
+  // are open — it hangs outright under CI's reduced parallelism. The caller
+  // asserts on rendered content, which is the real readiness signal anyway.
+  await page.waitForURL(/\/dashboard/, { timeout: 30_000, waitUntil: 'domcontentloaded' });
 };
 
 const test = base.extend({
