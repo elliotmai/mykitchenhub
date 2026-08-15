@@ -20,6 +20,7 @@ import useRecipes, {
   buildRecipeDocument,
   validateRecipe,
   validateRecipePatch,
+  canDeleteRecipe,
 } from '../useRecipes';
 import { AuthProvider } from '../useAuth';
 import * as fs from '../../test-utils/mocks/firestore';
@@ -638,6 +639,42 @@ describe('useRecipes.updateRecipe', () => {
   });
 });
 
+describe('canDeleteRecipe', () => {
+  const ME = 'test-uid';
+
+  it('says yes only for a recipe this cook added', () => {
+    expect(canDeleteRecipe({ source: 'user-created', createdBy: ME }, ME)).toBe(true);
+  });
+
+  it("says no for another cook's recipe, however it was made", () => {
+    expect(canDeleteRecipe({ source: 'user-created', createdBy: 'other' }, ME)).toBe(false);
+  });
+
+  it('says no when the recipe names no author', () => {
+    expect(canDeleteRecipe({ source: 'user-created' }, ME)).toBe(false);
+  });
+
+  it.each(RECIPE_SOURCES.filter((source) => source !== 'user-created'))(
+    'says no for a %s recipe even when createdBy matches',
+    (source) => {
+      expect(canDeleteRecipe({ source, createdBy: ME }, ME)).toBe(false);
+    }
+  );
+
+  it('says no rather than throwing on missing input', () => {
+    expect(canDeleteRecipe(null, ME)).toBe(false);
+    expect(canDeleteRecipe({ source: 'user-created', createdBy: ME }, null)).toBe(false);
+    expect(canDeleteRecipe(undefined, undefined)).toBe(false);
+  });
+
+  it('does not treat two absent values as a match', () => {
+    // Both undefined must not read as "the same cook".
+    expect(canDeleteRecipe({ source: 'user-created', createdBy: undefined }, undefined)).toBe(
+      false
+    );
+  });
+});
+
 describe('useRecipes.deleteRecipe', () => {
   it('deletes a recipe the user created', async () => {
     const { result } = await renderRecipes([makeRecipe({ id: 'r1', source: 'user-created' })]);
@@ -668,6 +705,39 @@ describe('useRecipes.deleteRecipe', () => {
       expect(fs.deleteDoc).not.toHaveBeenCalled();
     }
   );
+
+  // `recipes` is one shared library, so `source: 'user-created'` says a cook
+  // added it, not which cook. Deleting is the only irreversible thing the
+  // collection allows, and the rules refuse it unless `createdBy` is the caller.
+  it("refuses to delete another cook's recipe, and explains why", async () => {
+    const { result } = await renderRecipes([
+      makeRecipe({ id: 'r1', source: 'user-created', createdBy: 'someone-else-uid' }),
+    ]);
+
+    let response;
+    await act(async () => {
+      response = await result.current.deleteRecipe('r1');
+    });
+
+    expect(response.success).toBe(false);
+    expect(response.error).toMatch(/added yourself/i);
+    expect(fs.deleteDoc).not.toHaveBeenCalled();
+  });
+
+  it('refuses to delete a user-created recipe that names no author', async () => {
+    // Seeded and legacy-synced recipes carry no `createdBy` at all.
+    const orphan = makeRecipe({ id: 'r1', source: 'user-created' });
+    delete orphan.createdBy;
+    const { result } = await renderRecipes([orphan]);
+
+    let response;
+    await act(async () => {
+      response = await result.current.deleteRecipe('r1');
+    });
+
+    expect(response.success).toBe(false);
+    expect(fs.deleteDoc).not.toHaveBeenCalled();
+  });
 
   it('reports the failure rather than throwing when Firestore rejects', async () => {
     jest.spyOn(console, 'error').mockImplementation(() => {});

@@ -30,6 +30,7 @@ const Recipes = () => {
     deleteRecipe,
     markCooked,
     getRecipeById,
+    currentUid,
   } = useRecipes();
 
   const { items } = useInventory();
@@ -129,6 +130,7 @@ const Recipes = () => {
           onDelete={setDeleteTarget}
           onCook={handleCook}
           onOpenSync={() => setShowSync(true)}
+          currentUid={currentUid}
         />
       )}
 

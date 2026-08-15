@@ -5,7 +5,7 @@
 import React from 'react';
 import { Card, Badge, Button } from 'react-bootstrap';
 import { Clock, Users, ChefHat, Pencil, Trash2, UtensilsCrossed } from 'lucide-react';
-import { totalTime, SOURCE_LABELS } from '../../hooks/useRecipes';
+import { totalTime, SOURCE_LABELS, canDeleteRecipe } from '../../hooks/useRecipes';
 
 const DIFFICULTY_STYLES = {
   easy: { background: 'var(--mkh-expiring-safe)', color: 'var(--mkh-success-text)' },
@@ -23,8 +23,9 @@ const MAX_VISIBLE_TAGS = 3;
  * @param {function} onEdit   - (recipe) => void — optional
  * @param {function} onDelete - (recipe) => void — optional
  * @param {function} onCook   - (recipe) => void — optional, bumps Times Cooked
+ * @param {string}   currentUid - the signed-in cook's uid, for the delete guard
  */
-const RecipeCard = ({ recipe, onView, onEdit, onDelete, onCook }) => {
+const RecipeCard = ({ recipe, onView, onEdit, onDelete, onCook, currentUid }) => {
   if (!recipe) return null;
 
   const minutes = totalTime(recipe);
@@ -32,7 +33,13 @@ const RecipeCard = ({ recipe, onView, onEdit, onDelete, onCook }) => {
   const visibleTags = tags.slice(0, MAX_VISIBLE_TAGS);
   const hiddenTagCount = tags.length - visibleTags.length;
   const difficultyStyle = DIFFICULTY_STYLES[recipe.difficulty] ?? DIFFICULTY_STYLES.easy;
+  // Editing is open to everyone signed in — `recipes` is a shared library, and
+  // the rules allow any cook to fix a typo or record a cook on a recipe they
+  // did not add. Deleting is not: it needs the cook who actually added it, and
+  // the rules refuse anything else. Offering a button that always fails would
+  // be worse than offering none.
   const isMine = recipe.source === 'user-created';
+  const mayDelete = canDeleteRecipe(recipe, currentUid);
 
   return (
     <Card
@@ -169,7 +176,7 @@ const RecipeCard = ({ recipe, onView, onEdit, onDelete, onCook }) => {
             </Button>
           )}
 
-          {isMine && onDelete && (
+          {mayDelete && onDelete && (
             <Button
               size="sm"
               variant="light"

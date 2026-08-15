@@ -99,9 +99,50 @@ export const isAnalyticsEnabled = () => analytics !== null;
 export const analyticsDisabledReason = () => disabledReason;
 
 /**
+ * Parameter names that must never leave the browser.
+ *
+ * What this app knows about a person is unusually personal: their email, what
+ * they eat, what they buy, where they shop. None of it belongs in a GA4
+ * property, and GA4's own terms forbid sending identifiers.
+ *
+ * Matched as a substring, case-insensitively, so `recipe_name`, `item_name`
+ * and `store_name` are all caught by `name`. That is deliberately blunt: an
+ * analytics dimension is worth far less than a food diary leaking, so the rule
+ * errs towards dropping something useful rather than letting something
+ * identifying through.
+ */
+const IDENTIFYING_KEY = /uid|user_?id|e-?mail|name|phone|address|postcode|zip|token|note/i;
+
+/** An email address anywhere in a value, whatever the parameter is called. */
+const looksLikeEmail = (value) => typeof value === 'string' && /\S+@\S+/.test(value);
+
+/**
+ * Drop anything identifying from an event's parameters.
+ *
+ * Defence in depth, not a substitute for not sending it: the counts stay,
+ * only the dimension that would have identified someone goes. Exported so the
+ * rule itself can be tested directly.
+ *
+ * @param {object} params
+ * @returns {object} the parameters that are safe to send
+ */
+export const scrubParams = (params = {}) => {
+  if (!params || typeof params !== 'object') return {};
+
+  return Object.fromEntries(
+    Object.entries(params).filter(
+      ([key, value]) => !IDENTIFYING_KEY.test(key) && !looksLikeEmail(value)
+    )
+  );
+};
+
+/**
  * Record a custom event, if analytics is on.
  *
  * A no-op — never a throw — when it is off, so a caller never needs to guard.
+ * Parameters are scrubbed before they are sent: see `scrubParams`. A caller
+ * still should not pass anything identifying, but forgetting must not be the
+ * thing that leaks a cook's food diary into a GA4 report.
  *
  * @param {string} name   - GA4 event name, snake_case
  * @param {object} params - event parameters; never put anything identifying here
@@ -110,7 +151,7 @@ export const logAppEvent = (name, params = {}) => {
   if (!analytics || !name) return false;
 
   try {
-    logEvent(analytics, name, params);
+    logEvent(analytics, name, scrubParams(params));
     return true;
   } catch (error) {
     console.info(`Analytics event "${name}" was not recorded.`);

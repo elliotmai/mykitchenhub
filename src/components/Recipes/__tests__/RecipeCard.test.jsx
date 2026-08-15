@@ -1,12 +1,18 @@
 // One recipe in the grid. The card is where the delete rule becomes visible:
-// only recipes the user added show a delete button, because the security rules
-// only allow deleting those.
+// only recipes *this* cook added show a delete button, because those are the
+// only ones the security rules let them delete. `recipes` is a shared library,
+// so `source: 'user-created'` is not enough on its own — it says a cook added
+// it, not which cook.
 
 import React from 'react';
 import { renderWithProviders, screen, makeRecipe } from '../../../test-utils';
 import RecipeCard from '../RecipeCard';
 
-const render = (props = {}) => renderWithProviders(<RecipeCard recipe={makeRecipe()} {...props} />);
+const ME = 'test-uid';
+const ANOTHER_COOK = 'someone-else-uid';
+
+const render = (props = {}) =>
+  renderWithProviders(<RecipeCard recipe={makeRecipe()} currentUid={ME} {...props} />);
 
 describe('RecipeCard', () => {
   it('shows the recipe name', () => {
@@ -82,13 +88,48 @@ describe('RecipeCard', () => {
 
   it('offers edit and delete for a recipe the user created', () => {
     render({
-      recipe: makeRecipe({ name: 'Mine', source: 'user-created' }),
+      recipe: makeRecipe({ name: 'Mine', source: 'user-created', createdBy: ME }),
       onEdit: jest.fn(),
       onDelete: jest.fn(),
     });
 
     expect(screen.getByRole('button', { name: /Edit Mine/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Delete Mine/i })).toBeInTheDocument();
+  });
+
+  // The library is shared, so another cook's recipe is still `user-created`.
+  // Editing it is allowed — anyone may fix a typo — but deleting it is not,
+  // and the rules refuse it, so the button must not be there to press.
+  it("offers edit but not delete on another cook's recipe", () => {
+    render({
+      recipe: makeRecipe({ name: 'Theirs', source: 'user-created', createdBy: ANOTHER_COOK }),
+      onEdit: jest.fn(),
+      onDelete: jest.fn(),
+    });
+
+    expect(screen.getByRole('button', { name: /Edit Theirs/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Delete Theirs/i })).not.toBeInTheDocument();
+  });
+
+  it('offers no delete on a user-created recipe that names no author', () => {
+    // Seeded and imported recipes carry no `createdBy`; the rules make them
+    // undeletable, so the card must not offer the control.
+    const orphan = makeRecipe({ name: 'Seeded', source: 'user-created' });
+    delete orphan.createdBy;
+
+    render({ recipe: orphan, onEdit: jest.fn(), onDelete: jest.fn() });
+
+    expect(screen.queryByRole('button', { name: /Delete Seeded/i })).not.toBeInTheDocument();
+  });
+
+  it('offers no delete before the signed-in cook is known', () => {
+    render({
+      recipe: makeRecipe({ name: 'Mine', source: 'user-created', createdBy: ME }),
+      currentUid: null,
+      onDelete: jest.fn(),
+    });
+
+    expect(screen.queryByRole('button', { name: /Delete Mine/i })).not.toBeInTheDocument();
   });
 
   // The rules only allow deleting `source: 'user-created'`, so offering the

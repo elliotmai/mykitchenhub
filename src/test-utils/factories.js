@@ -191,10 +191,15 @@ export const makeNotification = (overrides = {}) => ({
  */
 export const makeRecipe = (overrides = {}) => {
   const name = overrides.name ?? 'Sheet Pan Salmon';
+  const source = overrides.source ?? 'user-created';
   return {
     id: nextId('recipe'),
     name,
-    source: 'user-created',
+    source,
+    // Only a recipe a cook added through the app carries an author. Legacy,
+    // synced and seeded recipes have none — which is exactly what makes them
+    // undeletable from the client, so the factory must not invent one.
+    ...(source === 'user-created' ? { createdBy: 'test-uid' } : {}),
     ingredients: [
       { name: 'salmon', quantity: 2, unit: 'fillet', normalized: 'salmon' },
       { name: 'spinach', quantity: 1, unit: 'bag', normalized: 'spinach' },
