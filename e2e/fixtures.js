@@ -37,7 +37,11 @@ const login = async (page) => {
   await page.getByPlaceholder('••••••••').first().fill(TEST_USER.password);
   await page.getByRole('button', { name: 'Sign In' }).click();
 
-  await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
+  // waitForURL defaults to waitUntil: 'load', which TESTING.md warns can hang
+  // outright — it waits on Firestore's long-lived connection. The goto above
+  // already avoids that; this call needs the same treatment or the whole suite
+  // fails at setup when the connection is slow to settle.
+  await page.waitForURL(/\/dashboard/, { timeout: 30_000, waitUntil: 'domcontentloaded' });
 };
 
 const test = base.extend({
