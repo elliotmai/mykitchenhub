@@ -91,6 +91,12 @@ Coverage thresholds in `package.json` are a ratchet. Raise the floor when your
 tests push coverage up. **Never lower a threshold to make a build pass** — if
 coverage dropped, write the missing test.
 
+A lint *warning* fails CI. The production build runs with `CI=true`, which turns
+every ESLint warning into a compile error, so an unused variable is enough to
+take down both the build and the end-to-end job. `npm run lint` is therefore
+pinned to `--max-warnings=0` — it fails on the same things the build does, in
+forty seconds instead of four minutes. Fix warnings; don't suppress them.
+
 ## 5. Version and changelog
 
 The footer version tracks the roadmap: `0.<phase>.<step>`. When you finish the
