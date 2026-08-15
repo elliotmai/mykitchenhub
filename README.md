@@ -186,7 +186,7 @@ accept common synonyms (`Item`/`Product` for `name`, `Qty`/`Amount` for
 | `unit` | no | Free text — `lbs`, `gal`, `bags` |
 | `notes` | no | Trimmed to 200 characters |
 | `shelfLifeDays` | no | Positive number of days, up to 3650 |
-| `expiresAt` | no | Any date the browser can parse; otherwise the expiry is calculated from shelf life |
+| `expiresAt` | no | Any date the browser can parse; otherwise the expiry is calculated from shelf life. A plain `2027-01-15` means that calendar day where you are, not midnight UTC |
 | `price`, `store` | no | Recorded in the item's purchase history |
 
 ```csv
