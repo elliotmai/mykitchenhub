@@ -61,6 +61,29 @@ const test = base.extend({
    */
   authedPage: async ({ page }, use) => {
     await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+
+    // Wait for the app to finish deciding whether it is signed in. Until then
+    // ProtectedRoute is showing its loader, so returning here would hand the
+    // spec a page that is about to navigate underneath it.
+    await page.waitForFunction(
+      () =>
+        document.querySelector('.app-footer__version') !== null ||
+        window.location.pathname.startsWith('/login'),
+      null,
+      { timeout: 30_000 }
+    );
+
+    // The shared storage state almost always restores the session. Under
+    // parallel load the Auth emulator occasionally fails a token refresh, the
+    // SDK resolves to signed-out, and ProtectedRoute sends the page to /login
+    // — which then fails whatever the spec asserted first, for a reason that
+    // has nothing to do with the spec. Signing in costs ~15s and only happens
+    // on the rare run that needs it; the alternative is a suite that fails at
+    // random on a different test each time.
+    if (new URL(page.url()).pathname.startsWith('/login')) {
+      await login(page);
+    }
+
     await use(page);
   },
 });
