@@ -83,6 +83,12 @@ const hellofreshRecipes = async () => {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 };
 
+/** How many recipes are in the shared library right now. */
+const recipeCount = async () => {
+  const snap = await admin.firestore().collection('recipes').get();
+  return snap.size;
+};
+
 /** Add an inventory item straight to the emulator, bypassing the UI. */
 const seedInventoryItem = async ({ name, quantity = 3, unit = 'ea' }) => {
   const uid = await testUserId();
@@ -166,4 +172,5 @@ module.exports = {
   seedMealPlanEntry,
   deliveries,
   hellofreshRecipes,
+  recipeCount,
 };

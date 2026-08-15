@@ -1,9 +1,10 @@
 // The dashboard against a real build, real emulators and real security rules.
 //
 // The seed (e2e/global-setup.js) gives the account three items — one expired,
-// one due tomorrow, one that keeps for months — and no recipes. That is
-// deliberately a state the dashboard has to survive: it reads collections other
-// roadmap phases own, and they may be empty.
+// one due tomorrow, one that keeps for months. Specs share that one account,
+// so any collection another phase writes to (recipes, meal plan entries,
+// deliveries) may hold whatever ran first — assert against the database, or
+// against a floor, never against an exact count you did not create.
 //
 // The important spec here is the last one. Every panel is fed by a collection
 // somebody else writes, so a unit test can only prove the dashboard renders the
@@ -13,7 +14,7 @@
 // empty week forever.
 
 const { test, expect } = require('./fixtures');
-const { mealPlanEntry } = require('./firestore-admin');
+const { mealPlanEntry, recipeCount } = require('./firestore-admin');
 
 const statValues = (page) => page.getByTestId('stat-card-value');
 
@@ -87,12 +88,19 @@ test.describe('dashboard', () => {
     expect(await statNumber(page, 1)).toBeGreaterThanOrEqual(2);
   });
 
-  test('reports zero for a collection that has nothing in it', async ({ authedPage: page }) => {
+  test('counts the recipe library as the database actually has it', async ({
+    authedPage: page,
+  }) => {
     await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
 
-    // Nothing in the suite writes recipes, so the library is reliably empty —
-    // and an empty collection has to read as zero, not as a failed page.
-    await expect(statValues(page).nth(2)).toHaveText('0', { timeout: 20_000 });
+    // This asserted a literal '0' when it was written, on the reasoning that
+    // nothing in the suite wrote recipes. Phase 5's HelloFresh import now does,
+    // and specs share one account — so the tile is checked against the real
+    // count instead. That still catches the failure this guards against (a
+    // blank, NaN or undefined tile), and no longer depends on which other
+    // specs happened to run first.
+    await expect(statValues(page).nth(2)).toHaveText(/^\d+$/, { timeout: 20_000 });
+    expect(await statNumber(page, 2)).toBe(await recipeCount());
   });
 
   test('lists the food that needs rescuing, worst first', async ({ authedPage: page }) => {
