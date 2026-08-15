@@ -3,7 +3,8 @@
 // Wires together useInventory, useStorageLocations, InventoryList,
 // AddItemModal, and ConfirmModal into a fully functional inventory view.
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Alert, Button } from 'react-bootstrap';
 import { Upload } from 'lucide-react';
 
@@ -43,6 +44,28 @@ const Inventory = () => {
   const [deleteError, setDeleteError] = useState('');
 
   const loading = itemsLoading || locationsLoading;
+
+  // ── App shortcut ─────────────────────────────────────────────────────────
+  //
+  // A long press on the installed app's home-screen icon offers "Add Item",
+  // which opens /inventory?action=add (public/manifest.json). Nothing read that
+  // parameter, so the shortcut quietly did nothing but navigate — roadmap 9.4.
+  //
+  // The parameter is consumed as soon as it is honoured. Left in the URL it
+  // would reopen the form every time the page re-rendered, and the back button
+  // would land the cook back inside the form they had just closed.
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams.get('action') !== 'add') return;
+
+    setEditItem(null);
+    setShowAddModal(true);
+
+    const next = new URLSearchParams(searchParams);
+    next.delete('action');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   // ── Handlers ─────────────────────────────────────────────────────────────
 

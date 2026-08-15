@@ -15,6 +15,7 @@ import { useState, useCallback } from 'react';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from '../services/firebase';
 import { friendlyError } from '../utils/firebaseErrors';
+import { compressImage } from '../utils/imageCompression';
 
 /** Content types firestore/storage.rules accepts for recipe images. */
 export const ALLOWED_IMAGE_TYPES = [
@@ -79,11 +80,18 @@ const useRecipeImageUpload = () => {
     setUploading(true);
     setError(null);
 
-    const path = `recipes/${recipeId || draftRecipeId()}/${safeFileName(file.name)}`;
+    // Shrink before uploading — roadmap 9.2. A phone photo is several MB and
+    // 4000px wide; the biggest it is ever shown is a recipe card. Because the
+    // library is shared, the original was paid for once on upload and again by
+    // everyone who opened the recipe. compressImage returns the file untouched
+    // when it cannot help, so the path below is the same either way.
+    const upright = await compressImage(file);
+
+    const path = `recipes/${recipeId || draftRecipeId()}/${safeFileName(upright.name)}`;
 
     try {
       const storageRef = ref(storage, path);
-      await uploadBytes(storageRef, file, { contentType: file.type });
+      await uploadBytes(storageRef, upright, { contentType: upright.type });
       const url = await getDownloadURL(storageRef);
 
       setUploading(false);

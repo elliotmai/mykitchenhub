@@ -24,9 +24,17 @@
 @import './design-system.css';
 
 /* --------------------------------------------------------------------------
-   3. Google Fonts - Inter
+   3. Typography — roadmap 9.2
+   
+   There is deliberately no webfont here. The Inter @import that used to live
+   on this line was a render-blocking request to a third-party origin on the
+   critical path, and in a PWA opened without a connection it simply failed,
+   leaving the app to repaint once the timeout expired.
+   
+   --mkh-font-family still lists 'Inter' first, so anyone who has it installed
+   sees it; everyone else gets their platform's own UI face, which is already
+   on the device, needs no request, and never causes a flash of unstyled text.
    -------------------------------------------------------------------------- */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 /* --------------------------------------------------------------------------
    4. Component-Specific Styles

@@ -15,13 +15,10 @@
   <meta name="apple-mobile-web-app-title" content="KitchenHub" />
   <link rel="apple-touch-icon" href="%PUBLIC_URL%/icons/icon-152x152.png" />
 
-  <!-- Splash screens for iOS -->
-  <link rel="apple-touch-startup-image" href="%PUBLIC_URL%/splash/splash-640x1136.png"
-    media="(device-width: 320px) and (device-height: 568px)" />
-  <link rel="apple-touch-startup-image" href="%PUBLIC_URL%/splash/splash-750x1334.png"
-    media="(device-width: 375px) and (device-height: 667px)" />
-  <link rel="apple-touch-startup-image" href="%PUBLIC_URL%/splash/splash-1242x2208.png"
-    media="(device-width: 414px) and (device-height: 736px)" />
+  <!-- No apple-touch-startup-image links: public/splash/ does not exist, so the
+       three that used to sit here were 404s on every iOS launch. iOS falls back
+       to the background_color and icon from the manifest, which is what an
+       installed KitchenHub shows today anyway. -->
 
   <!-- Manifest -->
   <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
