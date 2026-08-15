@@ -178,10 +178,11 @@ export const makeNotification = (overrides = {}) => ({
 /**
  * A recipe as the rules accept it.
  *
- * `name`, not `title`: firestore.rules requires `name` on create, and the
- * recipe picker orders by it — a document without one is invisible to a
- * Firestore `orderBy('name')` query, however good the rest of it looks.
- * `source` and `difficulty` are required too.
+ * `name`, not `title` — `firestore.rules` requires it on create, along with
+ * `source` and `difficulty`. Legacy imports that carry only `title` still
+ * exist, which is why readers fall back to it; they are the reason nothing
+ * queries this collection with `orderBy('name')`, since Firestore drops
+ * documents missing the ordered field.
  */
 export const makeRecipe = (overrides = {}) => ({
   id: nextId('recipe'),

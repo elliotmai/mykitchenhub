@@ -77,9 +77,6 @@ export const buildWeekDays = (weekStart, today = toDayKey(new Date())) =>
 export const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'];
 const MEAL_ORDER = Object.fromEntries(MEAL_TYPES.map((t, i) => [t, i]));
 
-/** The lifecycle the schema and the security rules allow an entry to be in. */
-export const MEAL_STATUSES = ['planned', 'cooked', 'skipped'];
-
 /**
  * Is this meal still going to be cooked?
  *
