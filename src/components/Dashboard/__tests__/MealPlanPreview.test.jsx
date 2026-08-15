@@ -3,6 +3,7 @@
 
 import React from 'react';
 import { renderWithProviders, screen } from '../../../test-utils';
+import { makeMealPlanEntry } from '../../../test-utils/factories';
 import MealPlanPreview, { buildWeekRows, countPlannedMeals } from '../MealPlanPreview';
 
 const LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -15,13 +16,11 @@ const weekDays = (todayIndex = -1) =>
     isToday: i === todayIndex,
   }));
 
-const entry = (recipeName, overrides = {}) => ({
-  id: `entry-${recipeName}`,
-  recipeName,
-  mealType: 'dinner',
-  status: 'planned',
-  ...overrides,
-});
+/**
+ * A scheduled meal, straight from the shared factory so this stays honest about
+ * what `mealPlanEntries` documents actually look like.
+ */
+const entry = (recipeName, overrides = {}) => makeMealPlanEntry({ recipeName, ...overrides });
 
 describe('countPlannedMeals', () => {
   it('adds up every meal across the week', () => {
