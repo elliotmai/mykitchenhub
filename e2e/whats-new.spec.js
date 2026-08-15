@@ -27,15 +27,18 @@ test.describe("what's new popup", () => {
     await expect(dialog).not.toBeVisible();
   });
 
-  test('keeps "Got it" tappable above the phone\'s bottom bar', async ({
+  test('keeps "Got it" tappable, whatever else is pinned to the bottom', async ({
     authedPage: page,
-  }, testInfo) => {
-    // The popup opens over every page, and on a phone the bottom tab bar is
-    // pinned to the same edge. If the bar were drawn on top of the dismiss
-    // button, the popup — which swallows clicks — could not be got rid of at
-    // all until the entry aged out.
-    test.skip(!testInfo.project.name.includes('mobile'), 'about the phone bottom bar');
-
+  }) => {
+    // The popup opens over every page and swallows clicks, so if anything were
+    // drawn on top of its dismiss button the app would be stuck until the entry
+    // aged out. On a phone the thing that could do that is the bottom tab bar,
+    // pinned to the same edge; on desktop it would be any other overlay.
+    //
+    // Deliberately not skipped on desktop. A test.skip that leaves a spec
+    // running in no project at all is how the CSV preview's phone check went
+    // unnoticed for a whole phase — and the assertion is worth making at both
+    // widths anyway.
     const gotIt = page.getByRole('button', { name: 'Got it' });
     await expect(gotIt).toBeVisible();
 
