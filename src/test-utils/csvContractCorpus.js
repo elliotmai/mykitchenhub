@@ -131,12 +131,24 @@ const CASES = [
   },
 
   // ── optional columns ─────────────────────────────────────────────────────
-  ...['2027-01-15', '01/15/2027', '15/01/2027', 'someday', '0', '45678', '2020-01-01'].map(
-    (expiresAt) => ({
-      name: `expiry "${expiresAt}"`,
-      text: csv(`${HEADER},expiresAt`, `Milk,1,gal,Main Fridge,${expiresAt}`),
-    })
-  ),
+  // A bare day is a local calendar day in both layers (`2027-01-15` parsed as
+  // midnight UTC is the 14th west of Greenwich), and an impossible one is
+  // rejected rather than rolled into the next month. Run the suite under
+  // `npm run test:tz` — on a UTC clock the wrong answer looks right.
+  ...[
+    '2027-01-15',
+    '01/15/2027',
+    '15/01/2027',
+    'someday',
+    '0',
+    '45678',
+    '2020-01-01',
+    '2027-02-30',
+    '2027-13-01',
+  ].map((expiresAt) => ({
+    name: `expiry "${expiresAt}"`,
+    text: csv(`${HEADER},expiresAt`, `Milk,1,gal,Main Fridge,${expiresAt}`),
+  })),
   ...['14', '14.4', '0', '-5', 'ages', '3650', '3651'].map((shelfLifeDays) => ({
     name: `shelf life "${shelfLifeDays}"`,
     text: csv(`${HEADER},shelfLifeDays`, `Milk,1,gal,Main Fridge,${shelfLifeDays}`),

@@ -177,6 +177,37 @@ const cell = (row, key) => squash(row ? row[key] : undefined);
 
 const toNumber = (raw) => Number(String(raw).replace(/[$,\s]/g, ''));
 
+/** `2027-01-15` and nothing else — a calendar day rather than an instant. */
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Parse a "best by" cell.
+ *
+ * A bare `2027-01-15` is a local calendar day: `new Date()` reads it as
+ * midnight UTC, which is the 14th anywhere west of Greenwich and expires the
+ * imported food a day early. A well-formed but impossible day (`2027-02-30`)
+ * is rejected rather than rolled forward into March.
+ *
+ * The browser does this through src/utils/timestamps.js, which this package
+ * cannot import (it is a separate npm package, and ESM). Same rule, mirrored —
+ * the contract test is what keeps the two honest.
+ */
+const toExpiryDate = (raw) => {
+  const value = String(raw).trim();
+
+  if (DATE_ONLY.test(value)) {
+    const [year, month, day] = value.split('-').map(Number);
+    const d = new Date(year, month - 1, day);
+    // Years 0–99 mean 1900+n to the Date constructor; say what we meant.
+    if (year < 100) d.setFullYear(year);
+    if (d.getMonth() !== month - 1 || d.getDate() !== day) return null;
+    return d;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
 const buildLocationIndex = (locations) => {
   const byLabel = new Map();
   const byType = new Map();
@@ -260,8 +291,8 @@ const validateRow = (row, rowNumber, locations) => {
   const rawExpires = cell(row, 'expiresAt');
   let expiresAt = null;
   if (rawExpires) {
-    const parsed = new Date(rawExpires);
-    if (Number.isNaN(parsed.getTime())) {
+    const parsed = toExpiryDate(rawExpires);
+    if (!parsed) {
       errors.push(`Expiry date "${rawExpires}" is not a date we can read.`);
     } else if (parsed.getTime() > Date.now() + MAX_SHELF_LIFE_DAYS * MS_PER_DAY) {
       // A spreadsheet that exported dates as serial numbers puts "45678" here,
