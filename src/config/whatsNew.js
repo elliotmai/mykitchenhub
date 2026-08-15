@@ -14,6 +14,16 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.08.15.2',
+    date: 'August 2026',
+    items: [
+      '📖 There is a proper guide now. Every part of the app — your fridge, your recipes, your HelloFresh box, the weekly plan — written up in plain English, with a troubleshooting page for when something looks wrong.',
+      '🔒 Your kitchen is locked down properly. Only you can touch your food, your shopping and your week, and nobody can delete a recipe out of the shared library that they did not add themselves.',
+      '❄️ Your default fridge, freezer and pantry can no longer be removed by accident.',
+      '🩹 Editing something can no longer quietly leave it without a name — a few edits used to be able to blank out the very thing you were looking at.',
+    ],
+  },
+  {
     version: '2026.08.15.1',
     date: 'August 2026',
     items: [
