@@ -207,19 +207,27 @@ describe('resolveRowShelfLife', () => {
   it('falls back for an ingredient that does not belong in that location', () => {
     // The table says milk has no pantry shelf life at all. Someone put it there
     // anyway, so give it the pantry default rather than writing null.
-    expect(resolveShelfLifeDays({ name: 'milk', locationType: 'pantry' })).toBe(90);
+    expect(resolveRowShelfLife({ name: 'milk', locationType: 'pantry' })).toEqual({
+      days: 90,
+      source: 'default',
+    });
   });
 
   it('gives an already-expired item at least a day', () => {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() - 30);
 
-    expect(resolveShelfLifeDays({ expiresAt, name: 'milk', locationType: 'fridge' })).toBe(1);
+    // Still the file's date, so still the file's choice — the row is importing
+    // stock that has already gone off, and `expiresAt` is stored as given.
+    expect(resolveRowShelfLife({ expiresAt, name: 'milk', locationType: 'fridge' })).toEqual({
+      days: 1,
+      source: 'custom',
+    });
   });
 
   it('always resolves to a positive number of days', () => {
     ['fridge', 'freezer', 'pantry'].forEach((locationType) => {
-      const days = resolveShelfLifeDays({ name: 'unheard-of thing', locationType });
+      const { days } = resolveRowShelfLife({ name: 'unheard-of thing', locationType });
 
       expect(typeof days).toBe('number');
       expect(days).toBeGreaterThan(0);
