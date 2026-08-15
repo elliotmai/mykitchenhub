@@ -57,22 +57,33 @@ export const AuthProvider = ({ children }) => {
   // Listen for auth state changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        setUser(firebaseUser);
-        // Fetch additional user profile from Firestore
-        try {
-          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-          if (userDoc.exists()) {
-            setUserProfile(userDoc.data());
-          }
-        } catch (err) {
-          console.error('Error fetching user profile:', err);
-        }
-      } else {
+      if (!firebaseUser) {
         setUser(null);
         setUserProfile(null);
+        setLoading(false);
+        return;
       }
+
+      setUser(firebaseUser);
+
+      // Auth is resolved as soon as we know who the user is. The profile read
+      // below must not gate it: ProtectedRoute and PublicOnlyRoute render a
+      // full-page loader while `loading` is true, so a Firestore read that is
+      // slow — or never settles, which its long-lived connection can do —
+      // would strand a signed-in user on a spinner instead of redirecting them
+      // to their dashboard. The profile arrives a moment later and everything
+      // that reads it already tolerates it being null at first.
       setLoading(false);
+
+      // Fetch additional user profile from Firestore
+      try {
+        const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+        if (userDoc.exists()) {
+          setUserProfile(userDoc.data());
+        }
+      } catch (err) {
+        console.error('Error fetching user profile:', err);
+      }
     });
 
     return () => unsubscribe();

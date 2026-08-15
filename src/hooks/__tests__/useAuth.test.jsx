@@ -66,6 +66,19 @@ describe('session state', () => {
     expect(result.current.userProfile).toBeNull();
   });
 
+  it('does not leave the app stuck loading when the profile read never settles', async () => {
+    // Firestore's long-lived connection can hang rather than reject. The route
+    // guards render a full-page loader while `loading` is true, so gating it on
+    // this read would strand a signed-in user on a spinner — which is exactly
+    // how the end-to-end suite's sign-in step used to time out.
+    authMock.__setUser(authMock.__user());
+    fs.getDoc.mockReturnValue(new Promise(() => {}));
+    const { result } = renderAuth();
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.isAuthenticated).toBe(true);
+  });
+
   it('does not leave the app stuck loading when the profile read fails', async () => {
     jest.spyOn(console, 'error').mockImplementation(() => {});
     authMock.__setUser(authMock.__user());
