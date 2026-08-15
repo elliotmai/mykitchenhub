@@ -197,7 +197,7 @@ workflow additionally uses `FIREBASE_SERVICE_ACCOUNT` and `FIREBASE_TOKEN`.
 | `npm run test:rules` | Firestore security rules against the emulator (needs Java) |
 | `npm run test:e2e` | Builds, starts the emulators, runs Playwright |
 | `npm run test:e2e:ui` | The same in Playwright's interactive UI |
-| `npm run lint` / `lint:fix` | ESLint over `src/` |
+| `npm run lint` / `lint:fix` | ESLint over `src/` and `e2e/`. A warning fails it — `--max-warnings=0` |
 | `npm run format` / `format:check` | Prettier over `src/`, `e2e/` and the root scripts |
 
 ---
