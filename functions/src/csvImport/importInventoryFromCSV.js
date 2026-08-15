@@ -13,7 +13,7 @@ const admin = require('firebase-admin');
 const functions = require('firebase-functions');
 
 const { validateCSV } = require('./csvValidation');
-const { getShelfLife } = require('../data/ingredientShelfLife');
+const { ingredientShelfLife } = require('../data/ingredientShelfLife');
 
 /** Firestore's hard limit on writes in a single batch. */
 const BATCH_SIZE = 500;
@@ -21,7 +21,36 @@ const BATCH_SIZE = 500;
 /** How many row errors get stored on the history record. */
 const MAX_LOGGED_ERRORS = 20;
 
+/**
+ * Used when the ingredient table cannot help. These are the same numbers as
+ * `SHELF_LIFE_DEFAULTS` in src/hooks/useInventory.js, which is what an item
+ * added by hand gets — an imported item should not expire on a different date
+ * than the same item typed in.
+ */
 const SHELF_LIFE_FALLBACK = { fridge: 7, freezer: 180, pantry: 90 };
+
+/** Last resort, when even the kind of storage is unrecognised. */
+const FALLBACK_DAYS = 30;
+
+/**
+ * Raw table lookup, keeping "never heard of it" (undefined) apart from "knows
+ * it, and says not there" (null) — the mirror of `lookupShelfLife` in
+ * src/hooks/useIngredientMetadata.js.
+ *
+ * `getShelfLife` from the data module cannot be used here: it collapses an
+ * unknown ingredient into defaults of its own (freezer 90, pantry 30) that
+ * differ from the ones above, so an unknown item imported by this function got
+ * a different expiry than the same row imported in the browser.
+ */
+const lookupShelfLife = (name, locationType) => {
+  const entry =
+    ingredientShelfLife[
+      String(name || '')
+        .toLowerCase()
+        .trim()
+    ];
+  return entry ? entry[locationType] : undefined;
+};
 
 /** Split rows into batch-sized chunks. */
 const chunk = (rows, size = BATCH_SIZE) => {
@@ -32,20 +61,44 @@ const chunk = (rows, size = BATCH_SIZE) => {
   return chunks;
 };
 
-/**
- * Days of shelf life for a row: whatever the file said, else what the
- * ingredient table knows, else the default for that kind of storage.
- */
-const resolveShelfLifeDays = (data) => {
-  if (data.shelfLifeDays) return data.shelfLifeDays;
+/** Whole calendar days from today until `date`, floored at one. */
+const daysUntil = (date) => {
+  const midnight = (value) => {
+    const d = new Date(value);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  };
+  return Math.max(1, Math.round((midnight(date) - midnight(new Date())) / 86400000));
+};
 
-  if (data.expiresAt) {
-    const days = Math.ceil((data.expiresAt - new Date()) / (1000 * 60 * 60 * 24));
-    return Math.max(1, days);
+/**
+ * How long a row's food keeps, and who decided that.
+ *
+ * A shelf life or an expiry date in the file was chosen by whoever wrote the
+ * file, so it is `custom` and the app must not silently recalculate it on the
+ * next edit. Anything else is ours: the ingredient table first, then the
+ * default for that kind of storage.
+ *
+ * Kept in step with `resolveRowShelfLife` in src/hooks/useCSVImport.js — the
+ * two importers write the same documents and a cook cannot tell which one ran.
+ */
+const resolveRowShelfLife = (data) => {
+  // `> 0` rather than truthiness: a row saying "0 days" is still the file
+  // speaking, and it must not fall through to our own guess.
+  if (Number(data.shelfLifeDays) > 0) {
+    return { days: Number(data.shelfLifeDays), source: 'custom' };
   }
 
-  const known = getShelfLife(data.name, data.locationType);
-  return known || SHELF_LIFE_FALLBACK[data.locationType] || 30;
+  if (data.expiresAt) {
+    return { days: daysUntil(data.expiresAt), source: 'custom' };
+  }
+
+  const known = lookupShelfLife(data.name, data.locationType);
+  return {
+    days:
+      typeof known === 'number' ? known : SHELF_LIFE_FALLBACK[data.locationType] || FALLBACK_DAYS,
+    source: 'default',
+  };
 };
 
 /**
@@ -55,7 +108,7 @@ const resolveShelfLifeDays = (data) => {
  * tagged with anything else (`addedBy`, say) is rejected.
  */
 const buildInventoryDoc = (data, timestamp) => {
-  const shelfLifeDays = resolveShelfLifeDays(data);
+  const { days: shelfLifeDays, source: shelfLifeSource } = resolveRowShelfLife(data);
 
   let expiresAt = data.expiresAt;
   if (!expiresAt) {
@@ -73,6 +126,7 @@ const buildInventoryDoc = (data, timestamp) => {
     addedAt: timestamp,
     expiresAt,
     shelfLifeDays,
+    shelfLifeSource,
     notes: data.notes || '',
     source: 'csv-import',
     purchaseHistory: [
@@ -90,11 +144,7 @@ const buildInventoryDoc = (data, timestamp) => {
 
 /** The user's storage locations, which CSV rows are matched against. */
 const loadLocations = async (db, userId) => {
-  const snapshot = await db
-    .collection('users')
-    .doc(userId)
-    .collection('storageLocations')
-    .get();
+  const snapshot = await db.collection('users').doc(userId).collection('storageLocations').get();
 
   return snapshot.docs.map((doc) => Object.assign({ id: doc.id }, doc.data()));
 };
@@ -139,7 +189,9 @@ const importCSVForUser = async ({ db, userId, csvData, fileName = 'import.csv' }
 
     for (const batchRows of batches) {
       const batch = db.batch();
-      batchRows.forEach((row) => batch.set(inventoryRef.doc(), buildInventoryDoc(row.data, timestamp)));
+      batchRows.forEach((row) =>
+        batch.set(inventoryRef.doc(), buildInventoryDoc(row.data, timestamp))
+      );
       // eslint-disable-next-line no-await-in-loop -- batches must land in order
       await batch.commit();
       imported += batchRows.length;
@@ -248,9 +300,9 @@ const handler = async (req, res) => {
       fileName: fileName || 'import.csv',
     });
 
-    res.status(result.status === 'error' ? 400 : 200).json(
-      Object.assign({ timestamp: new Date().toISOString() }, result)
-    );
+    res
+      .status(result.status === 'error' ? 400 : 200)
+      .json(Object.assign({ timestamp: new Date().toISOString() }, result));
   } catch (error) {
     console.error('Error in importInventoryFromCSV:', error);
     res.status(500).json({ error: 'Internal server error', message: error.message });
@@ -266,7 +318,7 @@ module.exports = {
   handler,
   importCSVForUser,
   buildInventoryDoc,
-  resolveShelfLifeDays,
+  resolveRowShelfLife,
   chunk,
   BATCH_SIZE,
   MAX_LOGGED_ERRORS,

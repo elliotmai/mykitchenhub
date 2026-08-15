@@ -24,6 +24,7 @@ import {
 import { db } from '../services/firebase';
 import { useAuth } from './useAuth';
 import { byExpirySoonestFirst } from './useInventory';
+import { toDayKey } from './useMealPlan';
 
 /** Recipes pulled per lookup — plenty for matching, small enough to stay cheap. */
 export const RECIPE_FETCH_LIMIT = 200;
@@ -47,19 +48,45 @@ export const ingredientNames = (ingredient) => {
   return [normalize(ingredient?.normalized), normalize(ingredient?.name)].filter(Boolean);
 };
 
+/** Minimum name length before containment matching is allowed. */
+const MIN_CONTAINMENT_LENGTH = 4;
+
+/**
+ * Crude singular form — enough for a kitchen, not for a dictionary.
+ *
+ * Recipes and shopping habits disagree about number: a recipe asks for "egg"
+ * and the fridge holds "Eggs". Comparing the singular forms catches that
+ * without loosening the containment rule below, which is what keeps "egg"
+ * away from "eggplant".
+ */
+export const singularize = (word) => {
+  if (word.length < 3) return word;
+  if (word.endsWith('ies')) return `${word.slice(0, -3)}y`;
+  if (/(ch|sh|ss|x|z)es$/.test(word)) return word.slice(0, -2);
+  if (word.endsWith('s') && !word.endsWith('ss')) return word.slice(0, -1);
+  return word;
+};
+
 /**
  * Does a recipe ingredient refer to this inventory item?
  *
- * Names rarely match exactly — a cook's "chicken" should still match a recipe's
- * "chicken breast" — so containment counts in either direction. Very short
- * names are compared strictly, otherwise "egg" would match "eggplant".
+ * Three rules, loosest last:
+ *   1. the same name (already lower-cased and trimmed by `normalize`)
+ *   2. the same name but for plural — "egg" is "eggs"
+ *   3. one contains the other, so a cook's "chicken" matches a recipe's
+ *      "chicken breast"
+ *
+ * Rule 3 only applies to names of four characters or more; without that,
+ * "egg" would match "eggplant" and put an aubergine curry at the top of the
+ * list for someone with eggs to use up.
  */
 export const ingredientMatchesItem = (ingredientName, itemName) => {
   const a = normalize(ingredientName);
   const b = normalize(itemName);
   if (!a || !b) return false;
   if (a === b) return true;
-  if (a.length < 4 || b.length < 4) return false;
+  if (singularize(a) === singularize(b)) return true;
+  if (a.length < MIN_CONTAINMENT_LENGTH || b.length < MIN_CONTAINMENT_LENGTH) return false;
   return a.includes(b) || b.includes(a);
 };
 
@@ -74,6 +101,10 @@ export const recipeTitle = (recipe) => recipe?.name ?? recipe?.title ?? 'Untitle
  * tie is broken by urgency.
  */
 export const matchRecipesToItems = (recipes, expiringItems) => {
+  // Neither list is guaranteed: the recipe collection can be empty or still
+  // loading, and a caller can pass whatever it has.
+  if (!Array.isArray(recipes) || !Array.isArray(expiringItems)) return [];
+
   const matches = recipes.map((recipe) => {
     const ingredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
 
@@ -107,11 +138,14 @@ export const matchRecipesToItems = (recipes, expiringItems) => {
     });
 };
 
-/** Today as YYYY-MM-DD in the cook's own timezone, not UTC. */
-export const todayIsoDate = (now = new Date()) => {
-  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
-  return local.toISOString().slice(0, 10);
-};
+/**
+ * Today as YYYY-MM-DD in the cook's own timezone, not UTC.
+ *
+ * `toDayKey` is Phase 7's, and so is the `date` field this feeds. Sharing it
+ * rather than keeping a second implementation means a meal scheduled from here
+ * lands on the same day key the meal plan page reads back.
+ */
+export const todayIsoDate = (now = new Date()) => toDayKey(now);
 
 /**
  * useRecipeSuggestions

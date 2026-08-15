@@ -35,6 +35,34 @@ describe('daysUntil', () => {
     expect(daysUntil(null, NOW)).toBeNull();
     expect(daysUntil('not a date', NOW)).toBeNull();
   });
+
+  it('counts days where the cook lives, not where the function runs', () => {
+    // The function runs in UTC. At the 9 AM New York firing (13:00 UTC), an
+    // item stamped for 23:00 that evening in New York is 03:00 the *next* day
+    // in UTC — so this used to answer 1 and the text read "milk (tomorrow)"
+    // beside a card in the app correctly reading "Expires today".
+    const nineAmNewYork = new Date('2026-08-14T13:00:00Z');
+    const elevenPmNewYork = new Date('2026-08-15T03:00:00Z');
+
+    expect(daysUntil(elevenPmNewYork, nineAmNewYork)).toBe(0);
+    expect(describeTiming(elevenPmNewYork, nineAmNewYork)).toBe('today');
+  });
+
+  it('counts a DST changeover day as one day', () => {
+    // 2026-03-08 is 23 hours long in New York; 2026-11-01 is 25.
+    expect(daysUntil(new Date('2026-03-09T01:00:00Z'), new Date('2026-03-08T01:00:00Z'))).toBe(1);
+    expect(daysUntil(new Date('2026-11-02T01:00:00Z'), new Date('2026-11-01T01:00:00Z'))).toBe(1);
+  });
+
+  it('can be asked to count in another timezone', () => {
+    const instant = new Date('2026-08-15T03:00:00Z');
+    const now = new Date('2026-08-14T13:00:00Z');
+
+    // The same two instants are one calendar day apart in UTC and none apart
+    // in New York.
+    expect(daysUntil(instant, now, 'UTC')).toBe(1);
+    expect(daysUntil(instant, now, 'America/New_York')).toBe(0);
+  });
 });
 
 describe('describeTiming', () => {

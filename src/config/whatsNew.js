@@ -14,6 +14,18 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.08.15',
+    date: 'August 2026',
+    items: [
+      '📆 Expiry dates now read the way you would say them. Something stamped for today says “Expires today” right up to bedtime, instead of flipping to “tomorrow” for most of the day — and the morning alert and the app finally agree with each other.',
+      '❄️ Freezer suggestions stopped offering to rescue food that has already gone off. Freezing keeps things; it cannot bring them back, and it used to promise nine more months on last week’s chicken.',
+      '⏳ If you set your own use-by on something, the freezer now tells you what freezing will really buy you, and half a pack keeps the same date as the half you left out.',
+      '🥚 A recipe calling for “egg” now finds the eggs in your fridge. Singular and plural no longer count as different food.',
+      '🎉 When nothing is about to go off, the Waste Alerts page just says so, once — instead of four separate panels each reporting nothing.',
+      '📥 Imported food now gets the right shelf life for what it actually is — chicken two days, rice two years — and if your file set a use-by date, we leave it exactly as you put it.',
+    ],
+  },
+  {
     version: '2026.08.14.6',
     date: 'August 2026',
     items: [

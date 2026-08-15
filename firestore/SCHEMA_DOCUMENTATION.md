@@ -225,7 +225,7 @@ entry, which is what puts it on the user's week.
   type: "waste-alert",              // "waste-alert" | "meal-plan" | "system"
   title: "3 items to use up soon",  // Headline
   body: "spinach (today), ...",     // Full text
-  createdAt: Timestamp,             // When the alert was generated
+  createdAt: "2026-08-14T13:00:00.000Z", // ISO string, not a Timestamp — see below
   read: false,                      // Cleared by the user in the app
   channel: "in-app",                // "in-app" | "sms" — how it actually reached them
   smsStatus: "not-configured",      // "sent" | "not-configured" | "no-phone-number" | …
@@ -234,10 +234,23 @@ entry, which is what puts it on the user's week.
 }
 ```
 
+`createdAt` is an ISO string rather than a `Timestamp`, unlike every other
+collection here. The scheduled function is the only writer and it is given its
+clock as an argument so the tests can drive it, so it has a plain `Date` to
+hand and no `serverTimestamp()` sentinel. ISO strings sort the same way, which
+is what `useNotifications` orders on.
+
 The in-app notification is written on **every** run, whether or not an SMS went
 out, so the daily alert works with no SMS provider key configured. The document
 id is derived from the date, so a re-run on the same day updates the alert
 rather than duplicating it.
+
+**Timezone:** that date, and every "today"/"tomorrow" in the alert wording, is
+counted in `ALERT_TIME_ZONE` (`functions/src/wasteAlerts/alertMessage.js`) —
+the timezone the Cloud Scheduler trigger fires in. It is one timezone for
+everybody: there is nowhere on the user profile to record a cook's own, so a
+cook outside it can see a day-boundary disagreement between their alert and
+the app. Adding `preferences.timeZone` is the fix when that matters.
 
 **Security Rules:**
 - Owner-only read, create, update and delete

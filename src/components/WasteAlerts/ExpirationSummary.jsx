@@ -6,10 +6,13 @@ import { Card, Col, Row } from 'react-bootstrap';
 
 import { EXPIRATION_LEVELS } from '../../hooks/useInventory';
 
+// The bands do not overlap, and the captions should not either: "Within 2
+// days" beside "Within 5 days" reads as though the second included the first,
+// so the three numbers looked like they should add up to more than the total.
 const TILES = [
   { key: 'expired', level: EXPIRATION_LEVELS.expired, caption: 'Already past its date' },
-  { key: 'critical', level: EXPIRATION_LEVELS.critical, caption: 'Within 2 days' },
-  { key: 'warning', level: EXPIRATION_LEVELS.warning, caption: 'Within 5 days' },
+  { key: 'critical', level: EXPIRATION_LEVELS.critical, caption: 'Today or in the next 2 days' },
+  { key: 'warning', level: EXPIRATION_LEVELS.warning, caption: 'In 3 to 5 days' },
 ];
 
 /**

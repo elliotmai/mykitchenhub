@@ -67,6 +67,30 @@ describe('ingredientMatchesItem', () => {
     expect(ingredientMatchesItem('egg', 'egg')).toBe(true);
   });
 
+  it('ignores case', () => {
+    expect(ingredientMatchesItem('Spinach', 'spinach')).toBe(true);
+    expect(ingredientMatchesItem('  SALMON ', 'Salmon')).toBe(true);
+  });
+
+  it.each([
+    ['egg', 'eggs'],
+    ['eggs', 'egg'],
+    ['tomato', 'tomatoes'],
+    ['berry', 'berries'],
+    ['squash', 'squashes'],
+    ['Onion', 'onions'],
+  ])('matches %s against %s, which differ only by number', (a, b) => {
+    // A recipe asks for "egg" and the fridge holds "Eggs". The length guard
+    // that keeps "egg" away from "eggplant" also kept it away from "eggs", so
+    // a carton about to go off matched nothing at all.
+    expect(ingredientMatchesItem(a, b)).toBe(true);
+  });
+
+  it('does not let plural matching reopen the eggplant hole', () => {
+    expect(ingredientMatchesItem('egg', 'eggplants')).toBe(false);
+    expect(ingredientMatchesItem('eggs', 'eggplant')).toBe(false);
+  });
+
   it('ignores case and surrounding spaces', () => {
     expect(ingredientMatchesItem('  Spinach ', 'SPINACH')).toBe(true);
   });
@@ -117,6 +141,25 @@ describe('matchRecipesToItems', () => {
     );
 
     expect(match.usesItems.map((i) => i.name)).toEqual(['Spinach', 'Milk']);
+  });
+
+  it('returns nothing when the recipe library is empty', () => {
+    expect(matchRecipesToItems([], [makeItem({ name: 'Spinach' })])).toEqual([]);
+  });
+
+  it('returns nothing when there is nothing expiring', () => {
+    expect(matchRecipesToItems([recipe('Anything', ['spinach'])], [])).toEqual([]);
+  });
+
+  it('returns nothing rather than throwing when handed no lists at all', () => {
+    expect(matchRecipesToItems(undefined, undefined)).toEqual([]);
+    expect(matchRecipesToItems(null, [])).toEqual([]);
+  });
+
+  it('skips a recipe whose ingredient list is empty', () => {
+    expect(
+      matchRecipesToItems([recipe('Boiled Water', [])], [makeItem({ name: 'Spinach' })])
+    ).toEqual([]);
   });
 
   it('copes with a recipe whose ingredients are plain strings', () => {

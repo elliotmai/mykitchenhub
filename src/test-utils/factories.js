@@ -163,7 +163,10 @@ export const makeNotification = (overrides = {}) => ({
   type: 'waste-alert',
   title: '2 items to use up soon',
   body: 'spinach (today) and milk (tomorrow). Freeze what you can, or cook something.',
-  createdAt: daysFromNow(0),
+  // An ISO string, not a Timestamp — the alert function has a plain Date to
+  // hand and writes one. This factory used to build a Timestamp, so nothing
+  // exercised the shape the only writer actually produces.
+  createdAt: new Date().toISOString(),
   read: false,
   channel: 'in-app',
   smsStatus: 'not-configured',

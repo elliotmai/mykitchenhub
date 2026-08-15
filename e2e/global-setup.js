@@ -148,6 +148,10 @@ module.exports = async () => {
           addedAt: admin.firestore.Timestamp.fromDate(daysFromNow(-1)),
           expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
           shelfLifeDays: 7,
+          // Seeded items are ours, not the cook's — same as makeItem in
+          // src/test-utils/factories.js. Without it the app has to infer, and
+          // the first edit of a seeded item rewrites its expiry.
+          shelfLifeSource: 'default',
           notes: '',
           source: 'seed',
           purchaseHistory: [],

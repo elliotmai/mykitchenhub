@@ -11,11 +11,38 @@ const SMS_MAX_LENGTH = 300;
 /** Named in the SMS; the rest are summarised as "and N more". */
 const MAX_NAMED_ITEMS = 3;
 
-const startOfDay = (date) => {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
-};
+/**
+ * The household's timezone — the one the Cloud Scheduler trigger fires in.
+ *
+ * Every "today"/"tomorrow" in this file is counted in it. Without that, day
+ * boundaries fell wherever the function happened to run, which is UTC: at the
+ * 9 AM New York firing, milk stamped for 23:00 that evening is already the
+ * next UTC day, so the text read "milk (tomorrow)" beside a card in the app
+ * correctly reading "Expires today".
+ *
+ * This is one timezone for everybody, not one per cook, because the user
+ * profile has nowhere to record a cook's own — see the note in
+ * firestore/SCHEMA_DOCUMENTATION.md. Counting in the timezone the alert is
+ * scheduled in is at least the same assumption "9 AM" already makes.
+ */
+const ALERT_TIME_ZONE = 'America/New_York';
+
+/** `YYYY-MM-DD` for an instant, as read off a clock in `timeZone`. */
+function localDay(date, timeZone = ALERT_TIME_ZONE) {
+  // 'en-CA' formats as YYYY-MM-DD, which is what both the day arithmetic and
+  // the notification's document id want.
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+/** Whole days since the epoch for a local calendar day. */
+function dayNumber(date, timeZone) {
+  return Math.round(Date.parse(`${localDay(date, timeZone)}T00:00:00Z`) / 86400000);
+}
 
 /** Firestore Timestamp, Date or ISO string → Date, or null if unusable. */
 function toDate(value) {
@@ -27,16 +54,19 @@ function toDate(value) {
 /**
  * Whole days from `now` until an expiry, counted by calendar day so that
  * "tomorrow" means tomorrow regardless of the time the job runs.
+ *
+ * Comparing calendar days rather than elapsed hours also means a DST
+ * changeover — a 23- or 25-hour day — still counts as one day.
  */
-function daysUntil(expiresAt, now = new Date()) {
+function daysUntil(expiresAt, now = new Date(), timeZone = ALERT_TIME_ZONE) {
   const expiry = toDate(expiresAt);
   if (!expiry) return null;
-  return Math.round((startOfDay(expiry) - startOfDay(now)) / 86400000);
+  return dayNumber(expiry, timeZone) - dayNumber(now, timeZone);
 }
 
 /** "expired", "today", "tomorrow", "in 3 days". */
-function describeTiming(expiresAt, now = new Date()) {
-  const days = daysUntil(expiresAt, now);
+function describeTiming(expiresAt, now = new Date(), timeZone = ALERT_TIME_ZONE) {
+  const days = daysUntil(expiresAt, now, timeZone);
   if (days === null) return 'soon';
   if (days < 0) return 'expired';
   if (days === 0) return 'today';
@@ -100,9 +130,11 @@ function formatAlertMessage(items = [], options = {}) {
 }
 
 module.exports = {
+  ALERT_TIME_ZONE,
   SMS_MAX_LENGTH,
   MAX_NAMED_ITEMS,
   daysUntil,
   describeTiming,
   formatAlertMessage,
+  localDay,
 };

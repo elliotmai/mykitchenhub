@@ -38,7 +38,7 @@ const RecipeSuggestions = ({ suggestions = [], loading = false, onAddToMealPlan 
   return (
     <Card data-testid="recipe-suggestions">
       <Card.Header className="bg-transparent d-flex align-items-center gap-2">
-        <ChefHat size={18} className="text-secondary" />
+        <ChefHat size={18} className="text-secondary" aria-hidden="true" />
         <h5 className="mb-0">Cook it before it goes</h5>
       </Card.Header>
       <Card.Body className="p-0">
@@ -83,7 +83,7 @@ const RecipeSuggestions = ({ suggestions = [], loading = false, onAddToMealPlan 
                     {busyId === match.recipe.id ? (
                       <Spinner size="sm" />
                     ) : (
-                      <CalendarPlus size={14} />
+                      <CalendarPlus size={14} aria-hidden="true" />
                     )}
                     {added.includes(match.recipe.id) ? 'On the plan' : 'Add to Meal Plan'}
                   </Button>

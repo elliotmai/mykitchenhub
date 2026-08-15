@@ -29,7 +29,7 @@ const WasteAlertNotifications = ({ notifications = [], onMarkRead, onDismiss }) 
   return (
     <Card className="mb-4" data-testid="waste-alert-notifications">
       <Card.Header className="bg-transparent d-flex align-items-center gap-2">
-        <Bell size={18} className="text-warning" />
+        <Bell size={18} className="text-warning" aria-hidden="true" />
         <h5 className="mb-0">Your daily alerts</h5>
       </Card.Header>
       <ListGroup variant="flush">
@@ -63,7 +63,7 @@ const WasteAlertNotifications = ({ notifications = [], onMarkRead, onDismiss }) 
                   aria-label={`Mark "${notification.title}" as read`}
                   onClick={() => onMarkRead?.(notification.id)}
                 >
-                  <Check size={14} />
+                  <Check size={14} aria-hidden="true" />
                 </Button>
               )}
               <Button
@@ -72,7 +72,7 @@ const WasteAlertNotifications = ({ notifications = [], onMarkRead, onDismiss }) 
                 aria-label={`Dismiss "${notification.title}"`}
                 onClick={() => onDismiss?.(notification.id)}
               >
-                <X size={14} />
+                <X size={14} aria-hidden="true" />
               </Button>
             </div>
           </ListGroup.Item>

@@ -10,7 +10,7 @@ import React from 'react';
 import { Row, Col, Alert } from 'react-bootstrap';
 import { Package, BookOpen, Calendar, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import useInventory, { getExpirationStatus } from '../hooks/useInventory';
+import useInventory, { isExpiringWithin } from '../hooks/useInventory';
 import useRecipeCount from '../hooks/useRecipeCount';
 import useMealPlan, { fromDayKey, shiftDayKey } from '../hooks/useMealPlan';
 import {
@@ -29,11 +29,17 @@ export const weekRangeLabel = (weekStart) => {
   return `${fmt(fromDayKey(weekStart))} – ${fmt(fromDayKey(shiftDayKey(weekStart, 6)))}`;
 };
 
-/** Items in the five-day window the inventory page colour-codes as at-risk. */
-const EXPIRING_STATUSES = ['expired', 'critical', 'warning'];
+/**
+ * Items in the five-day window the inventory page colour-codes as at-risk.
+ *
+ * Shares `isExpiringWithin` with the waste-alerts page so the dashboard tile
+ * and that page can never disagree about the same kitchen — the two used to
+ * define the window separately, one by status name and one by day count.
+ */
+export const EXPIRING_WINDOW_DAYS = 5;
 
 export const countExpiringSoon = (items = []) =>
-  items.filter((item) => EXPIRING_STATUSES.includes(getExpirationStatus(item?.expiresAt))).length;
+  items.filter((item) => isExpiringWithin(item, EXPIRING_WINDOW_DAYS)).length;
 
 /**
  * Dashboard Page
