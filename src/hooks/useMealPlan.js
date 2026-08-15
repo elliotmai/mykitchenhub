@@ -18,6 +18,7 @@ import {
   deleteDoc,
   setDoc,
   query,
+  where,
   orderBy,
   serverTimestamp,
 } from 'firebase/firestore';
@@ -367,8 +368,26 @@ const useMealPlan = () => {
       return;
     }
 
+    // Bounded to the week on screen — roadmap 9.2.
+    //
+    // This used to subscribe to every meal ever planned and filter to the
+    // current week in the browser. After a year of use that is ~1,000 documents
+    // read and held live to render seven day cards, growing every week and
+    // never shrinking. Nothing outside this hook sees the unfiltered list:
+    // every consumer goes through `entriesByDay`, and generatePlan matches on
+    // `planId === weekStart`.
+    //
+    // Day keys are ISO `YYYY-MM-DD` strings, so a lexicographic range is a
+    // chronological one. The range and the orderBy are on the same field, which
+    // the automatic single-field index already covers — no composite needed.
+    const weekEnd = shiftDayKey(weekStart, 6);
     const entriesRef = collection(db, 'users', user.uid, 'mealPlanEntries');
-    const q = query(entriesRef, orderBy('date', 'asc'));
+    const q = query(
+      entriesRef,
+      where('date', '>=', weekStart),
+      where('date', '<=', weekEnd),
+      orderBy('date', 'asc')
+    );
 
     const unsubscribe = onSnapshot(
       q,
@@ -385,7 +404,9 @@ const useMealPlan = () => {
     );
 
     return () => unsubscribe();
-  }, [user?.uid]);
+    // Re-subscribes when the cook moves week, which is the point: the query is
+    // now the week, not the whole history.
+  }, [user?.uid, weekStart]);
 
   // ── Week document listener ───────────────────────────────────────────────
   useEffect(() => {

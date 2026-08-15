@@ -318,6 +318,44 @@ describe('useMealPlan subscription', () => {
     expect(paths).toContain(ENTRIES_PATH);
   });
 
+  it('asks Firestore only for the week on screen, not for every meal ever planned', async () => {
+    await renderMealPlan();
+
+    // Roadmap 9.2. This listener used to read the whole history and filter to
+    // the week in the browser — ~1,000 documents held live after a year of use
+    // to render seven day cards, growing every week and never shrinking.
+    const constraints = fs.query.mock.calls.flatMap(([ref, ...rest]) =>
+      fs.pathOf(ref) === ENTRIES_PATH ? rest : []
+    );
+
+    const ranges = constraints.filter((c) => c.type === 'where' && c.field === 'date');
+    expect(ranges.map((c) => c.op).sort()).toEqual(['<=', '>=']);
+
+    const [from] = ranges.filter((c) => c.op === '>=').map((c) => c.value);
+    const [to] = ranges.filter((c) => c.op === '<=').map((c) => c.value);
+    // Exactly the seven days the board shows.
+    expect(shiftDayKey(from, 6)).toBe(to);
+
+    // Ordered by the same field the range is on, so the automatic single-field
+    // index serves it and no composite index is needed.
+    expect(constraints).toContainEqual({ type: 'orderBy', field: 'date', direction: 'asc' });
+  });
+
+  it('re-queries when the cook moves to another week', async () => {
+    const { result } = await renderMealPlan();
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    const before = fs.query.mock.calls.length;
+
+    await act(async () => {
+      result.current.goToWeek(1);
+    });
+
+    // A bounded query has to be re-issued to see a different week; the old
+    // read-everything listener never needed to, which was the whole cost.
+    await waitFor(() => expect(fs.query.mock.calls.length).toBeGreaterThan(before));
+  });
+
   it('buckets the week’s meals by day', async () => {
     const { result } = await renderMealPlan({
       entries: [

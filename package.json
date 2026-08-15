@@ -1,6 +1,6 @@
 {
   "name": "mykitchenhub",
-  "version": "0.8.2",
+  "version": "0.9.4",
   "private": true,
   "description": "Recipe & Inventory Management Progressive Web Application",
   "dependencies": {
@@ -85,10 +85,10 @@
     ],
     "coverageThreshold": {
       "global": {
-        "statements": 83,
-        "branches": 71,
-        "functions": 80,
-        "lines": 84
+        "statements": 86,
+        "branches": 74,
+        "functions": 84,
+        "lines": 87
       }
     }
   },

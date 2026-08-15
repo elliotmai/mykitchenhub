@@ -11,7 +11,7 @@
 // reads the kitchen never races the code that filled it.
 
 const admin = require('firebase-admin');
-const { TEST_USER, accountForWorker } = require('./accounts');
+const { TEST_USER, EMPTY_USER, accountForWorker } = require('./accounts');
 
 const PROJECT_ID = process.env.E2E_PROJECT_ID || 'mykitchenhub-e2e';
 const AUTH_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST || '127.0.0.1:9099';
@@ -99,7 +99,7 @@ const ITEMS = [
  * Every account gets the identical kitchen, so a spec's expectations hold
  * whichever worker picks it up.
  */
-const seedKitchen = async (db, account) => {
+const seedKitchen = async (db, account, { withItems = true } = {}) => {
   const uid = await createAuthUser(account);
   const userRef = db.collection('users').doc(uid);
 
@@ -129,6 +129,10 @@ const seedKitchen = async (db, account) => {
         })
     )
   );
+
+  // The empty-state account stops here: a profile and the default shelves are
+  // exactly what signing up gives you, and nothing has been put on them yet.
+  if (!withItems) return uid;
 
   await Promise.all(
     ITEMS.map(({ id, name, expiresIn, locationId, locationType }) =>
@@ -224,6 +228,9 @@ module.exports = async (config) => {
     uids.push(await seedKitchen(db, account));
   }
 
+  // One more with nothing in it, for e2e/empty-states.spec.js.
+  await seedKitchen(db, EMPTY_USER, { withItems: false });
+
   await Promise.all(
     RECIPES.map(({ id, ...data }) =>
       db
@@ -239,7 +246,7 @@ module.exports = async (config) => {
   );
 
   console.log(
-    `[e2e] seeded ${accounts.length} accounts (${workerCount} workers + auth spec), ` +
+    `[e2e] seeded ${accounts.length} accounts (${workerCount} workers + auth spec) + 1 empty, ` +
       `each with ${LOCATIONS.length} locations and ${ITEMS.length} items, ` +
       `plus ${RECIPES.length} shared recipes`
   );

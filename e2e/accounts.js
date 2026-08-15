@@ -36,6 +36,21 @@ const TEST_USER = {
   displayName: DISPLAY_NAME,
 };
 
+/**
+ * A signed-up cook who has not put anything in their kitchen yet.
+ *
+ * Gets a profile and the default storage locations — what the sign-up function
+ * actually creates — and nothing else. Roadmap 9.3 asks for empty states, and
+ * an empty state is not testable on an account the other specs keep filling.
+ *
+ * Shared by every worker on purpose: the specs that use it only read.
+ */
+const EMPTY_USER = {
+  email: 'e2e-newcomer@example.com',
+  password: PASSWORD,
+  displayName: 'New Cook',
+};
+
 /** The account belonging to worker `index`. */
 const accountForWorker = (index) => ({
   email: `e2e-cook+w${index}@example.com`,
@@ -55,6 +70,7 @@ module.exports = {
   PASSWORD,
   DISPLAY_NAME,
   TEST_USER,
+  EMPTY_USER,
   accountForWorker,
   currentAccount,
 };

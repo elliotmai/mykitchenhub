@@ -4,7 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 const { test: base, expect } = require('@playwright/test');
-const { TEST_USER, accountForWorker } = require('./accounts');
+const { TEST_USER, EMPTY_USER, accountForWorker } = require('./accounts');
 const { WHATS_NEW } = require('../src/config/whatsNew');
 
 // Must match STORAGE_KEY in src/components/Common/WhatsNew.jsx.
@@ -171,6 +171,50 @@ const test = withWhatsNewOption(base).extend({
 
   storageState: async ({ workerStorageState }, use) => {
     await use(workerStorageState);
+  },
+
+  /**
+   * Signed-in state for the account with nothing in it, captured once per
+   * worker. Kept apart from the worker account because the point of it is that
+   * nothing ever writes to it.
+   */
+  emptyStorageState: [
+    async ({ browser }, use, workerInfo) => {
+      const file = path.join(__dirname, '.auth', `empty-${workerInfo.parallelIndex}.json`);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+
+      const page = await browser.newPage({
+        storageState: undefined,
+        baseURL: workerInfo.project.use.baseURL,
+      });
+      try {
+        await login(page, EMPTY_USER);
+        await page.context().storageState({ path: file, indexedDB: true });
+      } finally {
+        await page.context().close();
+      }
+
+      await use(file);
+    },
+    { scope: 'worker' },
+  ],
+
+  /**
+   * A page signed in as a cook who has added nothing yet.
+   *
+   * Its own context rather than the shared `page`, because storageState is
+   * fixed when a context is created and this one needs a different account.
+   */
+  emptyPage: async ({ browser, baseURL, emptyStorageState, suppressWhatsNew }, use) => {
+    const context = await browser.newContext({ storageState: emptyStorageState, baseURL });
+    const page = await context.newPage();
+    if (suppressWhatsNew) await suppressWhatsNewPopup(page);
+
+    try {
+      await use(page);
+    } finally {
+      await context.close();
+    }
   },
 
   /**
