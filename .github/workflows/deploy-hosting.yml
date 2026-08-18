@@ -1,0 +1,88 @@
+name: Deploy frontend
+
+# Nothing published the web app before this workflow existed. The build is a
+# static bundle; Firebase Hosting serves it using the credentials this
+# repository already holds, so no new account or secret is involved.
+#
+# Deploys are manual by default: the job only runs on a push once the
+# repository variable AUTO_DEPLOY_HOSTING is set to 'true' (Settings → Secrets
+# and variables → Actions → Variables). The button always works.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-hosting
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || vars.AUTO_DEPLOY_HOSTING == 'true'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # REACT_APP_USE_EMULATORS is deliberately absent. If it were set the
+      # shipped bundle would try to reach localhost and nothing would work for
+      # anyone — the check below fails the build rather than publishing that.
+      - name: Build
+        env:
+          REACT_APP_FIREBASE_API_KEY: ${{ secrets.REACT_APP_FIREBASE_API_KEY }}
+          REACT_APP_FIREBASE_AUTH_DOMAIN: ${{ secrets.REACT_APP_FIREBASE_AUTH_DOMAIN }}
+          REACT_APP_FIREBASE_PROJECT_ID: ${{ secrets.REACT_APP_FIREBASE_PROJECT_ID }}
+          REACT_APP_FIREBASE_STORAGE_BUCKET: ${{ secrets.REACT_APP_FIREBASE_STORAGE_BUCKET }}
+          REACT_APP_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.REACT_APP_FIREBASE_MESSAGING_SENDER_ID }}
+          REACT_APP_FIREBASE_APP_ID: ${{ secrets.REACT_APP_FIREBASE_APP_ID }}
+          REACT_APP_FIREBASE_FUNCTIONS_URL: ${{ secrets.REACT_APP_FIREBASE_FUNCTIONS_URL }}
+          REACT_APP_FIREBASE_MEASUREMENT_ID: ${{ secrets.REACT_APP_FIREBASE_MEASUREMENT_ID }}
+          CI: true
+        run: npm run build
+
+      # A positive assertion, not a search for something wrong: the bundle has
+      # to name the project we are about to publish it to. Firebase config is
+      # inlined at build time, so an emulator build carries the e2e project id
+      # and a build with the secrets missing carries neither — both fail here
+      # rather than going live and talking to the wrong database, or to
+      # localhost, and working for nobody.
+      #
+      # Grepping for emulator host:port does not work: connectFirestoreEmulator
+      # takes the host and the port as separate arguments, so that string never
+      # appears in the bundle, and the emulator branch is not tree-shaken out of
+      # a production build either. Only the injected values actually differ.
+      - name: Refuse to publish a build that cannot work
+        env:
+          PROJECT_ID: ${{ secrets.REACT_APP_FIREBASE_PROJECT_ID }}
+        run: |
+          test -f build/service-worker.js || {
+            echo "::error::build/service-worker.js is missing. The app registers a"
+            echo "::error::service worker at that path, so publishing without it gives"
+            echo "::error::every visitor a 404 and silently no offline support."
+            exit 1
+          }
+          grep -rq "$PROJECT_ID" build/static/js/ || {
+            echo "::error::The bundle does not mention $PROJECT_ID. Either the"
+            echo "::error::REACT_APP_FIREBASE_* secrets did not reach the build, or it"
+            echo "::error::was built against the emulators. Publishing it would point"
+            echo "::error::every visitor at the wrong database."
+            exit 1
+          }
+          echo "Service worker present; bundle is configured for $PROJECT_ID."
+
+      - name: Deploy to Firebase Hosting
+        run: |
+          npm install -g firebase-tools
+          firebase deploy \
+            --only hosting \
+            --project ${{ secrets.REACT_APP_FIREBASE_PROJECT_ID }} \
+            --token ${{ secrets.FIREBASE_TOKEN }}

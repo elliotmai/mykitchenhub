@@ -24,6 +24,47 @@
   "storage": {
     "rules": "firestore/storage.rules"
   },
+  "hosting": {
+    "public": "build",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ],
+    "headers": [
+      {
+        // The service worker and the shell must never be served from a cache.
+        // Both sit under names that never change, so a cached copy is a copy
+        // the browser keeps forever: the app would install one build's worker
+        // and then never learn about the next one. This is the same stale-shell
+        // trap the precache revision on /index.html guards against, one layer up.
+        "source": "/service-worker.js",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        ]
+      },
+      {
+        "source": "/index.html",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        ]
+      },
+      {
+        // Everything under /static carries a content hash in its filename, so a
+        // changed file is a changed URL and this can be cached indefinitely.
+        "source": "/static/**",
+        "headers": [
+          { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+        ]
+      },
+      {
+        "source": "/manifest.json",
+        "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600" }]
+      }
+    ]
+  },
   "emulators": {
     "auth": {
       "port": 9099

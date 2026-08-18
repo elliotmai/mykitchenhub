@@ -7,8 +7,14 @@ console access that a build agent should not have.
 Work through it in order. Step 7 is the one that changes how the live database
 behaves, and it is the reason all the earlier steps exist.
 
-- [Before you start: two known drifts](#before-you-start-two-known-drifts)
+Steps 4, 7, 8 and 11 are now buttons rather than commands — see
+[What runs itself](#what-runs-itself) below. The commands are kept under each
+step because they are what the button runs, and because you will want them if a
+deploy ever has to happen from a laptop.
+
+- [Before you start: the two schema drifts are fixed](#before-you-start-the-two-schema-drifts-are-fixed)
 - [Before you start: rotate the committed credentials](#before-you-start-rotate-the-committed-credentials)
+- [What runs itself](#what-runs-itself)
 - [1. Confirm what you are deploying to](#1-confirm-what-you-are-deploying-to)
 - [2. Set the Cloud Functions environment](#2-set-the-cloud-functions-environment)
 - [3. Lock down who can start the legacy sync](#3-lock-down-who-can-start-the-legacy-sync)
@@ -24,65 +30,28 @@ behaves, and it is the reason all the earlier steps exist.
 
 ---
 
-## Before you start: two known drifts
+## Before you start: the two schema drifts are fixed
 
-Two places in the app write documents that the production rules will reject.
-Both work today only because the database is in test mode. **Fix these before
-step 7**, or fix them immediately after and accept a window where signup is
-broken.
+This section used to list two places that wrote documents the production rules
+would reject. Both are fixed; it is kept because the failure they would have
+caused is worth recognising if anything like it comes back.
 
-### 1. The client-side signup fallback writes the wrong shape
+**1. The client signup fallback wrote the wrong shape.** When `onUserCreated`
+was unreachable — no functions URL, a cold start, a deploy in progress — the
+browser built the profile itself, keying storage locations on `name` where the
+rules and the UI expect `label`, and omitting the top-level `helloFresh` the
+rules require on create. Under production rules both writes are denied, so a
+cook who hit that path would have ended up with an auth account and no profile
+behind it, and signing up again just says the email is taken. It only ever
+worked because the database was in test mode. `src/hooks/useAuth.js` now writes
+the documented shape, and `firestore/tests/firestore.rules.test.js` runs the
+payloads that file actually builds against the real rules.
 
-`src/hooks/useAuth.js`, `createUserProfile`. When the `onUserCreated` Cloud
-Function is unreachable — no `REACT_APP_FIREBASE_FUNCTIONS_URL`, a cold start
-that times out, a deploy in progress — the browser builds the profile itself.
-That fallback writes:
-
-- storage locations keyed on **`name`**, where the rules and the whole UI expect
-  **`label`** (this is the exact drift CONTRIBUTING §2 names as having already
-  caused a real bug — the locations render blank);
-- a user document with no top-level **`helloFresh`** field, which
-  `firestore.rules` requires on create.
-
-Under production rules both writes are denied, so a user who hits the fallback
-ends up with an auth account and no profile at all — a worse failure than the
-blank labels they get today.
-
-`firestore/tests/firestore.rules.test.js` already has the case that proves it:
-*"rejects a location keyed on `name` instead of `label`"*.
-
-The fix is small — rename `name` to `label` in the fallback's `defaultLocations`
-array, and add a top-level `helloFresh` to `fallbackData` — but it is a change to
-a shared app file, so it is written up here rather than made from the
-documentation branch.
-
-### 2. `helloFresh` preferences live in two places — *fixed in `onUserCreate`*
-
-`onUserCreate` used to seed HelloFresh settings under `preferences.helloFresh`,
-while `src/hooks/useDeliveries.js` writes them to a **top-level** `helloFresh`
-map — the shape `SCHEMA_DOCUMENTATION.md` and the rules describe. A profile
-therefore ended up with settings in both places after the first delivery.
-
-This turned out to be more than cosmetic. `readHelloFresh` in
-`functions/src/mealPlan/planContext.js` reads `profile.helloFresh` and nothing
-else, so while the settings were seeded under `preferences` the meal planner
-never saw the seeded delivery days at all — exactly the "reads the wrong one"
-failure the drift was flagged for.
-
-`onUserCreate` now writes the documented top-level shape and no nested copy.
-Two things remain outstanding, and both are somebody else's file to change:
-
-- the client signup fallback in `src/hooks/useAuth.js` still writes the nested
-  copy (it is being fixed alongside drift 1 above);
-- **profiles created before this change still have no top-level `helloFresh`.**
-  They are not broken — `useDeliveries` adds the field on the first logged
-  delivery, and the meal planner treats a missing map as "no deliveries" — but
-  the security rules deliberately do **not** require `helloFresh` on update for
-  precisely this reason. See the users section of `SCHEMA_DOCUMENTATION.md`.
-  A one-off backfill would let that rule be tightened later; nothing needs it
-  today.
-
----
+**2. `helloFresh` lived in two places.** `onUserCreate` seeded the settings under
+`preferences.helloFresh` while `useDeliveries` wrote them top-level. That was
+not cosmetic: `readHelloFresh` in `functions/src/mealPlan/planContext.js` reads
+`profile.helloFresh` and nothing else, so the meal planner never saw the seeded
+delivery days. Both writers now use the documented top-level field.
 
 ## Before you start: rotate the committed credentials
 
@@ -110,6 +79,37 @@ Note that `.github/workflows/deploy-functions.yml` writes a
 `functions/service-account.json` at deploy time from the `FIREBASE_SERVICE_ACCOUNT`
 secret and deletes it afterwards. That is fine and should keep working — update
 the secret to the new key when you rotate.
+
+---
+
+## What runs itself
+
+Three workflows deploy this project. All of them use credentials the repository
+already holds, so none of them needs a new account or secret.
+
+| Workflow | Deploys | Fires |
+| --- | --- | --- |
+| `deploy-functions.yml` | Cloud Functions | automatically, on any push to `main` touching `functions/**` |
+| `deploy-rules.yml` | Firestore rules, indexes, Storage rules | **button** (Actions -> Deploy Firestore rules and indexes -> Run workflow) |
+| `deploy-hosting.yml` | the web app | **button** (Actions -> Deploy frontend -> Run workflow) |
+
+The two buttons are deliberately manual. Set the repository variable
+`AUTO_DEPLOY_RULES` or `AUTO_DEPLOY_HOSTING` to `true` (Settings -> Secrets and
+variables -> Actions -> Variables) and that one also runs on every push to
+`main`. The button keeps working either way.
+
+Rules deploy only after `npm run test:rules` passes in the same job: a bad rule
+either locks every cook out of their own kitchen or opens everyone's to
+everyone, and the suite that proves the file correct takes twenty seconds.
+
+The frontend refuses to publish a build whose bundle does not name the project
+being deployed to. Firebase config is inlined at build time, so that one check
+catches both a build made against the emulators and a build whose secrets never
+arrived — either of which would point every visitor at the wrong database, or at
+`localhost`.
+
+**Pressing the rules button for the first time is step 7.** It replaces
+test-mode rules with the real ones. Read that step before you press it.
 
 ---
 
