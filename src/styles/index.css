@@ -59,6 +59,62 @@ html {
   scroll-behavior: smooth;
 }
 
+/* --------------------------------------------------------------------------
+   Tap behaviour
+
+   `touch-action: manipulation` tells the browser this element will never be
+   double-tapped to zoom, so it can dispatch the click immediately instead of
+   waiting ~300ms to find out whether a second tap is coming. That wait is the
+   single most common reason a well-built phone app still feels sluggish.
+
+   It is set on the things a cook taps, not on `html`. Panning and pinch stay
+   available everywhere else, which keeps a wide table or a chart scrollable by
+   touch — and on iOS, where the viewport's user-scalable=no is ignored, this
+   is the part that actually takes effect.
+
+   `-webkit-tap-highlight-color` removes the grey flash iOS paints over a tapped
+   element; every control here already has its own :active state.
+   -------------------------------------------------------------------------- */
+button,
+a,
+label,
+select,
+summary,
+[role='button'],
+[role='tab'],
+.btn,
+.nav-link,
+.page-link,
+.form-check-input {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* --------------------------------------------------------------------------
+   Nothing may push the page sideways
+
+   A single over-wide child — a long unbroken word, a table, a chart — makes the
+   whole document scroll horizontally, and on a phone that reads as the app
+   being broken. Wide content is expected to scroll inside its own container
+   (see .mkh-scroll-x below) rather than dragging the page with it.
+
+   This is a backstop, not a licence: e2e/mobile.spec.js still fails the build
+   for a page that overflows, so this cannot quietly hide a layout bug.
+   -------------------------------------------------------------------------- */
+html,
+body {
+  overflow-x: clip;
+}
+
+/* Opt-in horizontal scroller for content that is legitimately wider than the
+   screen. `overflow-x: auto` alone clips the focus ring on whatever is inside,
+   so a little padding is part of the deal. */
+.mkh-scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
 /* Better focus styles for accessibility */
 *:focus-visible {
   outline: 2px solid var(--mkh-primary);

@@ -14,6 +14,16 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.08.15.6',
+    date: 'August 2026',
+    items: [
+      '\u{1F50D} The recipe filters now fold away. On a phone the tag list and the four dropdowns used to fill the screen before a single recipe appeared \u2014 tap \u201cFilters\u201d to open them, and the button tells you how many you have on.',
+      '\u{1F3F7}\uFE0F Only the first dozen tags are shown now, with a \u201c+ more\u201d for the rest. A tag you have switched on always stays visible, so you can always switch it off again.',
+      '\u{1F4C4} Long forms scroll properly. Adding an item, a storage place, or importing a spreadsheet no longer pushes the Save button off the bottom of a small screen.',
+      '\u{1F44D} Taps land straight away instead of pausing first, and the app no longer drifts off-centre if you pinch or double-tap by accident.',
+    ],
+  },
+  {
     version: '2026.08.15.5',
     date: 'August 2026',
     items: [

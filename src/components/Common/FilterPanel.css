@@ -1,0 +1,31 @@
+/* ==========================================================================
+   FilterPanel
+
+   The toggle is a full-width button so the whole strip is tappable, not just
+   the words. It reads as a section header rather than a button people are
+   meant to hunt for, which is why the border is quiet and the background
+   matches the card behind it.
+   ========================================================================== */
+
+.mkh-filter-panel__toggle {
+  background: var(--mkh-bg-card);
+  border: 1px solid var(--mkh-border);
+  border-radius: var(--mkh-radius-md, 0.5rem);
+  color: var(--mkh-text-primary);
+  font-weight: var(--mkh-font-weight-medium, 500);
+}
+
+.mkh-filter-panel__toggle:hover,
+.mkh-filter-panel__toggle:focus-visible {
+  background: var(--mkh-bg-hover, var(--mkh-bg-card));
+  border-color: var(--mkh-border);
+  color: var(--mkh-text-primary);
+}
+
+/* The chevron animates, so anyone who has asked the system to stop moving
+   things gets the state change without the rotation. */
+@media (prefers-reduced-motion: reduce) {
+  .mkh-filter-panel__chevron {
+    transition: none !important;
+  }
+}

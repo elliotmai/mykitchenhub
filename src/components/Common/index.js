@@ -26,3 +26,7 @@ export { default as Toast, ToastProvider, useToast, toast, setToastRef } from '.
 
 // What's New Popup
 export { default as WhatsNew } from './WhatsNew';
+
+// Collapsible filter section and its chip row
+export { default as FilterPanel } from './FilterPanel';
+export { default as ChipFilter, DEFAULT_VISIBLE_CHIPS } from './ChipFilter';

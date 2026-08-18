@@ -93,7 +93,7 @@ const AddLocationModal = ({ show, onHide, onSave, editLocation = null }) => {
   };
 
   return (
-    <Modal show={show} onHide={onHide} centered size="md">
+    <Modal show={show} onHide={onHide} centered size="md" scrollable>
       <Modal.Header closeButton className="border-0 pb-0">
         <Modal.Title className="d-flex align-items-center gap-2">
           <MapPin size={20} className="text-primary" />
