@@ -107,7 +107,7 @@ const ScheduleMealModal = ({ show, onHide, onSave, date, days = [] }) => {
   };
 
   return (
-    <Modal show={show} onHide={onHide} centered>
+    <Modal show={show} onHide={onHide} centered scrollable>
       <Form onSubmit={handleSubmit}>
         <Modal.Header closeButton>
           <Modal.Title style={{ fontSize: 'var(--mkh-font-size-large, 1.15rem)' }}>

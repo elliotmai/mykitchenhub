@@ -618,3 +618,46 @@ test.describe('csv import on a phone', () => {
     expect(await overflowsHorizontally(page)).toBe(false);
   });
 });
+
+test.describe('filters on a phone', () => {
+  // The library's four dropdowns and its tag list used to fill the screen
+  // before a single recipe appeared. Folded away by default, they cost one tap
+  // and give the page back to the recipes.
+  test('start folded away, so the recipes are what you see first', async ({ authedPage: page }) => {
+    await page.goto('/recipes', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { name: /recipes/i }).first()).toBeVisible();
+
+    const toggle = page.getByRole('button', { name: /filters/i });
+    await expect(toggle).toBeVisible();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+    // Search is the one control worth permanent space, so it stays out.
+    await expect(page.getByRole('textbox', { name: 'Search recipes' })).toBeVisible();
+    await expect(page.getByLabel('Filter by difficulty')).not.toBeVisible();
+  });
+
+  test('open on a tap, and the controls inside are reachable with a thumb', async ({
+    authedPage: page,
+  }) => {
+    await page.goto('/recipes', { waitUntil: 'domcontentloaded' });
+
+    const toggle = page.getByRole('button', { name: /filters/i });
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+
+    await expect(page.getByLabel('Filter by difficulty')).toBeVisible();
+    await expect(page.getByLabel('Sort recipes')).toBeVisible();
+
+    // Opening the panel must not push anything off the side of the screen.
+    expect(await overflowsHorizontally(page)).toBe(false);
+    expect(await undersizedTargets(page, MIN_TOUCH_TARGET)).toEqual([]);
+  });
+
+  test('the toggle itself is big enough to hit', async ({ authedPage: page }) => {
+    await page.goto('/recipes', { waitUntil: 'domcontentloaded' });
+
+    const box = await page.getByRole('button', { name: /filters/i }).boundingBox();
+    expect(box).not.toBeNull();
+    expect(box.height).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET);
+  });
+});

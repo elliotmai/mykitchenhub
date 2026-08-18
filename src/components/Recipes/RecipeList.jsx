@@ -8,6 +8,8 @@ import React, { useState, useMemo } from 'react';
 import { Row, Col, Form, InputGroup, Button, Badge, Spinner } from 'react-bootstrap';
 import { Search, Plus, X, BookOpen, RefreshCw } from 'lucide-react';
 
+import { FilterPanel, ChipFilter } from '../Common';
+
 import RecipeCard from './RecipeCard';
 import {
   collectTags,
@@ -79,6 +81,11 @@ const RecipeList = ({
       prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
     );
 
+  // What the collapsed panel reports. Search sits outside the panel — it is the
+  // one control worth permanent space — so it is deliberately not counted.
+  const activeFilterCount =
+    selectedTags.length + (source ? 1 : 0) + (difficulty ? 1 : 0) + (maxMinutes ? 1 : 0);
+
   const filtersActive =
     Boolean(search) ||
     selectedTags.length > 0 ||
@@ -130,8 +137,8 @@ const RecipeList = ({
         </div>
       </div>
 
-      {/* ── Search + filters ── */}
-      <Row className="g-2 mb-3">
+      {/* ── Search: always visible, never folded away ── */}
+      <Row className="g-2 mb-2">
         <Col xs={12} md={6}>
           <InputGroup>
             <InputGroup.Text
@@ -154,93 +161,80 @@ const RecipeList = ({
             )}
           </InputGroup>
         </Col>
-
-        <Col xs={6} md={2}>
-          <Form.Select
-            aria-label="Filter by difficulty"
-            value={difficulty}
-            onChange={(e) => setDifficulty(e.target.value)}
-          >
-            <option value="">Any difficulty</option>
-            {DIFFICULTIES.map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </Form.Select>
-        </Col>
-
-        <Col xs={6} md={2}>
-          <Form.Select
-            aria-label="Filter by time"
-            value={maxMinutes}
-            onChange={(e) => setMaxMinutes(e.target.value)}
-          >
-            {TIME_FILTERS.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
-              </option>
-            ))}
-          </Form.Select>
-        </Col>
-
-        <Col xs={6} md={2}>
-          <Form.Select
-            aria-label="Sort recipes"
-            value={sortMode}
-            onChange={(e) => setSortMode(e.target.value)}
-          >
-            {SORT_MODES.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
-              </option>
-            ))}
-          </Form.Select>
-        </Col>
-
-        <Col xs={6} md={2}>
-          <Form.Select
-            aria-label="Filter by source"
-            value={source}
-            onChange={(e) => setSource(e.target.value)}
-          >
-            <option value="">Any source</option>
-            {RECIPE_SOURCES.map((s) => (
-              <option key={s} value={s}>
-                {SOURCE_LABELS[s]}
-              </option>
-            ))}
-          </Form.Select>
-        </Col>
       </Row>
 
-      {/* ── Tag chips ── */}
-      {allTags.length > 0 && (
-        <div className="d-flex gap-2 flex-wrap mb-3">
-          {allTags.map((tag) => {
-            const active = selectedTags.includes(tag);
-            return (
-              <Badge
-                key={tag}
-                as="button"
-                type="button"
-                bg={active ? 'primary' : 'light'}
-                text={active ? undefined : 'dark'}
-                aria-pressed={active}
-                onClick={() => toggleTag(tag)}
-                className="border-0 px-2 py-1"
-                style={{
-                  borderRadius: 'var(--mkh-radius-full)',
-                  cursor: 'pointer',
-                  outline: active ? 'none' : '1px solid var(--mkh-border)',
-                }}
-              >
-                {tag}
-              </Badge>
-            );
-          })}
-        </div>
-      )}
+      {/* ── Everything else folds away ── */}
+      <FilterPanel activeCount={activeFilterCount} className="mb-3">
+        <Row className="g-2">
+          <Col xs={6} md={3}>
+            <Form.Select
+              aria-label="Filter by difficulty"
+              value={difficulty}
+              onChange={(e) => setDifficulty(e.target.value)}
+            >
+              <option value="">Any difficulty</option>
+              {DIFFICULTIES.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </Form.Select>
+          </Col>
+
+          <Col xs={6} md={3}>
+            <Form.Select
+              aria-label="Filter by time"
+              value={maxMinutes}
+              onChange={(e) => setMaxMinutes(e.target.value)}
+            >
+              {TIME_FILTERS.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </Form.Select>
+          </Col>
+
+          <Col xs={6} md={3}>
+            <Form.Select
+              aria-label="Sort recipes"
+              value={sortMode}
+              onChange={(e) => setSortMode(e.target.value)}
+            >
+              {SORT_MODES.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </Form.Select>
+          </Col>
+
+          <Col xs={6} md={3}>
+            <Form.Select
+              aria-label="Filter by source"
+              value={source}
+              onChange={(e) => setSource(e.target.value)}
+            >
+              <option value="">Any source</option>
+              {RECIPE_SOURCES.map((s) => (
+                <option key={s} value={s}>
+                  {SOURCE_LABELS[s]}
+                </option>
+              ))}
+            </Form.Select>
+          </Col>
+        </Row>
+
+        {/* Only the first dozen tags; the rest are behind "show more". A tag
+            that is switched on is always shown, wherever it falls in the list. */}
+        <ChipFilter
+          options={allTags}
+          selected={selectedTags}
+          onToggle={toggleTag}
+          label="Filter by tag"
+          className="mt-2"
+        />
+      </FilterPanel>
 
       {filtersActive && (
         <div className="d-flex align-items-center gap-2 mb-3">

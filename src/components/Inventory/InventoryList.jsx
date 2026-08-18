@@ -189,6 +189,7 @@ const InventoryList = ({ items = [], locations = [], loading, onAdd, onEdit, onD
             <Form.Control
               type="text"
               placeholder="Search items…"
+              aria-label="Search items"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               style={{ border: '1px solid var(--mkh-border)', borderLeft: 'none' }}
@@ -207,6 +208,7 @@ const InventoryList = ({ items = [], locations = [], loading, onAdd, onEdit, onD
 
         <Col xs={12} sm={5} md={4}>
           <Form.Select
+            aria-label="Filter by expiry"
             value={expiryFilter}
             onChange={(e) => setExpiryFilter(e.target.value)}
             style={{ border: '1px solid var(--mkh-border)' }}

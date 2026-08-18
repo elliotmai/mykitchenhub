@@ -1,37 +1,53 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!--
+      user-scalable=no / maximum-scale=1 pin the app at 1x so a stray pinch or a
+      double-tap cannot leave a cook looking at a corner of the screen with no
+      obvious way back.
 
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
-  
-  <!-- PWA Meta Tags -->
-  <meta name="theme-color" content="#2E7D32" />
-  <meta name="description" content="Track your kitchen inventory, reduce food waste, and plan meals" />
+      Two honest caveats. iOS Safari has deliberately ignored user-scalable=no
+      since iOS 10, so on an iPhone pinch-zoom still works whatever this says —
+      the tap-delay removal in styles/index.css is what actually changes
+      behaviour there. And blocking zoom fails WCAG 2.1 SC 1.4.4, which matters
+      for anyone who enlarges text to read it. Deleting the two attributes below
+      restores zoom and changes nothing else.
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
 
-  <!-- iOS Support -->
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="KitchenHub" />
-  <link rel="apple-touch-icon" href="%PUBLIC_URL%/icons/icon-152x152.png" />
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#2E7D32" />
+    <meta
+      name="description"
+      content="Track your kitchen inventory, reduce food waste, and plan meals"
+    />
 
-  <!-- No apple-touch-startup-image links: public/splash/ does not exist, so the
+    <!-- iOS Support -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="KitchenHub" />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/icons/icon-152x152.png" />
+
+    <!-- No apple-touch-startup-image links: public/splash/ does not exist, so the
        three that used to sit here were 404s on every iOS launch. iOS falls back
        to the background_color and icon from the manifest, which is what an
        installed KitchenHub shows today anyway. -->
 
-  <!-- Manifest -->
-  <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    <!-- Manifest -->
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
 
-  <!-- Favicon -->
-  <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <!-- Favicon -->
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
 
-  <title>MyKitchenHub</title>
-</head>
+    <title>MyKitchenHub</title>
+  </head>
 
-<body>
-  <noscript>You need to enable JavaScript to run this app.</noscript>
-  <div id="root"></div>
-</body>
-
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+  </body>
 </html>

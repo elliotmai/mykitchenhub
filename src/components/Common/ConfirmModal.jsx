@@ -72,6 +72,10 @@ const ConfirmModal = ({
       centered={centered}
       size={size}
       className="confirm-modal"
+      // The message is whatever the caller passes. A long one on a short phone
+      // would otherwise push the confirm and cancel buttons off the bottom of
+      // the screen, leaving no way to answer the question being asked.
+      scrollable
       onKeyDown={handleKeyDown}
       {...props}
     >

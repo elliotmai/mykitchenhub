@@ -341,7 +341,7 @@ const CSVImporter = ({
   };
 
   return (
-    <Modal show={show} onHide={onHide} centered size="lg">
+    <Modal show={show} onHide={onHide} centered size="lg" scrollable>
       <Modal.Header closeButton className="border-0 pb-0">
         <Modal.Title className="d-flex align-items-center gap-2">
           <Upload size={20} className="text-primary" />
