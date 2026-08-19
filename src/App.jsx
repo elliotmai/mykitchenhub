@@ -59,6 +59,7 @@ const HelloFresh = lazyWithRetry(() => import('./pages/HelloFresh'), 'HelloFresh
 const Analytics = lazyWithRetry(() => import('./pages/Analytics'), 'Analytics');
 const Settings = lazyWithRetry(() => import('./pages/Settings'), 'Settings');
 const WasteAlerts = lazyWithRetry(() => import('./pages/WasteAlerts'), 'WasteAlerts');
+const Kiosk = lazyWithRetry(() => import('./pages/Kiosk'), 'Kiosk');
 
 /**
  * App Routes Component
@@ -100,6 +101,19 @@ const AppRoutes = () => {
           <Route path="/waste-alerts" element={<WasteAlerts />} />
           <Route path="/settings" element={<Settings />} />
         </Route>
+
+        {/* The fridge board.
+            Signed-in like everything else, but deliberately outside AppLayout:
+            it is a wall display, and a navbar and sidebar on a wall display are
+            just things to knock. */}
+        <Route
+          path="/kiosk"
+          element={
+            <ProtectedRoute>
+              <Kiosk />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Default Redirect */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />

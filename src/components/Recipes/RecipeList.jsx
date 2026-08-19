@@ -5,7 +5,7 @@
 // instant response instead of a round trip per keystroke.
 
 import React, { useState, useMemo } from 'react';
-import { Row, Col, Form, InputGroup, Button, Badge, Spinner } from 'react-bootstrap';
+import { Row, Col, Form, InputGroup, Button, Spinner } from 'react-bootstrap';
 import { Search, Plus, X, BookOpen, RefreshCw } from 'lucide-react';
 
 import { FilterPanel, ChipFilter } from '../Common';

@@ -2,9 +2,11 @@
 // Main application layout wrapper
 // Combines Navbar, Sidebar, Footer with main content area
 
-import React, { useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import React, { useState, useCallback } from 'react';
+import { Outlet, useNavigate } from 'react-router-dom';
 import useWasteAlerts from '../../hooks/useWasteAlerts';
+import useIdleReturn from '../../hooks/useIdleReturn';
+import { isKioskDevice } from '../../utils/kioskMode';
 import Navbar from './Navbar';
 import Sidebar from './Sidebar';
 import MobileNav from './MobileNav';
@@ -33,6 +35,16 @@ const AppLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { counts } = useWasteAlerts();
   const alertCount = counts.total;
+  const navigate = useNavigate();
+
+  // On the fridge tablet only, drift back to the board once everyone has walked
+  // away. Someone taps in to add an item, gets called to the hob, and the
+  // display everyone relies on is left showing a half-filled form.
+  //
+  // Read once per render rather than cached: turning the toggle off in Settings
+  // should take effect without reloading the tablet.
+  const returnToBoard = useCallback(() => navigate('/kiosk'), [navigate]);
+  useIdleReturn(returnToBoard, { enabled: isKioskDevice() });
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
   const closeSidebar = () => setSidebarOpen(false);
