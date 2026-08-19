@@ -67,8 +67,9 @@
 
 .kiosk__body {
   display: grid;
-  /* The food that needs eating gets the wider column; it is the reason the
-     board is on the fridge. */
+  /* The week gets the wider column. Standing at the fridge the first question
+     is usually what is being cooked, and seven days of meal names need more
+     room than a short list of things going off. */
   grid-template-columns: 3fr 2fr;
   gap: 3vmin;
   flex: 1 1 auto;
@@ -95,8 +96,7 @@
 }
 
 .kiosk__items,
-.kiosk__meals,
-.kiosk__upcoming {
+.kiosk__week {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -108,7 +108,9 @@
   gap: 2vmin;
   padding: 1.4vmin 0;
   border-bottom: 1px solid var(--mkh-border-light, var(--mkh-border));
-  font-size: 4.2vmin;
+  /* A shade smaller than it was: this panel is the narrower column now, and a
+     long item name has less room before it has to be cut off. */
+  font-size: 3.4vmin;
 }
 
 .kiosk__item:last-child {
@@ -134,39 +136,84 @@
 
 .kiosk__item-when {
   flex: 0 0 auto;
-  font-size: 3vmin;
+  font-size: 2.5vmin;
   color: var(--mkh-text-secondary);
 }
 
-.kiosk__meal {
-  font-size: 4.6vmin;
-  font-weight: 600;
-  padding: 1vmin 0;
-}
+/* --------------------------------------------------------------------------
+   The week, Monday to Sunday
 
-.kiosk__subtitle {
-  font-size: 2.4vmin;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--mkh-text-secondary);
-  margin: 3vmin 0 1vmin;
-}
-
-.kiosk__upcoming-day {
+   Seven rows sized to fill the panel rather than a fixed height, so the board
+   works on whatever it is mounted on without a scrollbar appearing on a shorter
+   screen.
+   -------------------------------------------------------------------------- */
+.kiosk__week {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.kiosk__day {
+  display: flex;
+  align-items: baseline;
   gap: 2vmin;
-  font-size: 2.8vmin;
-  padding: 0.8vmin 0;
+  flex: 1 1 0;
+  min-height: 0;
+  padding: 0.6vmin 0;
+  border-bottom: 1px solid var(--mkh-border-light, var(--mkh-border));
+  font-size: 3.2vmin;
 }
 
-.kiosk__upcoming-label {
-  color: var(--mkh-text-secondary);
+.kiosk__day:last-child {
+  border-bottom: none;
+}
+
+/* Today is what someone glancing over is looking for, so it is the one row
+   that is heavier than the rest rather than merely a different colour —
+   weight survives a glance from across the room where a hue may not. */
+.kiosk__day--today {
+  font-weight: 700;
+}
+
+.kiosk__day--today .kiosk__day-number {
+  background: var(--mkh-primary, #2f6f4f);
+  color: #fff;
+}
+
+/* A day already gone is still shown — the week reads wrong with a hole in it —
+   but it should not compete with the days still to cook. */
+.kiosk__day--past {
+  opacity: 0.45;
+}
+
+.kiosk__day-when {
+  display: flex;
+  align-items: baseline;
+  gap: 1vmin;
   flex: 0 0 auto;
+  min-width: 13vmin;
 }
 
-.kiosk__upcoming-meal {
-  text-align: right;
+.kiosk__day-name {
+  color: var(--mkh-text-secondary);
+  font-size: 2.6vmin;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.kiosk__day-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 4.6vmin;
+  padding: 0.3vmin 1vmin;
+  border-radius: var(--mkh-radius-full, 999px);
+  font-variant-numeric: tabular-nums;
+}
+
+.kiosk__day-meal {
+  flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -185,10 +232,6 @@
   color: var(--mkh-text-secondary);
   font-size: 2.6vmin;
   margin: 1vmin 0 0;
-}
-
-.kiosk__quiet--big {
-  font-size: 3.6vmin;
 }
 
 .kiosk__footer {
@@ -217,6 +260,10 @@
   }
 
   .kiosk__item {
-    font-size: 5.5vmin;
+    font-size: 4.5vmin;
+  }
+
+  .kiosk__day {
+    font-size: 4vmin;
   }
 }

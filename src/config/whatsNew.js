@@ -14,6 +14,14 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.08.15.8',
+    date: 'August 2026',
+    items: [
+      '\u{1F4C5} The fridge board now shows the whole week, Monday to Sunday, with the date on every day \u2014 so you can see Thursday is empty without counting forwards from today.',
+      '\u{1F373} The week has swapped places with the list of food to use up, and taken the bigger half of the screen. Standing at the fridge, what you are cooking is usually the question.',
+    ],
+  },
+  {
     version: '2026.08.15.7',
     date: 'August 2026',
     items: [

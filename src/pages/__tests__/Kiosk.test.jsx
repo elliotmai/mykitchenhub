@@ -12,7 +12,14 @@ import {
   firestoreMock as fs,
   authMock,
 } from '../../test-utils';
-import { asDocs, makeItem, makeLocation, daysFromNow } from '../../test-utils/factories';
+import {
+  asDocs,
+  makeItem,
+  makeLocation,
+  makeMealPlanEntry,
+  dayKey,
+  daysFromNow,
+} from '../../test-utils/factories';
 
 const UID = 'test-uid';
 
@@ -104,5 +111,73 @@ describe('Kiosk board', () => {
     delete navigator.wakeLock;
     await renderBoard();
     expect(await screen.findByText(/display timeout to Never/i)).toBeInTheDocument();
+  });
+
+  describe('the week', () => {
+    it('shows all seven days, Monday to Sunday, whatever day it is today', async () => {
+      await renderBoard();
+
+      const days = screen
+        .getAllByRole('listitem')
+        .filter((li) => li.className.includes('kiosk__day'));
+      expect(days).toHaveLength(7);
+      expect(days.map((li) => li.querySelector('.kiosk__day-name').textContent)).toEqual([
+        'Mon',
+        'Tue',
+        'Wed',
+        'Thu',
+        'Fri',
+        'Sat',
+        'Sun',
+      ]);
+    });
+
+    it('numbers each day with its date, not just its name', async () => {
+      await renderBoard();
+
+      const numbers = screen
+        .getAllByRole('listitem')
+        .filter((li) => li.className.includes('kiosk__day'))
+        .map((li) => Number(li.querySelector('.kiosk__day-number').textContent));
+
+      expect(numbers).toHaveLength(7);
+      numbers.forEach((n) => {
+        expect(Number.isInteger(n)).toBe(true);
+        expect(n).toBeGreaterThanOrEqual(1);
+        expect(n).toBeLessThanOrEqual(31);
+      });
+    });
+
+    it('marks today, so a glance lands on the right row', async () => {
+      await renderBoard();
+      const today = document.querySelectorAll('.kiosk__day--today');
+      expect(today).toHaveLength(1);
+      expect(today[0]).toHaveAttribute('aria-current', 'date');
+    });
+
+    it('puts a planned meal against its day', async () => {
+      const today = dayKey(0);
+      await renderBoard({
+        entries: [makeMealPlanEntry({ id: 'e1', date: today, recipeName: 'Sheet Pan Salmon' })],
+      });
+      expect(await screen.findByText('Sheet Pan Salmon')).toBeInTheDocument();
+    });
+
+    it('leaves an empty night visibly empty rather than hiding it', async () => {
+      await renderBoard({ entries: [] });
+      const dashes = Array.from(document.querySelectorAll('.kiosk__day-meal')).filter(
+        (el) => el.textContent === '—'
+      );
+      expect(dashes).toHaveLength(7);
+    });
+  });
+
+  // The week is the reason someone looks at the fridge, so it leads and takes
+  // the wider column.
+  it('puts the week before the list of what is going off', async () => {
+    await renderBoard();
+    const panels = Array.from(document.querySelectorAll('.kiosk__panel'));
+    expect(panels[0].className).toContain('kiosk__panel--week');
+    expect(panels[1].className).toContain('kiosk__panel--eat');
   });
 });

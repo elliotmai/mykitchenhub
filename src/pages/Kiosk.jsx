@@ -44,10 +44,6 @@ export const Kiosk = () => {
   const { active: screenHeld, supported: wakeLockSupported } = useWakeLock(true);
   const now = useClock();
 
-  const today = weekDays.find((day) => day.isToday);
-  const todayEntries = today ? (entriesByDay[today.key] ?? []) : [];
-  const upcoming = weekDays.filter((day) => !day.isPast && !day.isToday).slice(0, 3);
-
   const shown = expiringItems.slice(0, KIOSK_ITEM_LIMIT);
   const overflow = expiringItems.length - shown.length;
   const loading = alertsLoading || planLoading;
@@ -81,6 +77,51 @@ export const Kiosk = () => {
       </header>
 
       <main className="kiosk__body">
+        {/* The week leads, and takes the wider column. Standing at the fridge
+            the question is usually "what am I cooking", and the answer is worth
+            more space than the list of what is going off. */}
+        <section className="kiosk__panel kiosk__panel--week" aria-labelledby="kiosk-meals">
+          <h2 id="kiosk-meals" className="kiosk__panel-title">
+            <UtensilsCrossed size={32} aria-hidden="true" />
+            This week
+          </h2>
+
+          {loading ? (
+            <p className="kiosk__quiet">Checking the plan…</p>
+          ) : (
+            <ul className="kiosk__week">
+              {weekDays.map((day) => {
+                const entries = entriesByDay[day.key] ?? [];
+                const className = [
+                  'kiosk__day',
+                  day.isToday ? 'kiosk__day--today' : '',
+                  day.isPast ? 'kiosk__day--past' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ');
+
+                return (
+                  <li
+                    key={day.key}
+                    className={className}
+                    aria-current={day.isToday ? 'date' : undefined}
+                  >
+                    <span className="kiosk__day-when">
+                      <span className="kiosk__day-name">{day.label}</span>
+                      <span className="kiosk__day-number">{day.dayOfMonth}</span>
+                    </span>
+                    <span className="kiosk__day-meal">
+                      {entries.length > 0
+                        ? entries.map((entry) => entry.recipeName).join(', ')
+                        : '—'}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+
         <section className="kiosk__panel kiosk__panel--eat" aria-labelledby="kiosk-eat">
           <h2 id="kiosk-eat" className="kiosk__panel-title">
             <AlertTriangle size={32} aria-hidden="true" />
@@ -117,42 +158,6 @@ export const Kiosk = () => {
               )}
             </>
           )}
-        </section>
-
-        <section className="kiosk__panel" aria-labelledby="kiosk-meals">
-          <h2 id="kiosk-meals" className="kiosk__panel-title">
-            <UtensilsCrossed size={32} aria-hidden="true" />
-            Tonight
-          </h2>
-
-          {loading ? (
-            <p className="kiosk__quiet">Checking the plan…</p>
-          ) : todayEntries.length === 0 ? (
-            <p className="kiosk__quiet kiosk__quiet--big">Nothing planned for today</p>
-          ) : (
-            <ul className="kiosk__meals">
-              {todayEntries.map((entry) => (
-                <li key={entry.id} className="kiosk__meal">
-                  {entry.recipeName}
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <h3 className="kiosk__subtitle">Coming up</h3>
-          <ul className="kiosk__upcoming">
-            {upcoming.map((day) => {
-              const entries = entriesByDay[day.key] ?? [];
-              return (
-                <li key={day.key} className="kiosk__upcoming-day">
-                  <span className="kiosk__upcoming-label">{day.label}</span>
-                  <span className="kiosk__upcoming-meal">
-                    {entries.length > 0 ? entries.map((e) => e.recipeName).join(', ') : '—'}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
         </section>
       </main>
 
