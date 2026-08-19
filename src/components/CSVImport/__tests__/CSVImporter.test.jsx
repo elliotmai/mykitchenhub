@@ -4,7 +4,6 @@
 
 import React from 'react';
 import { renderWithProviders, screen, waitFor, within, act } from '../../../test-utils';
-import userEvent from '@testing-library/user-event';
 
 import CSVImporter from '../CSVImporter';
 import { makeLocation, makeImportRecord } from '../../../test-utils/factories';

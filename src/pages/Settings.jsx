@@ -3,11 +3,13 @@
 
 import React, { useState } from 'react';
 import { Card, Form, Button, Row, Col, Alert, Spinner, Nav } from 'react-bootstrap';
-import { User, Lock, MapPin, Bell } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { User, Lock, MapPin, Bell, Tv } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import useStorageLocations from '../hooks/useStorageLocations';
 import { StorageLocationsList } from '../components/StorageLocations';
 import { SmsAlertSettings } from '../components/WasteAlerts';
+import { isKioskDevice, setKioskDevice } from '../utils/kioskMode';
 
 // ─── Section constants ───────────────────────────────────────────────────────
 const SECTIONS = {
@@ -15,9 +17,14 @@ const SECTIONS = {
   PASSWORD: 'password',
   LOCATIONS: 'locations',
   ALERTS: 'alerts',
+  DISPLAY: 'display',
 };
 
 const Settings = () => {
+  // Per-device, so it is read from localStorage rather than the profile: the
+  // tablet on the fridge and the phone in a pocket are the same account.
+  const [kioskDevice, setKioskDeviceState] = useState(isKioskDevice);
+
   const { user, userProfile, updateUserProfile, updateUserPassword } = useAuth();
   const {
     locations,
@@ -142,6 +149,13 @@ const Settings = () => {
                   className="d-flex align-items-center gap-2 rounded-2 px-3 py-2"
                 >
                   <Bell size={16} /> Waste Alerts
+                </Nav.Link>
+                <Nav.Link
+                  active={activeSection === SECTIONS.DISPLAY}
+                  onClick={() => setActiveSection(SECTIONS.DISPLAY)}
+                  className="d-flex align-items-center gap-2 rounded-2 px-3 py-2"
+                >
+                  <Tv size={16} /> Fridge Display
                 </Nav.Link>
               </Nav>
             </Card.Body>
@@ -309,6 +323,47 @@ const Settings = () => {
                   preferences={userProfile?.preferences}
                   onSave={updateUserProfile}
                 />
+              </Card.Body>
+            </Card>
+          )}
+
+          {/* ── Fridge Display ──────────────────────────────────────────── */}
+          {activeSection === SECTIONS.DISPLAY && (
+            <Card>
+              <Card.Header className="bg-white border-bottom-0 pt-4 pb-2">
+                <h5 className="mb-0 d-flex align-items-center gap-2">
+                  <Tv size={18} /> Fridge Display
+                </h5>
+                <small className="text-muted">
+                  Turn a spare tablet into a board on the fridge door.
+                </small>
+              </Card.Header>
+              <Card.Body>
+                <p className="text-muted">
+                  The board shows what needs eating first and what is planned for tonight, in type
+                  you can read from across the kitchen. It stays live on its own — there is nothing
+                  to refresh.
+                </p>
+
+                <Button as={Link} to="/kiosk" variant="primary" className="mb-4">
+                  Open the board
+                </Button>
+
+                <Form.Check
+                  type="switch"
+                  id="kiosk-device-switch"
+                  label="Use this device as the fridge display"
+                  checked={kioskDevice}
+                  onChange={(e) => {
+                    setKioskDevice(e.target.checked);
+                    setKioskDeviceState(e.target.checked);
+                  }}
+                />
+                <small className="text-muted d-block mt-2">
+                  With this on, this device drifts back to the board a couple of minutes after
+                  anyone stops using it — so a half-finished form is never what greets the next
+                  person. It only affects this device; your phone is unaffected.
+                </small>
               </Card.Body>
             </Card>
           )}

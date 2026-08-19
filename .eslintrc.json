@@ -8,7 +8,10 @@
   "overrides": [
     {
       "files": ["e2e/**/*.js"],
-      "env": { "node": true, "es2022": true },
+      "env": {
+        "node": true,
+        "es2022": true
+      },
       "rules": {
         "testing-library/prefer-screen-queries": "off",
         "testing-library/no-node-access": "off",
@@ -22,6 +25,16 @@
         "jest/valid-title": "off",
         "jest/expect-expect": "off",
         "jest/no-standalone-expect": "off"
+      }
+    },
+    {
+      "files": ["**/__tests__/**/*.{js,jsx}", "**/*.test.{js,jsx}"],
+      "rules": {
+        "import/first": "off",
+        "testing-library/no-container": "off",
+        "testing-library/no-node-access": "off",
+        "testing-library/no-unnecessary-act": "off",
+        "testing-library/prefer-find-by": "off"
       }
     }
   ]

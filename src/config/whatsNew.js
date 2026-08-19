@@ -14,6 +14,14 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.08.15.7',
+    date: 'August 2026',
+    items: [
+      '\u{1F4FA} Got a spare tablet? Stick it on the fridge. There is a new board that shows what needs eating first and what is planned for tonight, in type you can read from the other side of the kitchen \u2014 and it keeps itself up to date.',
+      '\u{1F517} Find it under Settings \u2192 Fridge Display, or go straight to /kiosk. Turn on the switch there and that tablet drifts back to the board a couple of minutes after anyone stops using it, so nobody finds a half-finished form waiting for them.',
+    ],
+  },
+  {
     version: '2026.08.15.6',
     date: 'August 2026',
     items: [

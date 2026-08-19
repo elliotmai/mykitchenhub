@@ -59,8 +59,9 @@ const FirebaseTest = () => {
         timestamp: serverTimestamp(),
       });
 
-      // Read it back
-      const snapshot = await getDocs(testCollection);
+      // Read it back. The result is deliberately discarded — this is a
+      // connectivity probe, and the read either resolves or throws.
+      await getDocs(testCollection);
 
       // Clean up - delete the test document
       await deleteDoc(doc(db, '_connectionTest', docRef.id));

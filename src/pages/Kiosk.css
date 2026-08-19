@@ -1,0 +1,222 @@
+/* ==========================================================================
+   Kiosk board — a Fire HD 8 on a fridge door
+
+   1280x800, read from a metre or two away by someone with their hands full.
+   Type is sized for that distance rather than for a desk, and the whole board
+   is one screen: a wall display you have to scroll is a display you will not
+   read.
+
+   Sizes are in vmin so the board fills whatever it is mounted on. On the Fire
+   HD 8 in landscape vmin is the 800px edge, which puts the item names around
+   34px — comfortably readable across a kitchen.
+   ========================================================================== */
+
+.kiosk {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--mkh-bg-primary);
+  color: var(--mkh-text-primary);
+  padding: 2.5vmin 3vmin;
+  gap: 2vmin;
+  /* The board owns the screen. Nothing here scrolls, and the app chrome is
+     hidden on this route, so there is no page behind it to reach. */
+  overflow: hidden;
+}
+
+.kiosk__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex: 0 0 auto;
+}
+
+.kiosk__clock {
+  font-size: 9vmin;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.kiosk__date {
+  font-size: 3vmin;
+  color: var(--mkh-text-secondary);
+  margin-top: 0.5vmin;
+}
+
+/* Small, cornered, and low contrast: the way out should be findable but not
+   inviting. It still clears the 44px tap floor the mobile suite enforces. */
+.kiosk__exit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 1vmin;
+  border-radius: var(--mkh-radius-md, 0.5rem);
+  color: var(--mkh-text-secondary);
+  opacity: 0.45;
+}
+
+.kiosk__exit:hover,
+.kiosk__exit:focus-visible {
+  opacity: 1;
+  color: var(--mkh-text-primary);
+}
+
+.kiosk__body {
+  display: grid;
+  /* The food that needs eating gets the wider column; it is the reason the
+     board is on the fridge. */
+  grid-template-columns: 3fr 2fr;
+  gap: 3vmin;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.kiosk__panel {
+  background: var(--mkh-bg-card);
+  border: 1px solid var(--mkh-border);
+  border-radius: var(--mkh-radius-lg, 0.75rem);
+  padding: 2.5vmin;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.kiosk__panel-title {
+  display: flex;
+  align-items: center;
+  gap: 1.5vmin;
+  font-size: 3.4vmin;
+  font-weight: 600;
+  margin: 0 0 2vmin;
+}
+
+.kiosk__items,
+.kiosk__meals,
+.kiosk__upcoming {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.kiosk__item {
+  display: flex;
+  align-items: center;
+  gap: 2vmin;
+  padding: 1.4vmin 0;
+  border-bottom: 1px solid var(--mkh-border-light, var(--mkh-border));
+  font-size: 4.2vmin;
+}
+
+.kiosk__item:last-child {
+  border-bottom: none;
+}
+
+.kiosk__item-dot {
+  flex: 0 0 auto;
+  width: 2vmin;
+  height: 2vmin;
+  border-radius: 50%;
+}
+
+.kiosk__item-name {
+  flex: 1 1 auto;
+  font-weight: 600;
+  /* One line each. A wrapped name costs a whole row and pushes the last item
+     off a board that is deliberately not scrollable. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kiosk__item-when {
+  flex: 0 0 auto;
+  font-size: 3vmin;
+  color: var(--mkh-text-secondary);
+}
+
+.kiosk__meal {
+  font-size: 4.6vmin;
+  font-weight: 600;
+  padding: 1vmin 0;
+}
+
+.kiosk__subtitle {
+  font-size: 2.4vmin;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--mkh-text-secondary);
+  margin: 3vmin 0 1vmin;
+}
+
+.kiosk__upcoming-day {
+  display: flex;
+  justify-content: space-between;
+  gap: 2vmin;
+  font-size: 2.8vmin;
+  padding: 0.8vmin 0;
+}
+
+.kiosk__upcoming-label {
+  color: var(--mkh-text-secondary);
+  flex: 0 0 auto;
+}
+
+.kiosk__upcoming-meal {
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kiosk__all-clear {
+  display: flex;
+  align-items: center;
+  gap: 2vmin;
+  font-size: 3.6vmin;
+  color: var(--mkh-success, var(--mkh-text-secondary));
+  margin: 0;
+}
+
+.kiosk__quiet {
+  color: var(--mkh-text-secondary);
+  font-size: 2.6vmin;
+  margin: 1vmin 0 0;
+}
+
+.kiosk__quiet--big {
+  font-size: 3.6vmin;
+}
+
+.kiosk__footer {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  gap: 2vmin;
+  font-size: 2.2vmin;
+  color: var(--mkh-text-secondary);
+}
+
+.kiosk__warn {
+  color: var(--mkh-warning-text, var(--mkh-text-secondary));
+}
+
+/* A phone held in portrait is not the target, but somebody will open this on
+   one to see what it looks like. Stack rather than squeeze. */
+@media (max-aspect-ratio: 1/1) {
+  .kiosk__body {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+
+  .kiosk__clock {
+    font-size: 14vmin;
+  }
+
+  .kiosk__item {
+    font-size: 5.5vmin;
+  }
+}
