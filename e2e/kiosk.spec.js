@@ -41,9 +41,20 @@ test.describe('fridge board', () => {
     await expect(page.getByRole('heading', { name: 'This week' })).toBeVisible();
 
     const panels = page.locator('.kiosk__panel');
-    await expect(panels).toHaveCount(2);
+    await expect(panels).toHaveCount(3);
     await expect(panels.nth(0)).toHaveClass(/kiosk__panel--week/);
     await expect(panels.nth(1)).toHaveClass(/kiosk__panel--eat/);
+    await expect(panels.nth(2)).toHaveClass(/kiosk__panel--shopping/);
+  });
+
+  // The grocery list is being built separately. The board holds its corner so
+  // the proportions do not move when it lands.
+  test('holds a corner for the shopping list', async ({ authedPage: page }) => {
+    await page.goto('/kiosk', { waitUntil: 'domcontentloaded' });
+
+    const panel = page.getByTestId('kiosk-shopping');
+    await expect(panel.getByRole('heading', { name: 'Shopping list' })).toBeVisible();
+    await expect(panel.getByText('Coming soon')).toBeVisible();
   });
 
   test('wears none of the app chrome, and offers a way back into it', async ({

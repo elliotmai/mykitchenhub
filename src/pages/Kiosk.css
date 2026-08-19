@@ -71,9 +71,27 @@
      is usually what is being cooked, and seven days of meal names need more
      room than a short list of things going off. */
   grid-template-columns: 3fr 2fr;
+  /* The week spans both rows down the left; the right column carries the food
+     to use up above the shopping list. Rows rather than a third column: seven
+     meal names need width, and squeezing them to a third would start cutting
+     the names off. */
+  grid-template-rows: 3fr 2fr;
   gap: 3vmin;
   flex: 1 1 auto;
   min-height: 0;
+}
+
+.kiosk__panel--week {
+  grid-row: 1 / -1;
+}
+
+/* Quiet on purpose. A placeholder that shouts competes with the two panels
+   that are actually telling you something. */
+.kiosk__placeholder {
+  margin: auto 0;
+  color: var(--mkh-text-secondary);
+  opacity: 0.55;
+  font-size: 3vmin;
 }
 
 .kiosk__panel {
@@ -252,11 +270,16 @@
 @media (max-aspect-ratio: 1/1) {
   .kiosk__body {
     grid-template-columns: 1fr;
+    grid-template-rows: none;
     overflow-y: auto;
   }
 
   .kiosk__clock {
     font-size: 14vmin;
+  }
+
+  .kiosk__panel--week {
+    grid-row: auto;
   }
 
   .kiosk__item {

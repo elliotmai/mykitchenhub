@@ -14,7 +14,7 @@
 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Settings2, AlertTriangle, UtensilsCrossed, Snowflake } from 'lucide-react';
+import { Settings2, AlertTriangle, UtensilsCrossed, Snowflake, ShoppingCart } from 'lucide-react';
 
 import useWasteAlerts from '../hooks/useWasteAlerts';
 import useMealPlan from '../hooks/useMealPlan';
@@ -158,6 +158,33 @@ export const Kiosk = () => {
               )}
             </>
           )}
+        </section>
+
+        {/* ------------------------------------------------------------------
+            PLACEHOLDER — the grocery list is not built yet.
+
+            This reserves the corner it will live in so the board's proportions
+            do not shift when it arrives, and so nobody wonders where it went.
+            It holds no data and reads from no hook on purpose: a placeholder
+            that half-works is harder to replace than an empty one.
+
+            To fill it in: keep the <section> and its two classes (the grid
+            places the panel by `kiosk__panel--shopping`), swap the body below
+            for the real list, and delete `kiosk__placeholder` from the CSS.
+            e2e/kiosk.spec.js asserts the panel exists and that the board still
+            fits without scrolling — both of which should keep passing.
+            ------------------------------------------------------------------ */}
+        <section
+          className="kiosk__panel kiosk__panel--shopping"
+          aria-labelledby="kiosk-shopping"
+          data-testid="kiosk-shopping"
+        >
+          <h2 id="kiosk-shopping" className="kiosk__panel-title">
+            <ShoppingCart size={32} aria-hidden="true" />
+            Shopping list
+          </h2>
+
+          <p className="kiosk__placeholder">Coming soon</p>
         </section>
       </main>
 

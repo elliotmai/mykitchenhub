@@ -9,6 +9,7 @@ import {
   screen,
   waitFor,
   act,
+  within,
   firestoreMock as fs,
   authMock,
 } from '../../test-utils';
@@ -177,7 +178,20 @@ describe('Kiosk board', () => {
   it('puts the week before the list of what is going off', async () => {
     await renderBoard();
     const panels = Array.from(document.querySelectorAll('.kiosk__panel'));
-    expect(panels[0].className).toContain('kiosk__panel--week');
-    expect(panels[1].className).toContain('kiosk__panel--eat');
+    expect(panels.map((p) => p.className)).toEqual([
+      expect.stringContaining('kiosk__panel--week'),
+      expect.stringContaining('kiosk__panel--eat'),
+      expect.stringContaining('kiosk__panel--shopping'),
+    ]);
+  });
+
+  // Reserved space for a feature the owner is building. It must render, and it
+  // must not pretend to hold anything.
+  it('reserves a corner for the shopping list without inventing one', async () => {
+    await renderBoard();
+    const panel = screen.getByTestId('kiosk-shopping');
+    expect(within(panel).getByRole('heading', { name: 'Shopping list' })).toBeInTheDocument();
+    expect(within(panel).getByText('Coming soon')).toBeInTheDocument();
+    expect(within(panel).queryAllByRole('listitem')).toHaveLength(0);
   });
 });
