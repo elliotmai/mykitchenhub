@@ -112,6 +112,73 @@ export const findDuplicateNames = (manualItems = [], derivedItems = []) => {
 };
 
 /**
+ * "2 fillet", or nothing at all.
+ *
+ * A bare "1" is noise — "Batteries 1" tells a cook nothing they had not already
+ * assumed — so one of something unmeasured shows no amount. Anything else does.
+ *
+ * Lives here rather than in a component because both surfaces that render a
+ * shopping row use it: the panel on the meal plan page and the fridge board.
+ */
+export const amountLabel = (item) => {
+  const quantity = Number(item?.quantity ?? 0);
+  const unit = String(item?.unit ?? '').trim();
+  if (!quantity) return unit || null;
+  if (quantity === 1 && !unit) return null;
+  return unit ? `${quantity} ${unit}` : String(quantity);
+};
+
+/**
+ * The whole list as one errand list: typed items and the week's own, together.
+ *
+ * For the fridge board, which answers one question from across the kitchen —
+ * what do I need to buy — and has no room to explain where each line came from.
+ *
+ * Only what is still outstanding: a manual item already ticked off is not on the
+ * fridge any more, and a derived line the kitchen already covers was never
+ * something to buy.
+ *
+ * **One row per errand.** If a cook typed "milk" and the week's meals also need
+ * milk, that is one thing to pick up, and two "Milk" rows on a five-row board
+ * read as a rendering fault rather than as information. The typed row wins,
+ * because it is the cook's own words.
+ *
+ * This is not the merge that `findDuplicateNames` deliberately avoids. That one
+ * would *add* a typed "1" to a computed "200 g" and put the sum on screen — a
+ * number that is wrong in both units. Nothing is added here: one row is
+ * dropped, and the surviving row keeps its own quantity untouched. The meal plan
+ * page still shows both, with the note, which is where a cook can act on the
+ * difference.
+ */
+export const combineShoppingList = (manualItems = [], derivedItems = []) => {
+  const outstandingManual = manualItems.filter((item) => item.status !== 'bought');
+  const claimed = new Set(
+    outstandingManual.map((item) => normalizeName(item.normalized || item.name)).filter(Boolean)
+  );
+
+  const rows = outstandingManual.map((item) => ({
+    key: `manual-${item.id}`,
+    name: item.name,
+    amount: amountLabel(item),
+    kind: 'manual',
+  }));
+
+  derivedItems
+    .filter((item) => item.haveInInventory !== true)
+    .filter((item) => !claimed.has(normalizeName(item.normalized || item.name)))
+    .forEach((item) => {
+      rows.push({
+        key: `derived-${item.key ?? `${item.normalized} ${item.unit}`}`,
+        name: item.name,
+        amount: amountLabel(item),
+        kind: 'derived',
+      });
+    });
+
+  return rows;
+};
+
+/**
  * useShoppingList Hook
  *
  * Usage:

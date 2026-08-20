@@ -182,6 +182,36 @@ const shoppingItems = async () => {
 /** The stored shopping item with this exact name, or undefined. */
 const shoppingItem = async (name) => (await shoppingItems()).find((item) => item.name === name);
 
+/**
+ * Put an item straight on the shopping list, bypassing the UI.
+ *
+ * Field for field with the `create` rule in firestore.rules and with
+ * buildShoppingItem in src/hooks/useShoppingList.js, so it fails loudly if the
+ * contract moves. For specs that need a list already long enough to test what a
+ * long list does.
+ */
+const seedShoppingItem = async ({ name, quantity = 1, unit = '', status = 'pending' }) => {
+  const uid = await testUserId();
+  const ref = await admin.firestore().collection(`users/${uid}/shoppingItems`).add({
+    name,
+    normalized: name.trim().toLowerCase(),
+    quantity,
+    unit,
+    notes: '',
+    status,
+    source: 'manual',
+    createdAt: admin.firestore.Timestamp.now(),
+    boughtAt: null,
+  });
+  return ref.id;
+};
+
+/** Take a seeded item off again, so the next spec's board is predictable. */
+const deleteShoppingItem = async (id) => {
+  const uid = await testUserId();
+  await admin.firestore().doc(`users/${uid}/shoppingItems/${id}`).delete();
+};
+
 /** Every recipe in the shared library. */
 const recipes = async () => {
   const snap = await admin.firestore().collection('recipes').get();
@@ -260,6 +290,8 @@ module.exports = {
   deliveries,
   shoppingItems,
   shoppingItem,
+  seedShoppingItem,
+  deleteShoppingItem,
   hellofreshRecipes,
   recipeCount,
   recipes,

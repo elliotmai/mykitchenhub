@@ -41,7 +41,11 @@ const addItem = async (page, { name, quantity, unit }) => {
   if (unit !== undefined) await page.getByLabel('Unit').fill(unit);
   await page.getByRole('button', { name: /^Add$/ }).click();
 
-  await expect(page.getByText(name)).toBeVisible();
+  // `.first()` because this helper is also used for the duplicate case, where
+  // the same name is deliberately on both halves of the list — a bare
+  // getByText would then resolve to two elements and fail strict mode for a
+  // reason that has nothing to do with whether the add worked.
+  await expect(page.getByText(name).first()).toBeVisible();
   return storedItem(name);
 };
 

@@ -20,6 +20,12 @@ import React, { useState } from 'react';
 import { Badge, Button, Card, Form, Spinner } from 'react-bootstrap';
 import { Check, Plus, ShoppingCart, X } from 'lucide-react';
 
+import { amountLabel } from '../../hooks/useShoppingList';
+
+// Re-exported because the fridge board renders the same rows from the same
+// helper: one definition, two surfaces.
+export { amountLabel };
+
 /**
  * What the kitchen already has of something still on the list.
  *
@@ -42,21 +48,6 @@ export const stockNote = (item) => {
   });
 
   return notes.length ? notes.join(' · ') : null;
-};
-
-/**
- * "2 fillet", or nothing at all.
- *
- * A bare "1" against a manual row is noise — "Batteries 1" tells a cook nothing
- * they had not already assumed — so one of something unmeasured shows no
- * amount. Anything else does.
- */
-export const amountLabel = (item) => {
-  const quantity = Number(item?.quantity ?? 0);
-  const unit = String(item?.unit ?? '').trim();
-  if (!quantity) return unit || null;
-  if (quantity === 1 && !unit) return null;
-  return unit ? `${quantity} ${unit}` : String(quantity);
 };
 
 const SMALL = { fontSize: 'var(--mkh-font-size-small)' };

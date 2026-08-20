@@ -3,7 +3,7 @@
 
 import React from 'react';
 
-import Kiosk, { KIOSK_ITEM_LIMIT } from '../Kiosk';
+import Kiosk, { KIOSK_ITEM_LIMIT, KIOSK_SHOPPING_LIMIT } from '../Kiosk';
 import {
   renderWithProviders,
   screen,
@@ -18,6 +18,7 @@ import {
   makeItem,
   makeLocation,
   makeMealPlanEntry,
+  makeShoppingItem,
   dayKey,
   daysFromNow,
 } from '../../test-utils/factories';
@@ -33,7 +34,7 @@ const EXPIRING = [
   makeItem({ id: 'i2', name: 'Spinach', expiresAt: daysFromNow(1) }),
 ];
 
-const renderBoard = async ({ items = EXPIRING, entries = [] } = {}) => {
+const renderBoard = async ({ items = EXPIRING, entries = [], shopping = [] } = {}) => {
   const view = renderWithProviders(<Kiosk />, {
     route: '/kiosk',
     user: authMock.__user({ uid: UID }),
@@ -44,10 +45,20 @@ const renderBoard = async ({ items = EXPIRING, entries = [] } = {}) => {
     fs.__emit(`users/${UID}/inventory`, asDocs(items));
     fs.__emit(`users/${UID}/storageLocations`, asDocs(LOCATIONS));
     fs.__emit(`users/${UID}/mealPlanEntries`, asDocs(entries));
+    fs.__emit(`users/${UID}/shoppingItems`, asDocs(shopping));
   });
 
   return view;
 };
+
+/** A meal that puts `name` on the derived half of the shopping list. */
+const mealNeeding = (name, { quantity = 2, unit = 'g', id = 'meal-1' } = {}) =>
+  makeMealPlanEntry({
+    id,
+    date: dayKey(0),
+    recipeName: `Dinner with ${name}`,
+    usesIngredients: [{ name, normalized: name.toLowerCase(), quantity, unit }],
+  });
 
 describe('Kiosk board', () => {
   beforeEach(() => {
@@ -185,13 +196,114 @@ describe('Kiosk board', () => {
     ]);
   });
 
-  // Reserved space for a feature the owner is building. It must render, and it
-  // must not pretend to hold anything.
-  it('reserves a corner for the shopping list without inventing one', async () => {
-    await renderBoard();
-    const panel = screen.getByTestId('kiosk-shopping');
-    expect(within(panel).getByRole('heading', { name: 'Shopping list' })).toBeInTheDocument();
-    expect(within(panel).getByText('Coming soon')).toBeInTheDocument();
-    expect(within(panel).queryAllByRole('listitem')).toHaveLength(0);
+  // ------------------------------------------------------------------------
+  // The shopping list
+  //
+  // One question, answered from across the kitchen on the way out of the door:
+  // what do I need to buy. Both halves of the list, and nothing already dealt
+  // with.
+  // ------------------------------------------------------------------------
+  describe('the shopping list', () => {
+    const panel = () => screen.getByTestId('kiosk-shopping');
+
+    it('is still the third panel, and still says what it is', async () => {
+      await renderBoard();
+      expect(within(panel()).getByRole('heading', { name: 'Shopping list' })).toBeInTheDocument();
+    });
+
+    it('shows what the week needs and what the cook typed, together', async () => {
+      // A board showing only the ad-hoc items would be actively misleading
+      // about what needs buying.
+      await renderBoard({
+        entries: [mealNeeding('Salmon', { quantity: 2, unit: 'fillet' })],
+        shopping: [makeShoppingItem({ id: 's1', name: 'Batteries' })],
+      });
+
+      expect(within(panel()).getByText('Batteries')).toBeInTheDocument();
+      expect(within(panel()).getByText('Salmon')).toBeInTheDocument();
+      expect(within(panel()).getByText('2 fillet')).toBeInTheDocument();
+    });
+
+    it('takes a ticked-off item off the fridge', async () => {
+      await renderBoard({
+        shopping: [
+          makeShoppingItem({ id: 's1', name: 'Batteries' }),
+          makeShoppingItem({ id: 's2', name: 'Kitchen Roll', status: 'bought' }),
+        ],
+      });
+
+      expect(within(panel()).getByText('Batteries')).toBeInTheDocument();
+      // Already in the trolley is not still to buy — the board is not the
+      // place to relitigate that.
+      expect(within(panel()).queryByText('Kitchen Roll')).not.toBeInTheDocument();
+    });
+
+    it('leaves out what the kitchen already covers', async () => {
+      await renderBoard({
+        items: [makeItem({ id: 'stock', name: 'Rice', quantity: 5, unit: 'cup' })],
+        entries: [mealNeeding('Rice', { quantity: 1, unit: 'cup' })],
+      });
+
+      expect(within(panel()).queryByText('Rice')).not.toBeInTheDocument();
+      expect(within(panel()).getByText(/Nothing to pick up/i)).toBeInTheDocument();
+    });
+
+    it('says so plainly when there is nothing to buy', async () => {
+      await renderBoard();
+      expect(within(panel()).getByText(/Nothing to pick up/i)).toBeInTheDocument();
+      expect(within(panel()).queryAllByRole('listitem')).toHaveLength(0);
+    });
+
+    // The constraint that governs this whole page: the board is one screen.
+    it('stops at the limit rather than growing off the screen', async () => {
+      const many = Array.from({ length: KIOSK_SHOPPING_LIMIT + 3 }, (_, i) =>
+        makeShoppingItem({ id: `s${i}`, name: `Thing ${i}` })
+      );
+      await renderBoard({ shopping: many });
+
+      expect(within(panel()).queryAllByRole('listitem')).toHaveLength(KIOSK_SHOPPING_LIMIT);
+      expect(within(panel()).getByText('Thing 0')).toBeInTheDocument();
+      expect(within(panel()).queryByText(`Thing ${KIOSK_SHOPPING_LIMIT}`)).not.toBeInTheDocument();
+      expect(within(panel()).getByText(/and 3 more/i)).toBeInTheDocument();
+    });
+
+    it('counts the derived half toward that limit too', async () => {
+      // Otherwise four typed items plus six the week needs is ten rows on a
+      // panel with room for four.
+      const shopping = Array.from({ length: 2 }, (_, i) =>
+        makeShoppingItem({ id: `s${i}`, name: `Typed ${i}` })
+      );
+      const entries = Array.from({ length: 5 }, (_, i) =>
+        mealNeeding(`Needed ${i}`, { id: `m${i}` })
+      );
+      await renderBoard({ shopping, entries });
+
+      expect(within(panel()).queryAllByRole('listitem')).toHaveLength(KIOSK_SHOPPING_LIMIT);
+      expect(within(panel()).getByText(/and 3 more/i)).toBeInTheDocument();
+    });
+
+    it('gives one errand one row when both halves name it', async () => {
+      // Two "Milk" rows on a four-row board read as a rendering fault, not as
+      // information. This is not the quantity merge the schema rules out: no
+      // number is added, one row is dropped, and the meal plan page still shows
+      // both with the note explaining the difference.
+      await renderBoard({
+        entries: [mealNeeding('Milk', { quantity: 200, unit: 'g' })],
+        shopping: [makeShoppingItem({ id: 's1', name: 'Milk', quantity: 2, unit: 'l' })],
+      });
+
+      expect(within(panel()).getAllByText('Milk')).toHaveLength(1);
+      // The typed row survives — it is the cook's own words — with its own
+      // quantity untouched rather than summed with the computed one.
+      expect(within(panel()).getByText('2 l')).toBeInTheDocument();
+      expect(within(panel()).queryByText('200 g')).not.toBeInTheDocument();
+    });
+
+    it('leaves out a bare "1" that tells the cook nothing', async () => {
+      await renderBoard({ shopping: [makeShoppingItem({ id: 's1', name: 'Batteries' })] });
+
+      const row = within(panel()).getByText('Batteries').closest('li');
+      expect(within(row).queryByText('1')).not.toBeInTheDocument();
+    });
   });
 });

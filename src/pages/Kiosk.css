@@ -85,15 +85,6 @@
   grid-row: 1 / -1;
 }
 
-/* Quiet on purpose. A placeholder that shouts competes with the two panels
-   that are actually telling you something. */
-.kiosk__placeholder {
-  margin: auto 0;
-  color: var(--mkh-text-secondary);
-  opacity: 0.55;
-  font-size: 3vmin;
-}
-
 .kiosk__panel {
   background: var(--mkh-bg-card);
   border: 1px solid var(--mkh-border);
@@ -237,6 +228,60 @@
   white-space: nowrap;
 }
 
+/* --------------------------------------------------------------------------
+   The shopping list
+
+   The smallest panel on the board — the grid gives it 2fr against the "eat
+   these first" panel's 3fr, and it sits underneath — so it is the one a long
+   list would push off the bottom first.
+
+   Two columns, because one does not hold enough to be worth walking over to.
+
+   Measured on the board rather than reasoned about: this panel gives its list
+   100px on a Fire HD 8 (1280x800) and 90px on a 1280x720 desktop, and a
+   comfortable single-column row is 43px. That is two items. Two columns at
+   2.9vmin fit four in the same space with 26px to spare, and clip no name a
+   single column would have shown — product names are short, and the ones that
+   are not ellipsise to one line exactly as they already do in "Eat these
+   first". Reading order is left to right then down, the way a written list
+   goes.
+   -------------------------------------------------------------------------- */
+.kiosk__shopping {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 3vmin;
+  align-content: start;
+  flex: 1 1 auto;
+  min-height: 0;
+  /* Belt and braces with KIOSK_SHOPPING_LIMIT: the count is what keeps the list
+     short, and this is what keeps a freak row — a name that wraps on a narrower
+     board than the Fire HD 8 — from pushing the panel past its corner. */
+  overflow: hidden;
+}
+
+.kiosk__shopping .kiosk__item {
+  /* Natural height, deliberately NOT `flex: 1 1 0`. Sharing the panel's height
+     out between the rows sounds tidier and is worse: each row becomes whatever
+     is left over, which at four rows measured 22px of box around 31px of text —
+     the type spilled out of its own row and was clipped. Rows keep their size;
+     the count is what gives. */
+  padding: 0.5vmin 0;
+  line-height: 1.2;
+  /* A shade under the expiry list's 3.4vmin: these are single product names
+     rather than a name plus a dated phrase, and this panel has the least height
+     on the board to spend. Still ~23px on a Fire HD 8 — kitchen-readable. */
+  font-size: 2.9vmin;
+  gap: 1.5vmin;
+}
+
+/* The overflow line costs the list a whole row if it is left at the shared
+   size — 39px of a 100px budget. Smaller and closer here, where it is a
+   footnote rather than a finding. */
+.kiosk__panel--shopping .kiosk__quiet {
+  margin-top: 0.4vmin;
+  font-size: 2.2vmin;
+}
+
 .kiosk__all-clear {
   display: flex;
   align-items: center;
@@ -288,5 +333,12 @@
 
   .kiosk__day {
     font-size: 4vmin;
+  }
+
+  /* Stacked and scrollable down here, so the rows do not have to share a fixed
+     height — let them size to their text like every other list. */
+  .kiosk__shopping .kiosk__item {
+    flex: 0 0 auto;
+    font-size: 4.5vmin;
   }
 }

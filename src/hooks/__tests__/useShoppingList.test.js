@@ -9,7 +9,9 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import React from 'react';
 
 import useShoppingList, {
+  amountLabel,
   buildShoppingItem,
+  combineShoppingList,
   findDuplicateNames,
   normalizeName,
   SHOPPING_ITEM_STATUSES,
@@ -195,6 +197,148 @@ describe('findDuplicateNames', () => {
     expect(findDuplicateNames().size).toBe(0);
     expect(findDuplicateNames([], [derived('milk')]).size).toBe(0);
     expect(findDuplicateNames([makeShoppingItem()], []).size).toBe(0);
+  });
+});
+
+describe('amountLabel', () => {
+  it('says nothing for one of something unmeasured', () => {
+    expect(amountLabel({ quantity: 1, unit: '' })).toBeNull();
+  });
+
+  it('keeps a count that means something', () => {
+    expect(amountLabel({ quantity: 6, unit: '' })).toBe('6');
+    expect(amountLabel({ quantity: 1, unit: 'box' })).toBe('1 box');
+    expect(amountLabel({ quantity: 2, unit: 'l' })).toBe('2 l');
+  });
+
+  it('falls back to the unit when there is no number', () => {
+    expect(amountLabel({ quantity: 0, unit: 'bunch' })).toBe('bunch');
+    expect(amountLabel({})).toBeNull();
+    expect(amountLabel()).toBeNull();
+  });
+});
+
+// The fridge board's view: one errand list, read from across the kitchen.
+describe('combineShoppingList', () => {
+  const derived = (name, overrides = {}) => ({
+    key: `${name.toLowerCase()}|g`,
+    name,
+    normalized: name.toLowerCase(),
+    quantity: 200,
+    unit: 'g',
+    onHand: 0,
+    haveInInventory: false,
+    ...overrides,
+  });
+
+  it('puts both halves of the list in one place', () => {
+    const rows = combineShoppingList(
+      [makeShoppingItem({ id: 's1', name: 'Batteries' })],
+      [derived('Salmon', { quantity: 2, unit: 'fillet' })]
+    );
+
+    expect(rows.map((r) => r.name)).toEqual(['Batteries', 'Salmon']);
+    expect(rows.map((r) => r.kind)).toEqual(['manual', 'derived']);
+  });
+
+  it('leads with what the cook typed', () => {
+    // Same order as the panel on the meal plan page: the two surfaces should
+    // not disagree about which end of the list a typed item lives at.
+    const rows = combineShoppingList(
+      [makeShoppingItem({ id: 's1', name: 'Batteries' })],
+      [derived('Apples'), derived('Salmon')]
+    );
+    expect(rows[0].name).toBe('Batteries');
+  });
+
+  it('drops what has already been ticked off', () => {
+    const rows = combineShoppingList(
+      [
+        makeShoppingItem({ id: 's1', name: 'Batteries' }),
+        makeShoppingItem({ id: 's2', name: 'Kitchen roll', status: 'bought' }),
+      ],
+      []
+    );
+    expect(rows.map((r) => r.name)).toEqual(['Batteries']);
+  });
+
+  it('drops what the kitchen already covers', () => {
+    const rows = combineShoppingList([], [derived('Rice', { haveInInventory: true })]);
+    expect(rows).toEqual([]);
+  });
+
+  it('keeps a derived row whose haveInInventory never got set', () => {
+    // Same rule as the panel: an absent flag means "still to buy", never
+    // "already have".
+    const { haveInInventory, ...withoutFlag } = derived('Salmon');
+    expect(combineShoppingList([], [withoutFlag]).map((r) => r.name)).toEqual(['Salmon']);
+  });
+
+  it('gives one errand one row, keeping the typed one', () => {
+    // Two "Milk" rows on a four-row board read as a rendering fault. This drops
+    // a row; it does not add two numbers together — see findDuplicateNames for
+    // the merge that is deliberately not done.
+    const rows = combineShoppingList(
+      [makeShoppingItem({ id: 's1', name: 'Milk', quantity: 2, unit: 'l' })],
+      [derived('milk')]
+    );
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ name: 'Milk', amount: '2 l', kind: 'manual' });
+  });
+
+  it('collapses across case and spacing, like every other name match here', () => {
+    const rows = combineShoppingList(
+      [makeShoppingItem({ id: 's1', name: '  MILK ' })],
+      [derived('milk')]
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].kind).toBe('manual');
+  });
+
+  it('does not collapse two different things', () => {
+    const rows = combineShoppingList(
+      [makeShoppingItem({ id: 's1', name: 'Batteries' })],
+      [derived('Milk')]
+    );
+    expect(rows).toHaveLength(2);
+  });
+
+  it('keeps two derived lines that differ only by unit', () => {
+    // buildShoppingList keys on ingredient *and* unit for a reason — 2 cups of
+    // flour and 200 g of flour are two things to buy, not one.
+    const rows = combineShoppingList(
+      [],
+      [
+        derived('Flour', { key: 'flour|cup', quantity: 2, unit: 'cup' }),
+        derived('Flour', { key: 'flour|g', quantity: 200, unit: 'g' }),
+      ]
+    );
+
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => r.amount)).toEqual(['2 cup', '200 g']);
+    expect(new Set(rows.map((r) => r.key)).size).toBe(2);
+  });
+
+  it('gives every row a key of its own', () => {
+    const rows = combineShoppingList(
+      [
+        makeShoppingItem({ id: 's1', name: 'Batteries' }),
+        makeShoppingItem({ id: 's2', name: 'Bin bags' }),
+      ],
+      [derived('Salmon')]
+    );
+    expect(new Set(rows.map((r) => r.key)).size).toBe(3);
+  });
+
+  it('leaves out a bare "1" that tells the cook nothing', () => {
+    const rows = combineShoppingList([makeShoppingItem({ id: 's1', name: 'Batteries' })], []);
+    expect(rows[0].amount).toBeNull();
+  });
+
+  it('copes with nothing on either side', () => {
+    expect(combineShoppingList()).toEqual([]);
+    expect(combineShoppingList([], [])).toEqual([]);
   });
 });
 

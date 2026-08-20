@@ -14,10 +14,18 @@
 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Settings2, AlertTriangle, UtensilsCrossed, Snowflake, ShoppingCart } from 'lucide-react';
+import {
+  Settings2,
+  AlertTriangle,
+  UtensilsCrossed,
+  Snowflake,
+  ShoppingCart,
+  Check,
+} from 'lucide-react';
 
 import useWasteAlerts from '../hooks/useWasteAlerts';
 import useMealPlan from '../hooks/useMealPlan';
+import useShoppingList, { combineShoppingList } from '../hooks/useShoppingList';
 import useWakeLock from '../hooks/useWakeLock';
 import { getExpirationLabel, getExpirationLevel, EXPIRATION_LEVELS } from '../hooks/useInventory';
 
@@ -25,6 +33,19 @@ import './Kiosk.css';
 
 /** How many expiring items fit on the board before it stops being glanceable. */
 export const KIOSK_ITEM_LIMIT = 6;
+
+/**
+ * How many things to buy fit before the shopping panel stops being glanceable.
+ *
+ * Lower than KIOSK_ITEM_LIMIT because this is the smallest panel on the board —
+ * the grid gives it 2fr against the "eat these first" panel's 3fr, and it sits
+ * under it. Four is measured rather than picked: the panel's list gets ~100px
+ * on a Fire HD 8, a row is ~37px, and Kiosk.css lays these out in two columns,
+ * so four is two rows with room left over. Past it the panel says how many more
+ * there are rather than growing — the board is one screen, and a wall display
+ * you have to scroll is one nobody reads.
+ */
+export const KIOSK_SHOPPING_LIMIT = 4;
 
 /** A ticking clock, because a dark screen and a stopped clock look identical. */
 const useClock = () => {
@@ -40,13 +61,23 @@ const useClock = () => {
 
 export const Kiosk = () => {
   const { items, expiringItems, loading: alertsLoading } = useWasteAlerts();
-  const { weekDays, entriesByDay, loading: planLoading } = useMealPlan();
+  const { weekDays, entriesByDay, shoppingList, loading: planLoading } = useMealPlan();
+  const { items: manualItems, loading: shoppingLoading } = useShoppingList();
   const { active: screenHeld, supported: wakeLockSupported } = useWakeLock(true);
   const now = useClock();
 
   const shown = expiringItems.slice(0, KIOSK_ITEM_LIMIT);
   const overflow = expiringItems.length - shown.length;
   const loading = alertsLoading || planLoading;
+
+  // Both halves of the list, as one errand list. The board answers a single
+  // question on the way out of the door — what do I need to buy — and has no
+  // room to explain that one line was computed from Thursday's dinner and
+  // another was typed in on Sunday. Anything already ticked off is gone from
+  // here, because it is no longer something to pick up.
+  const toBuy = combineShoppingList(manualItems, shoppingList);
+  const shownToBuy = toBuy.slice(0, KIOSK_SHOPPING_LIMIT);
+  const toBuyOverflow = toBuy.length - shownToBuy.length;
 
   return (
     <div className="kiosk">
@@ -160,20 +191,16 @@ export const Kiosk = () => {
           )}
         </section>
 
-        {/* ------------------------------------------------------------------
-            PLACEHOLDER — the grocery list is not built yet.
+        {/* The grocery list: what the week's meals still need, and whatever the
+            cook typed in themselves, as one list of errands. Both halves,
+            because a corner showing only the ad-hoc items would be actively
+            misleading about what needs buying.
 
-            This reserves the corner it will live in so the board's proportions
-            do not shift when it arrives, and so nobody wonders where it went.
-            It holds no data and reads from no hook on purpose: a placeholder
-            that half-works is harder to replace than an empty one.
-
-            To fill it in: keep the <section> and its two classes (the grid
-            places the panel by `kiosk__panel--shopping`), swap the body below
-            for the real list, and delete `kiosk__placeholder` from the CSS.
-            e2e/kiosk.spec.js asserts the panel exists and that the board still
-            fits without scrolling — both of which should keep passing.
-            ------------------------------------------------------------------ */}
+            The smallest of the three panels, so it is the one most at risk of
+            pushing the board past one screen. Two things stop that: the count
+            is capped at KIOSK_SHOPPING_LIMIT with an "and N more" line, and
+            Kiosk.css lays the rows out in two columns at their natural height —
+            measured to fit, not assumed to. */}
         <section
           className="kiosk__panel kiosk__panel--shopping"
           aria-labelledby="kiosk-shopping"
@@ -184,7 +211,26 @@ export const Kiosk = () => {
             Shopping list
           </h2>
 
-          <p className="kiosk__placeholder">Coming soon</p>
+          {loading || shoppingLoading ? (
+            <p className="kiosk__quiet">Checking the list…</p>
+          ) : shownToBuy.length === 0 ? (
+            <p className="kiosk__all-clear">
+              <Check size={40} aria-hidden="true" />
+              Nothing to pick up.
+            </p>
+          ) : (
+            <>
+              <ul className="kiosk__items kiosk__shopping">
+                {shownToBuy.map((row) => (
+                  <li key={row.key} className="kiosk__item">
+                    <span className="kiosk__item-name">{row.name}</span>
+                    {row.amount && <span className="kiosk__item-when">{row.amount}</span>}
+                  </li>
+                ))}
+              </ul>
+              {toBuyOverflow > 0 && <p className="kiosk__quiet">and {toBuyOverflow} more</p>}
+            </>
+          )}
         </section>
       </main>
 
