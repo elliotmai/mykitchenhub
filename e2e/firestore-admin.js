@@ -166,6 +166,22 @@ const seedMealPlanEntry = async ({
   });
   return ref.id;
 };
+/**
+ * Every manual shopping item belonging to the seeded account.
+ *
+ * The rest of the shopping list is derived from the week's meals and the
+ * kitchen, and has no documents at all — so there is nothing to read back for
+ * those, and nothing that could be read back if a tick tried to store one.
+ */
+const shoppingItems = async () => {
+  const uid = await testUserId();
+  const snap = await admin.firestore().collection(`users/${uid}/shoppingItems`).get();
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+/** The stored shopping item with this exact name, or undefined. */
+const shoppingItem = async (name) => (await shoppingItems()).find((item) => item.name === name);
+
 /** Every recipe in the shared library. */
 const recipes = async () => {
   const snap = await admin.firestore().collection('recipes').get();
@@ -242,6 +258,8 @@ module.exports = {
   mealPlanEntry,
   seedMealPlanEntry,
   deliveries,
+  shoppingItems,
+  shoppingItem,
   hellofreshRecipes,
   recipeCount,
   recipes,
