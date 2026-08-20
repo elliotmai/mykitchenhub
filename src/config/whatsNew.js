@@ -14,6 +14,15 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.08.20.2',
+    date: 'August 2026',
+    items: [
+      '\u{270F}\u{FE0F} Typed a shopping item wrong? Tap the pencil beside it and fix the name, the amount or the units \u2014 no more deleting it and starting again.',
+      '\u{1F37D}\u{FE0F} Meals on the plan can be edited too. Change what it feeds, move it from dinner to lunch, or add a note to yourself, without unscheduling it and putting it back.',
+      '\u{1F4E6} Deliveries can be corrected after the fact \u2014 the day it actually turned up, which week it was for, and whether you have cooked it yet.',
+    ],
+  },
+  {
     version: '2026.08.20.1',
     date: 'August 2026',
     items: [

@@ -82,6 +82,50 @@ const deliveries = async () => {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 };
 
+/**
+ * Log a delivery straight in the emulator, bypassing the import.
+ *
+ * Field for field with the `create` rule in firestore.rules and with
+ * addDelivery in src/hooks/useDeliveries.js, so it fails loudly if the contract
+ * moves. For specs that start from a delivery already in the history rather
+ * than importing a recipe first to make one.
+ */
+const seedDelivery = async ({
+  recipeNames = [],
+  deliveredAt = new Date(),
+  weekOf = '',
+  status = 'received',
+  mealCount = 1,
+  itemsAdded = 2,
+  notes = '',
+} = {}) => {
+  const uid = await testUserId();
+  const ref = await admin
+    .firestore()
+    .collection(`users/${uid}/deliveries`)
+    .add({
+      deliveredAt: admin.firestore.Timestamp.fromDate(deliveredAt),
+      weekOf,
+      recipeIds: [],
+      recipeNames,
+      mealCount,
+      itemsAdded,
+      locationId: 'loc-fridge',
+      status,
+      source: 'hellofresh',
+      notes,
+      createdAt: admin.firestore.Timestamp.now(),
+    });
+  return ref.id;
+};
+
+/** The stored delivery document by id, or undefined. */
+const deliveryById = async (id) => {
+  const uid = await testUserId();
+  const snap = await admin.firestore().doc(`users/${uid}/deliveries/${id}`).get();
+  return snap.exists ? { id: snap.id, ...snap.data() } : undefined;
+};
+
 /** Recipes imported from HelloFresh — the shared library, not a subcollection. */
 const hellofreshRecipes = async () => {
   const snap = await admin
@@ -288,6 +332,8 @@ module.exports = {
   mealPlanEntry,
   seedMealPlanEntry,
   deliveries,
+  seedDelivery,
+  deliveryById,
   shoppingItems,
   shoppingItem,
   seedShoppingItem,

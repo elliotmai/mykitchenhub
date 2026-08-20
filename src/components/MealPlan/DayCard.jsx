@@ -8,7 +8,7 @@
 
 import React, { useState } from 'react';
 import { Badge, Button, Card, Form } from 'react-bootstrap';
-import { Check, GripVertical, Plus, Trash2, UtensilsCrossed } from 'lucide-react';
+import { Check, GripVertical, Plus, Pencil, Trash2, UtensilsCrossed } from 'lucide-react';
 
 export const DRAG_TYPE = 'application/x-mykitchenhub-meal';
 
@@ -24,7 +24,7 @@ const STATUS_BADGES = {
   skipped: { label: 'Skipped', variant: 'secondary' },
 };
 
-const MealEntry = ({ entry, days, onCook, onRemove, onMove, busy }) => {
+const MealEntry = ({ entry, days, onCook, onRemove, onMove, onEdit, busy }) => {
   const cooked = entry.status === 'cooked';
   // `skipped` is part of the shared entry contract, so it has to render as
   // something other than "still for dinner".
@@ -122,10 +122,22 @@ const MealEntry = ({ entry, days, onCook, onRemove, onMove, busy }) => {
             </Form.Select>
           </>
         )}
+        {onEdit && (
+          <Button
+            size="sm"
+            variant="link"
+            className="p-0 ms-auto text-muted"
+            aria-label={`Edit ${entry.recipeName}`}
+            disabled={busy}
+            onClick={() => onEdit(entry)}
+          >
+            <Pencil size={13} aria-hidden="true" />
+          </Button>
+        )}
         <Button
           size="sm"
           variant="link"
-          className="p-0 ms-auto"
+          className={onEdit ? 'p-0' : 'p-0 ms-auto'}
           aria-label={`Remove ${entry.recipeName}`}
           style={{ color: 'var(--mkh-danger-text)' }}
           onClick={() => onRemove(entry)}
@@ -157,6 +169,7 @@ const DayCard = ({
   onAdd,
   onCook,
   onRemove,
+  onEdit,
   onMove,
   onDropMeal,
   busyEntryId = null,
@@ -234,6 +247,7 @@ const DayCard = ({
                 onCook={onCook}
                 onRemove={onRemove}
                 onMove={onMove}
+                onEdit={onEdit}
                 busy={busyEntryId === entry.id}
               />
             ))}

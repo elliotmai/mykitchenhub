@@ -12,6 +12,7 @@ import { Link } from 'react-router-dom';
 import {
   AddDeliveryModal,
   DeliveryHistory,
+  EditDeliveryModal,
   PhotoImport,
   RecipeReviewForm,
   UrlImport,
@@ -47,11 +48,13 @@ const HelloFresh = () => {
     saving: savingDelivery,
     error: deliveriesError,
     addDelivery,
+    updateDelivery,
     deleteDelivery,
   } = useDeliveries();
 
   const [importMethod, setImportMethod] = useState('photo');
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
+  const [editingDelivery, setEditingDelivery] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -75,6 +78,15 @@ const HelloFresh = () => {
         } scheduled.`
       );
     }
+    return result;
+  };
+
+  const handleEditDelivery = async (delivery, changes) => {
+    const result = await updateDelivery(delivery.id, changes);
+    if (result.success) showSuccess('Delivery updated.');
+    else showError(result.error || 'That change could not be saved.');
+    // Handed back so the dialog stays open on a refusal rather than closing
+    // over an edit that never landed.
     return result;
   };
 
@@ -197,6 +209,7 @@ const HelloFresh = () => {
         <DeliveryHistory
           deliveries={deliveries}
           loading={deliveriesLoading}
+          onEdit={setEditingDelivery}
           onDelete={setDeleteTarget}
         />
       </section>
@@ -209,6 +222,13 @@ const HelloFresh = () => {
         recipesLoading={recipesLoading}
         locations={locations}
         saving={savingDelivery}
+      />
+
+      <EditDeliveryModal
+        show={Boolean(editingDelivery)}
+        onHide={() => setEditingDelivery(null)}
+        onSave={handleEditDelivery}
+        delivery={editingDelivery}
       />
 
       <ConfirmModal

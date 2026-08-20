@@ -279,6 +279,51 @@ test.describe('meal plan', () => {
         .locator('[data-testid^="meal-entry-"]', { hasText: recipeName })
     ).toBeVisible();
   });
+  test('amends a meal already on the board, without moving or renaming it away', async ({
+    authedPage: page,
+  }) => {
+    const recipeName = `E2E Amendable ${Date.now()}`;
+    const [day] = await boardDayKeys(page);
+    await seedMealPlanEntry({ date: day, recipeName, servings: 2, mealType: 'dinner' });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+
+    const meal = page.locator('[data-testid^="meal-entry-"]').filter({ hasText: recipeName });
+    await expect(meal).toBeVisible();
+    const before = await mealPlanEntry(recipeName);
+
+    await meal.getByRole('button', { name: `Edit ${recipeName}` }).click();
+    await page.getByLabel('Servings').fill('4');
+    await page.getByLabel('Sitting').selectOption('lunch');
+    await page.getByLabel('Notes').fill('Double the sauce');
+    await page.getByRole('button', { name: /^Save$/ }).click();
+
+    await expect
+      .poll(async () => (await mealPlanEntry(recipeName))?.servings, { timeout: 10_000 })
+      .toBe(4);
+
+    const after = await mealPlanEntry(recipeName);
+    expect(after).toMatchObject({
+      id: before.id,
+      recipeName,
+      servings: 4,
+      mealType: 'lunch',
+      notes: 'Double the sauce',
+      // The day is the card's own picker's job, and the dialog must not have
+      // quietly taken it along.
+      date: day,
+    });
+    // Pinned by the rules — an update that re-stamps it is refused outright,
+    // so a green here also proves the write actually landed.
+    expect(after.createdAt).toEqual(before.createdAt);
+
+    // Still on the same card, now reading as it was amended.
+    await expect(
+      page.getByTestId(`day-card-${day}`).locator('[data-testid^="meal-entry-"]', {
+        hasText: recipeName,
+      })
+    ).toBeVisible();
+  });
+
   test('regenerates a week it has already planned', async ({ authedPage: page }, testInfo) => {
     // The emulator runs the real firestore.rules, and `mealPlans` pins
     // createdAt on update. A regeneration that re-stamps it is refused here

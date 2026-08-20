@@ -5,7 +5,6 @@
 // what a cook sees when a write fails, and which row shows as busy while it is
 // in flight, are the things that must not differ between the two screens.
 
-import React from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 
 import { useShoppingListActions } from '../useShoppingListActions';

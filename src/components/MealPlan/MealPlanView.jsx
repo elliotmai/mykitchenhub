@@ -13,6 +13,7 @@ import { useToast } from '../Common';
 import { PageLoader } from '../Common/LoadingSpinner';
 import DayCard from './DayCard';
 import ScheduleMealModal from './ScheduleMealModal';
+import EditMealModal from './EditMealModal';
 import ShoppingList from './ShoppingList';
 import BatchCookingTips from './BatchCookingTips';
 
@@ -43,6 +44,7 @@ const MealPlanView = () => {
     error,
     generating,
     scheduleMeal,
+    updateMeal,
     rescheduleMeal,
     removeMeal,
     markCooked,
@@ -62,6 +64,7 @@ const MealPlanView = () => {
   const { showSuccess, showError, showInfo } = useToast();
 
   const [addDay, setAddDay] = useState(null);
+  const [editingEntry, setEditingEntry] = useState(null);
   const [busyEntryId, setBusyEntryId] = useState(null);
   const [notice, setNotice] = useState(null);
 
@@ -70,6 +73,18 @@ const MealPlanView = () => {
   const duplicateNames = useMemo(
     () => findDuplicateNames(manualItems, shoppingList),
     [manualItems, shoppingList]
+  );
+
+  const handleEditMeal = useCallback(
+    async (entry, changes) => {
+      const result = await updateMeal(entry.id, changes);
+      if (result.success) showSuccess('Meal updated.');
+      else showError(result.error || 'Could not save that change.');
+      // Handed back so the dialog stays open on a refusal rather than closing
+      // over an edit that never landed.
+      return result;
+    },
+    [updateMeal, showError, showSuccess]
   );
 
   const handleCook = useCallback(
@@ -213,6 +228,7 @@ const MealPlanView = () => {
                   onRemove={handleRemove}
                   onMove={handleMove}
                   onDropMeal={moveEntryTo}
+                  onEdit={setEditingEntry}
                   busyEntryId={busyEntryId}
                 />
               </Col>
@@ -239,6 +255,13 @@ const MealPlanView = () => {
           </div>
         </Col>
       </Row>
+
+      <EditMealModal
+        show={Boolean(editingEntry)}
+        onHide={() => setEditingEntry(null)}
+        onSave={handleEditMeal}
+        entry={editingEntry}
+      />
 
       <ScheduleMealModal
         show={Boolean(addDay)}

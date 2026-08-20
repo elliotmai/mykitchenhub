@@ -325,6 +325,61 @@ describe('logging a delivery', () => {
     );
   });
 
+  it('edits a delivery already in the history', async () => {
+    const { user } = renderPage();
+    await seedListeners({
+      deliveries: [
+        {
+          id: 'd1',
+          deliveredAt: new Date(2026, 7, 14),
+          weekOf: '2026-08-10',
+          mealCount: 1,
+          itemsAdded: 2,
+          status: 'received',
+          recipeNames: [],
+          notes: '',
+        },
+      ],
+    });
+
+    await user.click(await screen.findByRole('button', { name: /edit delivery from/i }));
+    await user.selectOptions(await screen.findByLabelText(/status/i), 'cooked');
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(fs.pathOf(fs.updateDoc.mock.calls.at(-1)[0])).toBe(`users/${uid()}/deliveries/d1`)
+    );
+    expect(fs.updateDoc.mock.calls.at(-1)[1]).toMatchObject({ status: 'cooked' });
+    // The counts describe what the import put in the kitchen — an edit must
+    // not be able to talk them out of agreeing with the inventory.
+    expect(fs.updateDoc.mock.calls.at(-1)[1]).not.toHaveProperty('mealCount');
+    expect(fs.updateDoc.mock.calls.at(-1)[1]).not.toHaveProperty('itemsAdded');
+    expect(await screen.findByText(/delivery updated/i)).toBeInTheDocument();
+  });
+
+  it('says so when an edit is refused, and keeps the dialog open', async () => {
+    const { user } = renderPage();
+    await seedListeners({
+      deliveries: [
+        {
+          id: 'd1',
+          deliveredAt: new Date(2026, 7, 14),
+          mealCount: 1,
+          itemsAdded: 2,
+          status: 'received',
+          recipeNames: [],
+        },
+      ],
+    });
+    fs.updateDoc.mockRejectedValueOnce(Object.assign(new Error('nope'), { code: 'unavailable' }));
+
+    await user.click(await screen.findByRole('button', { name: /edit delivery from/i }));
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+    expect(await screen.findByText(/offline|connection|try again/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/status/i)).toBeInTheDocument();
+  });
+
   it('surfaces a failure to load the history', async () => {
     renderPage();
     await waitFor(() => expect(fs.__listenerCount(`users/${uid()}/deliveries`)).toBe(1));

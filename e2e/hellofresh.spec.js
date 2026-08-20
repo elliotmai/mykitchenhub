@@ -15,6 +15,8 @@
 const { test, expect } = require('./fixtures');
 const {
   deliveries,
+  deliveryById,
+  seedDelivery,
   hellofreshRecipes,
   inventoryItems,
   mealPlanEntry,
@@ -331,5 +333,56 @@ test.describe('hellofresh deliveries', () => {
     const dayCard = page.getByTestId(`day-card-${TODAY}`);
     await expect(dayCard).toBeVisible();
     await expect(dayCard.getByText(recipeName)).toBeVisible();
+  });
+
+  test('corrects a delivery already in the history', async ({ authedPage: page }) => {
+    const recipeName = `E2E Correctable Box ${Date.now()}`;
+    // Two days ago, so changing the status is the only thing under test and the
+    // date field has a value that is plainly not today.
+    const arrived = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    const id = await seedDelivery({
+      recipeNames: [recipeName],
+      deliveredAt: arrived,
+      weekOf: '2026-08-10',
+      status: 'received',
+      mealCount: 3,
+      itemsAdded: 12,
+    });
+    const before = await deliveryById(id);
+
+    await page.goto('/hellofresh', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { name: 'HelloFresh', exact: true })).toBeVisible();
+    await expect(page.getByText(recipeName).first()).toBeVisible();
+
+    await page.getByRole('button', { name: /^Edit delivery from/ }).click();
+    const modal = page.locator('.modal.show');
+    await expect(modal).toBeVisible();
+    await modal.getByLabel('Status').selectOption('cooked');
+    await modal.getByLabel('Notes').fill('Short a fillet');
+    await modal.getByRole('button', { name: /^Save$/ }).click();
+    await expect(modal).toBeHidden();
+
+    await expect
+      .poll(async () => (await deliveryById(id))?.status, { timeout: 10_000 })
+      .toBe('cooked');
+
+    const after = await deliveryById(id);
+    expect(after).toMatchObject({
+      status: 'cooked',
+      notes: 'Short a fillet',
+      // Re-checked by the update rule, so an edit cannot relabel a delivery
+      // out of the history the page counts.
+      source: 'hellofresh',
+      // The counts describe what the import actually put in the kitchen. The
+      // dialog does not offer them, and the merged write must not drop them
+      // either — the rule requires both to survive.
+      mealCount: 3,
+      itemsAdded: 12,
+    });
+    expect(after.createdAt).toEqual(before.createdAt);
+    // Untouched fields are still there: `updateDoc` merges, and the update
+    // rule refuses the write outright if any required field went missing.
+    expect(after.deliveredAt.toDate().toDateString()).toBe(arrived.toDateString());
+    expect(after.recipeNames).toEqual([recipeName]);
   });
 });

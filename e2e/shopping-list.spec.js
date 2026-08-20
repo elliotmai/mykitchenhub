@@ -253,6 +253,48 @@ test.describe('manual shopping list items', () => {
     expect(stored.some((item) => item.name === ingredient)).toBe(false);
   });
 
+  test('corrects a typed line in place, keeping the document it already had', async ({
+    authedPage: page,
+  }) => {
+    const name = `E2E Mlik ${Date.now()}`;
+    const stored = await addItem(page, { name, quantity: 1, unit: '' });
+
+    await page.getByRole('button', { name: `Edit ${name}` }).click();
+    const corrected = name.replace('Mlik', 'Milk');
+    await page.getByLabel(`Name for ${name}`).fill(corrected);
+    await page.getByLabel(`How many ${name}`).fill('2');
+    await page.getByLabel(`Unit for ${name}`).fill('l');
+    await page.getByRole('button', { name: /^Save$/ }).click();
+
+    const after = await storedItem(corrected);
+    expect(after).toMatchObject({
+      id: stored.id,
+      name: corrected,
+      // Rewritten alongside the name, or the week's own line for milk would
+      // stop matching it and the list would show two.
+      normalized: corrected.toLowerCase(),
+      quantity: 2,
+      unit: 'l',
+      source: 'manual',
+    });
+    // The rules pin it, and an edit is exactly the write that would try.
+    expect(after.createdAt).toEqual(stored.createdAt);
+
+    // The misspelling is gone, not sitting beside the correction.
+    expect(await shoppingItem(name)).toBeUndefined();
+  });
+
+  test('will not save an edit that blanks the name', async ({ authedPage: page }) => {
+    const name = `E2E Cling Film ${Date.now()}`;
+    await addItem(page, { name });
+
+    await page.getByRole('button', { name: `Edit ${name}` }).click();
+    await page.getByLabel(`Name for ${name}`).fill('   ');
+
+    await expect(page.getByRole('button', { name: /^Save$/ })).toBeDisabled();
+    expect(await shoppingItem(name)).toMatchObject({ name });
+  });
+
   test('refuses a line with no name, without spending a write', async ({ authedPage: page }) => {
     const before = (await shoppingItems()).length;
 

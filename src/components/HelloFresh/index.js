@@ -6,3 +6,4 @@ export { default as UrlImport } from './UrlImport';
 export { default as RecipeReviewForm } from './RecipeReviewForm';
 export { default as AddDeliveryModal } from './AddDeliveryModal';
 export { default as DeliveryHistory } from './DeliveryHistory';
+export { default as EditDeliveryModal } from './EditDeliveryModal';

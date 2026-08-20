@@ -226,3 +226,21 @@ describe('while one meal is being logged', () => {
     expect(buttons[1]).toBeEnabled();
   });
 });
+
+it('hands the whole entry back when a meal is edited', async () => {
+  const user = userEvent.setup();
+  const entry = makeMealPlanEntry({ id: 'e1', date: monday.date, recipeName: 'Sheet Pan Salmon' });
+  const onEdit = jest.fn();
+  renderDay({ entries: [entry], onEdit });
+
+  await user.click(screen.getByRole('button', { name: /edit sheet pan salmon/i }));
+
+  expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ id: 'e1' }));
+});
+
+it('hides the edit button when there is nothing to handle it', () => {
+  const entry = makeMealPlanEntry({ id: 'e1', date: monday.date, recipeName: 'Sheet Pan Salmon' });
+  renderDay({ entries: [entry] });
+
+  expect(screen.queryByRole('button', { name: /edit sheet pan salmon/i })).not.toBeInTheDocument();
+});

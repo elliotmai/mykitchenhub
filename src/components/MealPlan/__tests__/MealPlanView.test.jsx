@@ -397,3 +397,46 @@ describe('an empty kitchen', () => {
     expect(screen.getByRole('button', { name: /Generate plan/ })).toBeEnabled();
   });
 });
+
+describe('editing a meal already on the board', () => {
+  it('writes the amended fields, and nothing else', async () => {
+    const user = userEvent.setup();
+    await renderBoard({
+      entries: [
+        makeMealPlanEntry({ id: 'e1', date: TODAY, recipeName: 'Salmon', servings: 2, notes: '' }),
+      ],
+    });
+
+    await user.click(screen.getByRole('button', { name: /edit salmon/i }));
+    await user.clear(screen.getByLabelText(/servings/i));
+    await user.type(screen.getByLabelText(/servings/i), '4');
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(fs.pathOf(fs.updateDoc.mock.calls.at(-1)[0])).toBe(`${ENTRIES_PATH}/e1`)
+    );
+    const patch = fs.updateDoc.mock.calls.at(-1)[1];
+    expect(patch).toMatchObject({ servings: 4 });
+    // The day is moved with the card's own picker, and the recipe link is what
+    // the ingredients hang off — neither is this dialog's to rewrite.
+    expect(patch).not.toHaveProperty('date');
+    expect(patch).not.toHaveProperty('recipeId');
+    expect(await screen.findByText(/meal updated/i)).toBeInTheDocument();
+  });
+
+  it('says so when the edit is refused, and keeps the dialog open', async () => {
+    const user = userEvent.setup();
+    await renderBoard({
+      entries: [makeMealPlanEntry({ id: 'e1', date: TODAY, recipeName: 'Salmon' })],
+    });
+    fs.updateDoc.mockRejectedValueOnce(
+      Object.assign(new Error('nope'), { code: 'permission-denied' })
+    );
+
+    await user.click(screen.getByRole('button', { name: /edit salmon/i }));
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => expect(fs.updateDoc).toHaveBeenCalled());
+    expect(screen.getByLabelText(/sitting/i)).toBeInTheDocument();
+  });
+});

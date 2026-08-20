@@ -117,3 +117,19 @@ it('copes with a delivery missing its counts', () => {
   expect(screen.getByText(/date unknown/i)).toBeInTheDocument();
   expect(screen.getByText(/0 meals/i)).toBeInTheDocument();
 });
+
+it('hands the whole delivery back when one is edited', async () => {
+  const delivery = makeDelivery({ id: 'd1' });
+  const onEdit = jest.fn();
+  const { user } = setup({ deliveries: [delivery], onEdit });
+
+  await user.click(screen.getByRole('button', { name: /edit delivery from/i }));
+
+  expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ id: 'd1' }));
+});
+
+it('hides the edit button when there is nothing to handle it', () => {
+  setup({ deliveries: [makeDelivery()] });
+
+  expect(screen.queryByRole('button', { name: /edit delivery/i })).not.toBeInTheDocument();
+});

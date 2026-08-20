@@ -3,7 +3,7 @@
 
 import React from 'react';
 import { Badge, Button, Card, Col, Row } from 'react-bootstrap';
-import { CalendarDays, Package, Trash2, Utensils } from 'lucide-react';
+import { CalendarDays, Package, Pencil, Trash2, Utensils } from 'lucide-react';
 
 import { CardLoader } from '../Common';
 
@@ -32,7 +32,7 @@ const formatDate = (value) => {
   });
 };
 
-const DeliveryHistory = ({ deliveries = [], loading = false, onDelete }) => {
+const DeliveryHistory = ({ deliveries = [], loading = false, onDelete, onEdit }) => {
   if (loading) return <CardLoader />;
 
   if (deliveries.length === 0) {
@@ -90,16 +90,28 @@ const DeliveryHistory = ({ deliveries = [], loading = false, onDelete }) => {
                 {delivery.notes && <p className="text-muted small mt-2 mb-0">{delivery.notes}</p>}
               </Col>
 
-              {onDelete && (
-                <Col xs="auto">
-                  <Button
-                    variant="outline-danger"
-                    size="sm"
-                    onClick={() => onDelete(delivery)}
-                    aria-label={`Remove delivery from ${formatDate(delivery.deliveredAt)}`}
-                  >
-                    <Trash2 size={16} />
-                  </Button>
+              {(onEdit || onDelete) && (
+                <Col xs="auto" className="d-flex gap-1">
+                  {onEdit && (
+                    <Button
+                      variant="outline-secondary"
+                      size="sm"
+                      onClick={() => onEdit(delivery)}
+                      aria-label={`Edit delivery from ${formatDate(delivery.deliveredAt)}`}
+                    >
+                      <Pencil size={16} />
+                    </Button>
+                  )}
+                  {onDelete && (
+                    <Button
+                      variant="outline-danger"
+                      size="sm"
+                      onClick={() => onDelete(delivery)}
+                      aria-label={`Remove delivery from ${formatDate(delivery.deliveredAt)}`}
+                    >
+                      <Trash2 size={16} />
+                    </Button>
+                  )}
                 </Col>
               )}
             </Row>
