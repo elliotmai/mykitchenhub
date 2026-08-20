@@ -173,12 +173,35 @@ export const markUpdateAttempt = (version) => {
 };
 
 /** Did the last attempt reload us straight back onto the build that started it? */
-export const didUpdateStall = (version) => {
+/** Did the last tap record this exact version as the one it was leaving? */
+export const updateAttemptMatches = (version) => {
   try {
     return sessionStorage.getItem(ATTEMPT_KEY) === version;
   } catch {
     return false;
   }
+};
+
+/**
+ * Did the last update fail to apply?
+ *
+ * Two conditions, and the second is the one that was missing. An unchanged
+ * version label is *not* on its own evidence of a stall: the label is the
+ * roadmap step, several builds can carry the same one, and updating between
+ * two of those leaves it reading exactly as it did before. Deciding on the
+ * label alone reported a perfectly good update as a failure and offered to
+ * wipe the tablet to fix it — which is the worse of the two ways to be wrong,
+ * because the remedy costs the user their session and does nothing.
+ *
+ * So the label only says "this might be the build we tried to leave". What
+ * settles it is whether a worker is *still waiting*: if the update applied,
+ * the waiting slot is empty, whatever the label says. That is plain browser
+ * state, and it is the same thing that made the original fix work.
+ */
+export const didUpdateStall = async (version) => {
+  if (!updateAttemptMatches(version)) return false;
+  // Same label. Only a build still sitting unapplied makes it a stall.
+  return Boolean(await getWaitingWorker());
 };
 
 /** Forget the last attempt, so a stall is reported once rather than forever. */

@@ -27,3 +27,15 @@ export const ROADMAP_STEP = '10.7';
 export const ROADMAP_STEP_NAME = 'One-Tap Update';
 
 export default APP_VERSION;
+
+/**
+ * Identifies the build, not the milestone.
+ *
+ * APP_VERSION is a roadmap coordinate and several builds share one — which is
+ * why the footer alone could not confirm an update had landed. This is stamped
+ * from the commit at build time and changes whenever the code does.
+ *
+ * Empty in development and in tests, where there is no build to identify; the
+ * footer leaves it out rather than showing an empty pair of brackets.
+ */
+export const BUILD_ID = process.env.REACT_APP_BUILD_ID || '';

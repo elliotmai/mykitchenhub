@@ -182,11 +182,15 @@ const App = () => {
     // A stalled update means a worker is still waiting, so the card is going to
     // appear anyway — but on the ordinary path it would appear with the same
     // button that has already been tried, which is the loop the user sees.
-    if (didUpdateStall(APP_VERSION)) {
-      setStalled(true);
-      setShowUpdateNotification(true);
-    }
-    clearUpdateAttempt();
+    // Async now: it asks the browser whether a build is still waiting rather
+    // than deciding from the version label, which several builds can share.
+    didUpdateStall(APP_VERSION).then((stalled) => {
+      if (stalled) {
+        setStalled(true);
+        setShowUpdateNotification(true);
+      }
+      clearUpdateAttempt();
+    });
 
     // The chunk reload guard is re-armed by lazyWithRetry, on a chunk that
     // actually loads. It used to be cleared here instead — but the app booting

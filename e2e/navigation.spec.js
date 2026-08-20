@@ -80,7 +80,15 @@ test.describe('navigation', () => {
 
     await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
 
-    await expect(page.locator('.app-footer__version')).toHaveText(`v${APP_VERSION}`);
+    const footer = page.locator('.app-footer__version');
+    await expect(footer).toContainText(`v${APP_VERSION}`);
+
+    // And the build code beside it. This is the half that answers "did the
+    // update land" — the version alone cannot, because it is a roadmap
+    // coordinate and consecutive builds share one. Asserted as a shape rather
+    // than a value: it is stamped from the commit at build time, so the test
+    // cannot know it, but it can insist it is there and is not empty.
+    await expect(page.locator('.app-footer__build')).toHaveText(/^ \([0-9a-z]{4,}\)$/);
   });
 
   test('has no horizontal overflow on a phone viewport', async ({ authedPage: page }) => {

@@ -14,6 +14,7 @@ import {
   getWaitingWorker,
   isApplyingUpdate,
   markUpdateAttempt,
+  updateAttemptMatches,
   refreshRegistration,
   SKIP_WAITING,
   UPDATE_STAGES,
@@ -245,31 +246,63 @@ describe('applyUpdate', () => {
    -------------------------------------------------------------------------- */
 
 describe('recognising an update that did not take', () => {
-  it('reports a stall when the reload landed on the build that asked for it', () => {
+  /** A worker still sitting in the waiting slot — the mark of a real stall. */
+  const stillWaiting = () => mockServiceWorker({ waiting: { postMessage: jest.fn() } });
+
+  it('reports a stall when the reload landed on the build that asked for it', async () => {
+    stillWaiting();
     markUpdateAttempt('0.10.5');
 
-    expect(didUpdateStall('0.10.5')).toBe(true);
+    await expect(didUpdateStall('0.10.5')).resolves.toBe(true);
   });
 
-  it('reports no stall when the build actually moved', () => {
+  it('reports no stall when the build actually moved', async () => {
+    stillWaiting();
     markUpdateAttempt('0.10.5');
 
-    expect(didUpdateStall('0.10.6')).toBe(false);
+    await expect(didUpdateStall('0.10.6')).resolves.toBe(false);
   });
 
-  it('reports no stall when no update was attempted at all', () => {
-    expect(didUpdateStall('0.10.5')).toBe(false);
+  it('reports no stall when no update was attempted at all', async () => {
+    stillWaiting();
+
+    await expect(didUpdateStall('0.10.5')).resolves.toBe(false);
   });
 
-  it('forgets the attempt once it has been reported', () => {
+  // The bug this pair exists for. APP_VERSION is a roadmap coordinate, so
+  // several builds legitimately carry the same one — five shipped as 0.10.6.
+  // Updating between two of those leaves the label reading exactly as it did,
+  // and deciding on the label alone called a perfectly good update a failure
+  // and offered to wipe the tablet to fix it.
+  it('does not call it a stall when the label repeats but nothing is left waiting', async () => {
+    mockServiceWorker({ waiting: null });
+    markUpdateAttempt('0.10.6');
+
+    // Same label before and after, but the waiting slot is empty: the update
+    // applied, and the two builds simply share a roadmap step.
+    await expect(didUpdateStall('0.10.6')).resolves.toBe(false);
+  });
+
+  it('still catches a real stall on a repeated label', async () => {
+    stillWaiting();
+    markUpdateAttempt('0.10.6');
+
+    // Same label, but the build that asked to be applied is still sitting
+    // there unapplied — which is the genuine article.
+    await expect(didUpdateStall('0.10.6')).resolves.toBe(true);
+  });
+
+  it('forgets the attempt once it has been reported', async () => {
+    stillWaiting();
     markUpdateAttempt('0.10.5');
     clearUpdateAttempt();
 
     // Otherwise a tab reloaded by hand would go on claiming an update failed.
-    expect(didUpdateStall('0.10.5')).toBe(false);
+    await expect(didUpdateStall('0.10.5')).resolves.toBe(false);
   });
 
-  it('survives storage being unavailable rather than taking the app down', () => {
+  it('survives storage being unavailable rather than taking the app down', async () => {
+    stillWaiting();
     const setItem = jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('quota');
     });
@@ -278,7 +311,7 @@ describe('recognising an update that did not take', () => {
     });
 
     expect(() => markUpdateAttempt('0.10.5')).not.toThrow();
-    expect(didUpdateStall('0.10.5')).toBe(false);
+    await expect(didUpdateStall('0.10.5')).resolves.toBe(false);
 
     setItem.mockRestore();
     getItem.mockRestore();
@@ -288,16 +321,16 @@ describe('recognising an update that did not take', () => {
     mockServiceWorker({ waiting: null });
     mockCaches([]);
 
-    await applyUpdate({ timeoutMs: 1, reload: () => {}, version: '0.10.5' });
+    await applyUpdate({ timeoutMs: 1, refreshMs: 1, reload: () => {}, version: '0.10.5' });
 
-    expect(didUpdateStall('0.10.5')).toBe(true);
+    expect(updateAttemptMatches('0.10.5')).toBe(true);
   });
 
   it('leaves no marker when no version was handed in', async () => {
     mockServiceWorker({ waiting: null });
     mockCaches([]);
 
-    await applyUpdate({ timeoutMs: 1, reload: () => {} });
+    await applyUpdate({ timeoutMs: 1, refreshMs: 1, reload: () => {} });
 
     expect(sessionStorage.getItem('mykitchenhub.updateAttempt')).toBeNull();
   });
@@ -371,7 +404,7 @@ describe('forceReinstall', () => {
 
     await forceReinstall({ reload: () => {} });
 
-    expect(didUpdateStall('0.10.5')).toBe(false);
+    expect(updateAttemptMatches('0.10.5')).toBe(false);
   });
 });
 

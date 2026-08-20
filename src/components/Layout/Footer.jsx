@@ -3,7 +3,7 @@
 
 import React from 'react';
 import { Heart } from 'lucide-react';
-import { APP_VERSION, ROADMAP_STEP, ROADMAP_STEP_NAME } from '../../config/version';
+import { APP_VERSION, ROADMAP_STEP, ROADMAP_STEP_NAME, BUILD_ID } from '../../config/version';
 import './Footer.css';
 
 /**
@@ -30,6 +30,10 @@ const Footer = () => {
             title={`Roadmap step ${ROADMAP_STEP} — ${ROADMAP_STEP_NAME}`}
           >
             v{APP_VERSION}
+            {/* The part that actually differs between two builds carrying the
+                same roadmap step. Quiet, because it is a diagnostic — but
+                present, because "did my update land" has no other answer. */}
+            {BUILD_ID && <span className="app-footer__build"> ({BUILD_ID})</span>}
           </span>
         </p>
         <a

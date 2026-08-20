@@ -14,6 +14,14 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.08.20.7',
+    date: 'August 2026',
+    items: [
+      '\u{2705} Updates stop claiming to have failed when they worked. The check that spots a stuck update was reading the version number alone \u2014 and since several builds can share one, a perfectly good update looked like a failed one and offered to wipe the app and reinstall. It now checks whether the new version is genuinely still sitting there unapplied, so Force Update only appears when something really is stuck.',
+      '\u{1F50E} The footer now shows a short build code next to the version, e.g. v0.10.7 (a3f9c1). It changes with every release even when the version number does not, so after an update you can tell at a glance whether the new code actually landed.',
+    ],
+  },
+  {
     version: '2026.08.20.6',
     date: 'August 2026',
     items: [
