@@ -6,7 +6,7 @@
 // documents behind it — every assertion is confirmed in Firestore, through the
 // real security rules, not just on screen.
 
-const { test, expect } = require('./fixtures');
+const { test, expect, fillUntilEnabled } = require('./fixtures');
 const { shoppingItem, shoppingItems, seedMealPlanEntry } = require('./firestore-admin');
 
 /** `YYYY-MM-DD` in local time — the format meal plan entries use. */
@@ -36,10 +36,18 @@ const storedItem = async (name) => {
  * flight is the case that hangs rather than fails (see TESTING.md).
  */
 const addItem = async (page, { name, quantity, unit }) => {
-  await page.getByLabel('Add something to the shopping list').fill(name);
+  const field = page.getByLabel('Add something to the shopping list');
+  const addButton = page.getByRole('button', { name: /^Add$/ });
+
+  // This is what "clears the trolley" was actually failing on: 112 retries
+  // across sixty seconds against `<button disabled>`, surfacing as a timeout on
+  // the *next* click, which is why it read as a flake in a different part of
+  // the test from the one that dropped the value.
+  await fillUntilEnabled(field, addButton, name);
+
   if (quantity !== undefined) await page.getByLabel('How many').fill(String(quantity));
   if (unit !== undefined) await page.getByLabel('Unit').fill(unit);
-  await page.getByRole('button', { name: /^Add$/ }).click();
+  await addButton.click();
 
   // `.first()` because this helper is also used for the duplicate case, where
   // the same name is deliberately on both halves of the list — a bare

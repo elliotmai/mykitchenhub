@@ -4,7 +4,7 @@
 // spec asserts on — no sidebar, no footer version label. That is the point of
 // it, and it is why this lives in its own file rather than in the routes table.
 
-const { test, expect } = require('./fixtures');
+const { test, expect, fillUntilEnabled } = require('./fixtures');
 const {
   seedShoppingItem,
   deleteShoppingItem,
@@ -154,25 +154,28 @@ test.describe('fridge board', () => {
     authedPage: page,
   }) => {
     const name = `Board Scale ${Date.now()}`;
-    const id = await seedShoppingItem({ name });
+    // With a quantity and a unit, so the row renders an amount to compare. A
+    // bare quantity of 1 deliberately renders nothing (see "leaves out a bare
+    // '1' that tells the cook nothing"), which would make the comparison
+    // null-against-a-size and fail for a reason that is not about scale.
+    const id = await seedShoppingItem({ name, quantity: 2, unit: 'boxes' });
 
     try {
       await page.goto('/kiosk', { waitUntil: 'domcontentloaded' });
 
-      const rowSize = (testId) =>
-        page
-          .getByTestId(testId)
-          .locator('li')
-          .first()
-          .evaluate((el) => {
-            const style = getComputedStyle(el);
-            const when = el.querySelector('.kiosk__item-when');
-            return {
-              font: style.fontSize,
-              padding: style.paddingTop,
-              amount: when ? getComputedStyle(when).fontSize : null,
-            };
-          });
+      // Addressed by the row's own text rather than by position: both lists
+      // hold rows this spec did not put there, and which one lands first is
+      // not something it should depend on.
+      const rowSize = (row) =>
+        row.evaluate((el) => {
+          const style = getComputedStyle(el);
+          const when = el.querySelector('.kiosk__item-when');
+          return {
+            font: style.fontSize,
+            padding: style.paddingTop,
+            amount: when ? getComputedStyle(when).fontSize : null,
+          };
+        });
 
       const headingSize = (panelTestId) =>
         page
@@ -180,12 +183,28 @@ test.describe('fridge board', () => {
           .locator('.kiosk__panel-title')
           .evaluate((el) => getComputedStyle(el).fontSize);
 
-      await expect(page.getByTestId('kiosk-shopping').locator('li').first()).toBeVisible();
-      const shopping = await rowSize('kiosk-shopping-list');
-      const eating = await rowSize('kiosk-eat-list');
+      const shoppingRow = page
+        .getByTestId('kiosk-shopping-list')
+        .locator('li')
+        .filter({ hasText: name });
+      // "Old Yogurt" is seeded into every account's kitchen by global-setup and
+      // is always expiring, so it always carries an expiry label.
+      const eatingRow = page
+        .getByTestId('kiosk-eat-list')
+        .locator('li')
+        .filter({ hasText: 'Old Yogurt' });
+
+      await expect(shoppingRow).toBeVisible();
+      await expect(eatingRow).toBeVisible();
+
+      const shopping = await rowSize(shoppingRow);
+      const eating = await rowSize(eatingRow);
 
       expect(shopping.font).toBe(eating.font);
       expect(shopping.padding).toBe(eating.padding);
+      // Both rows have an amount, so this compares two sizes rather than
+      // silently passing on two nulls.
+      expect(shopping.amount).not.toBeNull();
       expect(shopping.amount).toBe(eating.amount);
       expect(await headingSize('kiosk-shopping')).toBe(await headingSize('kiosk-eat-panel'));
 
@@ -224,8 +243,12 @@ test.describe('fridge board', () => {
 
     try {
       await page.goto('/kiosk', { waitUntil: 'domcontentloaded' });
-      await page.getByLabel('Add an item to the shopping list').fill(name);
-      await page.getByRole('button', { name: 'Add to the shopping list' }).click();
+      // Same gate as the Shopping List page: the button is disabled off the
+      // component's own state, so filling once and clicking can wait out the
+      // whole test on a value React never received.
+      const button = page.getByRole('button', { name: 'Add to the shopping list' });
+      await fillUntilEnabled(page.getByLabel('Add an item to the shopping list'), button, name);
+      await button.click();
 
       await expect(page.getByTestId('kiosk-shopping').getByText(name)).toBeVisible();
       // Read back through the rules rather than trusting the optimistic render.

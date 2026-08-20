@@ -350,6 +350,32 @@ const test = withWhatsNewOption(base).extend({
  */
 const signedOutTest = withWhatsNewOption(base);
 
+/**
+ * Type into a React-controlled field until the button it gates agrees.
+ *
+ * `fill` sets the DOM value and dispatches the event React listens for, but a
+ * re-render committed in the same tick writes the component's own (empty)
+ * state straight back over it. Nothing types again after that, so the value is
+ * gone for good: the submit button never enables and the spec waits out its
+ * whole budget on an element that cannot change. It then fails on whatever it
+ * tried *next*, which is why this reads as a flake somewhere else entirely.
+ *
+ * The button's disabled state is the component's state, so it is the only
+ * thing on the page that can confirm the fill was actually received. Asserting
+ * on the field's own value cannot: the DOM keeps what was typed even when
+ * React never saw it.
+ *
+ * @param {import('@playwright/test').Locator} field
+ * @param {import('@playwright/test').Locator} button - disabled until the field has a value
+ * @param {string} value
+ */
+const fillUntilEnabled = async (field, button, value) => {
+  await expect(async () => {
+    await field.fill(value);
+    await expect(button).toBeEnabled({ timeout: 1_000 });
+  }).toPass({ timeout: 15_000 });
+};
+
 /** The header row every CSV fixture starts with. */
 const CSV_HEADER = 'name,quantity,unit,location';
 
@@ -384,6 +410,7 @@ module.exports = {
   login,
   addInventoryItem,
   chooseCSV,
+  fillUntilEnabled,
   CSV_HEADER,
   suppressWhatsNewPopup,
   workerStatePath,
