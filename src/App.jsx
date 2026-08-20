@@ -59,6 +59,7 @@ const HelloFresh = lazyWithRetry(() => import('./pages/HelloFresh'), 'HelloFresh
 const Analytics = lazyWithRetry(() => import('./pages/Analytics'), 'Analytics');
 const Settings = lazyWithRetry(() => import('./pages/Settings'), 'Settings');
 const WasteAlerts = lazyWithRetry(() => import('./pages/WasteAlerts'), 'WasteAlerts');
+const ShoppingListPage = lazyWithRetry(() => import('./pages/ShoppingList'), 'ShoppingList');
 const Kiosk = lazyWithRetry(() => import('./pages/Kiosk'), 'Kiosk');
 
 /**
@@ -96,6 +97,7 @@ const AppRoutes = () => {
           <Route path="/inventory" element={<Inventory />} />
           <Route path="/recipes" element={<Recipes />} />
           <Route path="/meal-plan" element={<MealPlan />} />
+          <Route path="/shopping-list" element={<ShoppingListPage />} />
           <Route path="/hellofresh" element={<HelloFresh />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/waste-alerts" element={<WasteAlerts />} />

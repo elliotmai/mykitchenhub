@@ -24,6 +24,7 @@ const PAGES = [
   '/inventory',
   '/recipes',
   '/meal-plan',
+  '/shopping-list',
   '/hellofresh',
   '/waste-alerts',
   '/analytics',

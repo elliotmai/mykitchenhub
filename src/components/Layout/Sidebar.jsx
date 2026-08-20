@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   X,
   ChefHat,
+  ShoppingCart,
 } from 'lucide-react';
 import './Sidebar.css';
 
@@ -41,6 +42,11 @@ const NAV_ITEMS = [
     path: '/meal-plan',
     icon: Calendar,
     label: 'Meal Plan',
+  },
+  {
+    path: '/shopping-list',
+    icon: ShoppingCart,
+    label: 'Shopping List',
   },
   {
     path: '/hellofresh',

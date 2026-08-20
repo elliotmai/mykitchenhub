@@ -61,6 +61,20 @@
     min-height: 22px;
   }
 
+  /* The exception to the rule above.
+     
+     That rule keeps tick boxes small because the label beside them is bound to
+     the input, so the pair is the target and the box need not be. A shopping
+     row is not built that way: its name is a span and the box carries only an
+     aria-label, which leaves the 22px box as the whole of the target. It is
+     also tapped one-handed while carrying a basket, which is the worst case
+     the floor exists for. */
+  .mkh-tickbox .form-check-input {
+    min-width: 44px;
+    min-height: 44px;
+    margin-top: 0;
+  }
+
   /* ------------------------------------------------------------------------
      Icon-only controls
 

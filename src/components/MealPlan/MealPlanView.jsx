@@ -8,6 +8,7 @@ import { CalendarDays, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
 
 import useMealPlan, { fromDayKey } from '../../hooks/useMealPlan';
 import useShoppingList, { findDuplicateNames } from '../../hooks/useShoppingList';
+import { useShoppingListActions } from './useShoppingListActions';
 import { useToast } from '../Common';
 import { PageLoader } from '../Common/LoadingSpinner';
 import DayCard from './DayCard';
@@ -53,13 +54,15 @@ const MealPlanView = () => {
   // The manual half of the shopping list. Its own collection and its own hook:
   // the derived half is a function of this week's meals, and "buy batteries" is
   // not, so it does not belong to a week at all.
-  const { items: manualItems, addItem, setBought, removeItem, clearBought } = useShoppingList();
+  // Read here, written through the shared actions hook — the same wiring the
+  // standalone Shopping List page uses, so the two cannot drift.
+  const { items: manualItems } = useShoppingList();
+  const shoppingActions = useShoppingListActions();
 
   const { showSuccess, showError, showInfo } = useToast();
 
   const [addDay, setAddDay] = useState(null);
   const [busyEntryId, setBusyEntryId] = useState(null);
-  const [busyShoppingItemId, setBusyShoppingItemId] = useState(null);
   const [notice, setNotice] = useState(null);
 
   // Which typed items the week's meals also ask for. Not merged — see
@@ -68,49 +71,6 @@ const MealPlanView = () => {
     () => findDuplicateNames(manualItems, shoppingList),
     [manualItems, shoppingList]
   );
-
-  const handleAddShoppingItem = useCallback(
-    async (input) => {
-      const result = await addItem(input);
-      if (!result.success) showError(result.error || 'Could not add that to your shopping list.');
-      return result;
-    },
-    [addItem, showError]
-  );
-
-  /**
-   * Tick a typed item off, or put it back.
-   *
-   * Only manual rows reach here. A derived row has no document to mark, and
-   * creating one on a tick would make the same list true in two places — so
-   * derived rows have no checkbox at all.
-   */
-  const handleToggleBought = useCallback(
-    async (item, bought) => {
-      setBusyShoppingItemId(item.id);
-      const result = await setBought(item.id, bought);
-      setBusyShoppingItemId(null);
-      if (!result.success) showError(result.error || 'Could not update your shopping list.');
-    },
-    [setBought, showError]
-  );
-
-  const handleRemoveShoppingItem = useCallback(
-    async (item) => {
-      setBusyShoppingItemId(item.id);
-      const result = await removeItem(item.id);
-      setBusyShoppingItemId(null);
-      if (result.success) showInfo(`${item.name} taken off your shopping list.`);
-      else showError(result.error || 'Could not remove that from your shopping list.');
-    },
-    [removeItem, showError, showInfo]
-  );
-
-  const handleClearBought = useCallback(async () => {
-    const result = await clearBought();
-    if (!result.success) showError(result.error || 'Could not clear what you have bought.');
-    else if (result.cleared) showInfo(`Cleared ${result.cleared} item(s) off your shopping list.`);
-  }, [clearBought, showError, showInfo]);
 
   const handleCook = useCallback(
     async (entry) => {
@@ -273,11 +233,7 @@ const MealPlanView = () => {
               items={shoppingList}
               manualItems={manualItems}
               duplicateNames={duplicateNames}
-              busyItemId={busyShoppingItemId}
-              onAddItem={handleAddShoppingItem}
-              onToggleBought={handleToggleBought}
-              onRemoveItem={handleRemoveShoppingItem}
-              onClearBought={handleClearBought}
+              {...shoppingActions}
             />
             <BatchCookingTips tips={batchTips} />
           </div>

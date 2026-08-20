@@ -16,11 +16,12 @@
 // derived row was bought, and quietly creating a document for one would make
 // the same list true in two places.
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Badge, Button, Card, Form, Spinner } from 'react-bootstrap';
 import { Check, Plus, ShoppingCart, X } from 'lucide-react';
 
 import { amountLabel } from '../../hooks/useShoppingList';
+import { groupByStoreSection } from '../../config/storeSections';
 
 // Re-exported because the fridge board renders the same rows from the same
 // helper: one definition, two surfaces.
@@ -75,7 +76,10 @@ const ManualRow = ({ item, duplicate, busy, onToggleBought, onRemove }) => {
       <div className="d-flex align-items-baseline gap-2">
         <Form.Check
           type="checkbox"
-          className="flex-shrink-0"
+          // mkh-tickbox: this box has no <label> bound to it — the item name
+          // beside it is a span — so unlike the settings toggles there is
+          // nothing else to tap and the box itself has to meet the 44px floor.
+          className="flex-shrink-0 mkh-tickbox"
           checked={bought}
           disabled={busy}
           onChange={() => onToggleBought(item, !bought)}
@@ -176,6 +180,19 @@ const ShoppingList = ({
   const boughtManual = manualItems.filter((item) => item.status === 'bought');
 
   const outstanding = toBuy.length + pendingManual.length;
+
+  // One list of errands, grouped the way the shop is laid out. Manual and
+  // derived rows sit together inside an aisle: standing in front of the dairy
+  // fridge, where a line came from is not the question — "milk" is one errand
+  // whether a recipe asked for it or the cook did.
+  //
+  // Only pending rows are grouped. Bought and already-have rows keep their own
+  // sections below, because they are answers to different questions.
+  const manualIds = new Set(pendingManual.map((item) => item.id));
+  const aisles = useMemo(
+    () => groupByStoreSection([...pendingManual, ...toBuy]),
+    [pendingManual, toBuy]
+  );
   const isEmpty = items.length === 0 && manualItems.length === 0;
 
   const handleAdd = async (event) => {
@@ -264,23 +281,39 @@ const ShoppingList = ({
                   : 'Nothing left to buy.'}
               </p>
             ) : (
-              <ul className="list-unstyled mb-0 d-flex flex-column gap-1">
-                {/* Manual rows first: the one just typed belongs where the cook
-                    can see it landed. */}
-                {pendingManual.map((item) => (
-                  <ManualRow
-                    key={rowKey(item)}
-                    item={item}
-                    duplicate={duplicateNames.has(item.normalized)}
-                    busy={busyItemId === item.id}
-                    onToggleBought={onToggleBought}
-                    onRemove={onRemoveItem}
-                  />
+              <div className="d-flex flex-column gap-2">
+                {aisles.map((aisle) => (
+                  <section key={aisle.key} aria-labelledby={`aisle-${aisle.key}`}>
+                    <h4
+                      id={`aisle-${aisle.key}`}
+                      className="text-muted mb-1"
+                      style={{
+                        fontSize: 'var(--mkh-font-size-tiny)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.06em',
+                      }}
+                    >
+                      {aisle.label}
+                    </h4>
+                    <ul className="list-unstyled mb-0 d-flex flex-column gap-1">
+                      {aisle.items.map((item) =>
+                        manualIds.has(item.id) ? (
+                          <ManualRow
+                            key={rowKey(item)}
+                            item={item}
+                            duplicate={duplicateNames.has(item.normalized)}
+                            busy={busyItemId === item.id}
+                            onToggleBought={onToggleBought}
+                            onRemove={onRemoveItem}
+                          />
+                        ) : (
+                          <DerivedRow key={rowKey(item)} item={item} />
+                        )
+                      )}
+                    </ul>
+                  </section>
                 ))}
-                {toBuy.map((item) => (
-                  <DerivedRow key={rowKey(item)} item={item} />
-                ))}
-              </ul>
+              </div>
             )}
 
             {boughtManual.length > 0 && (

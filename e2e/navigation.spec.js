@@ -8,6 +8,7 @@ const ROUTES = [
   ['/inventory', /inventory/i],
   ['/recipes', /recipes/i],
   ['/meal-plan', /meal plan/i],
+  ['/shopping-list', /shopping list/i],
   ['/hellofresh', /hellofresh/i],
   ['/analytics', /analytics/i],
   ['/settings', /settings/i],

@@ -14,6 +14,15 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.08.20.1',
+    date: 'August 2026',
+    items: [
+      '\u{1F6D2} The shopping list has its own tab now, so you can open it in the shop without going through the meal plan first.',
+      '\u{1F9FA} It is grouped by aisle \u2014 produce, bakery, meat, dairy, frozen, pantry, drinks \u2014 in the order most shops are laid out, so you walk the place once instead of doubling back for the milk.',
+      '\u{1F4DD} Things you typed in and things your meals need sit together under the same heading. Standing at the dairy fridge, milk is one errand however it got on the list.',
+    ],
+  },
+  {
     version: '2026.08.20',
     date: 'August 2026',
     items: [
