@@ -661,6 +661,103 @@ holds only what belongs to the week as a whole.
 
 ---
 
+### 8. `users/{userId}/shoppingItems` Subcollection
+
+**Purpose:** The part of the shopping list a cook types in themselves — batteries,
+milk, a birthday cake. Anything no recipe asked for.
+
+**This is the only stored part of the shopping list.** The rest of what the page
+renders is *derived*: `buildShoppingList(weekEntries, inventoryItems)` in
+`src/hooks/useMealPlan.js` walks the week's meals, subtracts the kitchen, and
+returns a fresh array on every render, storing nothing. Do not confuse either of
+those with `users/{userId}/mealPlans/{weekId}.shoppingList`, which is the AI
+planner's own output snapshotted onto the week document and is not what the page
+renders.
+
+**Document Structure:**
+```javascript
+{
+  id: "auto-generated",                   // document ID
+  name: "Batteries",                      // as the cook typed it, trimmed
+  normalized: "batteries",                // lowercase, for matching against derived rows
+  quantity: 1,                            // > 0; defaults to 1 when nothing is typed
+  unit: "",                               // free text ("pack", "kg"), often empty
+  notes: "",                              // free text, often empty
+  status: "pending",                      // "pending" | "bought"
+  source: "manual",                       // always "manual" — see below
+  createdAt: Timestamp,                   // immutable after creation
+  boughtAt: Timestamp | null              // when it was ticked off, or null
+}
+```
+
+**Design decisions, and why:**
+
+*Not week-bound.* There is no `weekId` and no week in the document ID. A derived
+row exists because *this* week's meals need it, and it is gone the moment the
+week rolls over — that is correct for "2 fillets of salmon". It is wrong for "buy
+batteries", which is not a fact about a week at all. A manual item lives until it
+is ticked off and cleared, or deleted outright, however many Mondays go past.
+
+*No `haveInInventory`, and no `onHand`.* Those fields only mean something for a
+row with a recipe behind it: they are the answer to "the week needs 2, the
+kitchen has 1". A manual item has no needed-versus-on-hand comparison to make, so
+the field is absent rather than `false` — a `false` would claim a comparison was
+run and came out negative. `ShoppingList.jsx` therefore never buckets manual
+items by that field; it renders them from their own `status`, and the two kinds
+of row are separate props. (The derived bucketing is written so an *absent*
+`haveInInventory` falls into "to buy", never into "already in your kitchen" —
+there is a test pinning that.)
+
+*Ticking off marks bought; it does not delete.* `status` goes to `"bought"` and
+`boughtAt` is stamped, so a mis-tap on a phone in a shop is one tap to undo.
+Bought items collect in their own section with a "Clear bought" action that
+deletes them. **Derived rows are not tickable at all** — they have no document to
+mark, and inventing one as a side effect of a tick would be a second, silently
+different, source of truth for the same list. That stays a deliberate gap until
+there is a decision about what "bought" should mean for a row the week computes.
+
+*Duplicates are shown, not merged.* If a cook types "milk" and the week's meals
+also need milk, both rows appear. The quantities come from different places and
+one of them is a guess — summing "1" (typed, meaning *a bottle*) with "200 g"
+(computed from a recipe) produces a number that is wrong in both units. Instead
+the manual row carries a note that the same thing is on the week's list, and the
+cook decides. Matching is on `normalized`.
+
+*`source` has exactly one legal value.* Everything else on the list is derived
+and has no document, so `manual` is the only way a row gets into this collection.
+Naming it — and pinning it on update as well as create — keeps a later feature
+from quietly mixing a second kind of row into a collection the UI renders as
+"things you asked for yourself".
+
+**Security Rules:**
+- Users can CRUD their own shopping items; nobody can read or write anyone else's
+- Required on create **and** update: `name`, `normalized`, `quantity`, `unit`,
+  `status`, `source`, `createdAt`
+- `name` must be a string that is non-empty *after trimming*. A row named `"   "`
+  renders exactly as blank as one named `""`. The hook trims before writing and
+  the rule trims before measuring, so neither has to trust the other
+- `status` must be one of: "pending", "bought"
+- `source` must be `"manual"`, on create **and** update
+- `quantity` must be > 0
+- `createdAt` cannot be rewritten — ticking an item off must not restamp when the
+  cook added it
+- The whole create-time check is re-applied on update, as it is everywhere else
+  in this file: ticking off is an update, and without it every constraint above
+  is one edit away from being bypassed
+
+**Queries:**
+```javascript
+// The whole list, newest first — what the shopping list panel subscribes to.
+db.collection('users').doc(userId)
+  .collection('shoppingItems')
+  .orderBy('createdAt', 'desc')
+  .get();
+```
+Ordered on a single field, so the automatic single-field index covers it; no
+composite index is needed.
+
+---
+
 ## Data Relationships
 
 ### User → Storage Locations (1:Many)
@@ -806,6 +903,7 @@ Queries the app issues today that need **no** composite index:
 | `recipes` `orderBy('createdAt','desc')` (`useRecipes`) | single field |
 | `deliveries` `orderBy('deliveredAt','desc')` (`useDeliveries`) | single field |
 | `notifications` / `importHistory` `orderBy(...)` + `limit` | single field |
+| `shoppingItems` `orderBy('createdAt','desc')` (`useShoppingList`) | single field |
 | `inventory` `where('expiresAt','<=')` + `orderBy('expiresAt')` (`sendDailyWasteAlerts`) | range and order are the same field |
 | `recipes` `where('legacyId','==')` + `limit(1)` (`syncLegacyRecipes`) | single field |
 

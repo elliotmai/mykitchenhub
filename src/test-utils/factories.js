@@ -359,6 +359,42 @@ export const makeMealPlan = (overrides = {}) => ({
 });
 
 // ---------------------------------------------------------------------------
+// users/{userId}/shoppingItems/{itemId}
+//
+// The only *stored* part of the shopping list: what a cook typed in themselves.
+// The derived rows — what the week's meals need minus what the kitchen has —
+// have no documents at all, so there is no factory for them; build those with
+// buildShoppingList() from real entries and inventory.
+//
+// Deliberately carries no `haveInInventory` or `onHand`. Those answer a
+// needed-versus-on-hand question a manual item never poses, and a `false` here
+// would claim the comparison was run. See SCHEMA_DOCUMENTATION.md §8.
+// ---------------------------------------------------------------------------
+export const makeShoppingItem = (overrides = {}) => {
+  const name = overrides.name ?? 'Batteries';
+  return {
+    id: nextId('shopping'),
+    name,
+    normalized: name.trim().toLowerCase(),
+    quantity: 1,
+    unit: '',
+    notes: '',
+    status: 'pending',
+    source: 'manual',
+    createdAt: daysFromNow(-1),
+    boughtAt: null,
+    ...overrides,
+  };
+};
+
+/** One item per status, for assertions about the two sections of the list. */
+export const makeShoppingItemsAcrossStatuses = () => [
+  makeShoppingItem({ name: 'Batteries' }),
+  makeShoppingItem({ name: 'Birthday cake', quantity: 1, unit: '' }),
+  makeShoppingItem({ name: 'Kitchen roll', status: 'bought', boughtAt: daysFromNow(0) }),
+];
+
+// ---------------------------------------------------------------------------
 // Firestore snapshot shims
 // ---------------------------------------------------------------------------
 
