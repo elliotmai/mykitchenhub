@@ -22,7 +22,8 @@ import { isKioskDevice } from '../utils/kioskMode';
 
 /** Fraction of the bar filled at each stage, so it only ever moves forwards. */
 const STAGE_PROGRESS = {
-  activating: 0.35,
+  checking: 0.15,
+  activating: 0.4,
   clearing: 0.7,
   reloading: 1,
 };

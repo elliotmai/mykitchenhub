@@ -36,6 +36,16 @@ export const SKIP_WAITING = 'SKIP_WAITING';
 export const CONTROL_TIMEOUT_MS = 6_000;
 
 /**
+ * How long to spend looking for a newer build before applying what is waiting.
+ *
+ * Generous, because a fridge tablet on far-end-of-the-house wifi is the case
+ * this exists for, and the cost of giving up early is the two-tap update it is
+ * meant to remove. It is not a stall: the card is on screen saying what it is
+ * doing for every second of it.
+ */
+export const REFRESH_TIMEOUT_MS = 8_000;
+
+/**
  * Caches that belong to the *new* build and must survive the clear-out.
  *
  * Both are written by the incoming service worker while it installs, which has
@@ -66,6 +76,7 @@ export const isApplyingUpdate = () => applying;
 
 /** Progress stages, in the order they happen. The UI renders these. */
 export const UPDATE_STAGES = {
+  checking: 'Checking for the newest version…',
   activating: 'Switching to the new version…',
   clearing: 'Clearing out the old files…',
   reloading: 'Reloading…',
@@ -219,6 +230,73 @@ export const forceReinstall = async ({ reload = () => window.location.reload() }
 };
 
 /**
+ * Resolve when `worker` stops installing, whichever way it goes.
+ *
+ * 'installed' is the one we want; 'activated' covers a worker that raced
+ * straight past it, and 'redundant' means a newer one superseded it while we
+ * watched — all three end the wait, because in none of them is anything still
+ * arriving.
+ */
+const waitForInstalled = (worker) =>
+  new Promise((resolve) => {
+    if (!worker || worker.state !== 'installing') {
+      resolve();
+      return;
+    }
+    const onChange = () => {
+      if (worker.state === 'installing') return;
+      worker.removeEventListener('statechange', onChange);
+      resolve();
+    };
+    worker.addEventListener('statechange', onChange);
+  });
+
+/** Resolve `promise`, or resolve anyway once `ms` has passed. */
+const withTimeout = (promise, ms) =>
+  Promise.race([promise, new Promise((resolve) => setTimeout(resolve, ms))]);
+
+/**
+ * Re-check the server for a newer build, and wait for it to finish installing.
+ *
+ * Without this, tapping "Update Now" activates whichever build was waiting as
+ * of the last check — the hourly poll, or whenever the tablet last woke. Ship
+ * twice between those and the tap applies the older of the two, the page
+ * reloads, the poll immediately finds the newer one, and the card comes back.
+ * From the fridge that reads as an update button that only half works.
+ *
+ * Never rejects. Offline, `update()` throws and the already-waiting build is
+ * the right thing to apply — it is still newer than what is running.
+ */
+export const refreshRegistration = async (timeoutMs = REFRESH_TIMEOUT_MS) => {
+  if (!('serviceWorker' in navigator)) return null;
+
+  let registration = null;
+  try {
+    registration = await navigator.serviceWorker.getRegistration();
+  } catch {
+    return null;
+  }
+  if (!registration) return null;
+
+  if (typeof registration.update === 'function') {
+    try {
+      await withTimeout(Promise.resolve(registration.update()), timeoutMs);
+    } catch {
+      // Offline, or the fetch failed. Fall through and use what is waiting.
+    }
+  }
+
+  // `update()` may have started a newer worker installing, which takes the
+  // waiting slot from the one that was there. Activating before it lands would
+  // apply the build we just superseded.
+  if (registration.installing) {
+    await withTimeout(waitForInstalled(registration.installing), timeoutMs);
+  }
+
+  return registration;
+};
+
+/**
  * Apply a waiting update: activate it, clear the stale caches, reload.
  *
  * @param {object}   options
@@ -230,17 +308,26 @@ export const forceReinstall = async ({ reload = () => window.location.reload() }
 export const applyUpdate = async ({
   onStage = () => {},
   timeoutMs = CONTROL_TIMEOUT_MS,
+  refreshMs = REFRESH_TIMEOUT_MS,
   reload = () => window.location.reload(),
   version = null,
 } = {}) => {
   applying = true;
-  onStage('activating');
+  onStage('checking');
 
   // Written before anything else can go wrong. If the reload below lands on
   // this same version, the page that comes back knows the update stalled.
   if (version) markUpdateAttempt(version);
 
-  const waiting = await getWaitingWorker();
+  // Find the newest build *before* activating anything. `registration.waiting`
+  // holds whichever build installed at the last check, which is not
+  // necessarily the newest one deployed — and activating a superseded build
+  // reloads the page straight into finding its successor, which is the
+  // "I have to update twice" this fixes.
+  const registration = await refreshRegistration(refreshMs);
+
+  onStage('activating');
+  const waiting = registration?.waiting ?? (await getWaitingWorker());
   let tookControl = false;
 
   if (waiting) {

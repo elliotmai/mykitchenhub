@@ -14,6 +14,7 @@ import {
   getWaitingWorker,
   isApplyingUpdate,
   markUpdateAttempt,
+  refreshRegistration,
   SKIP_WAITING,
   UPDATE_STAGES,
 } from '../appUpdate';
@@ -155,7 +156,7 @@ describe('applyUpdate', () => {
 
     await applyUpdate({ onStage: (s) => stages.push(s), reload: jest.fn() });
 
-    expect(stages).toEqual(['activating', 'clearing', 'reloading']);
+    expect(stages).toEqual(['checking', 'activating', 'clearing', 'reloading']);
     // Every stage the mechanism reports has copy to render. A stage with no
     // entry would show the fallback and read as a stall.
     stages.forEach((stage) => expect(UPDATE_STAGES[stage]).toBeTruthy());
@@ -371,5 +372,141 @@ describe('forceReinstall', () => {
     await forceReinstall({ reload: () => {} });
 
     expect(didUpdateStall('0.10.5')).toBe(false);
+  });
+});
+
+/* Looking for a newer build before activating anything.
+ *
+ * This is the fix for "I have to update twice". `registration.waiting` holds
+ * whichever build installed at the last check; ship again before the user taps
+ * and that is no longer the newest one. Activating it reloads the page
+ * straight into finding its successor. */
+describe('refreshRegistration', () => {
+  /** A registration whose update() swaps a newer worker into `installing`. */
+  const mockRegistration = ({ waiting = null, update, installing = null } = {}) => {
+    const registration = { waiting, installing, update };
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: { getRegistration: jest.fn(async () => registration) },
+      configurable: true,
+      writable: true,
+    });
+    return registration;
+  };
+
+  /** A ServiceWorker-alike stuck installing until `finish()` is called. */
+  const installingWorker = () => {
+    const listeners = [];
+    const worker = {
+      state: 'installing',
+      addEventListener: (_, fn) => listeners.push(fn),
+      removeEventListener: (_, fn) => {
+        const i = listeners.indexOf(fn);
+        if (i >= 0) listeners.splice(i, 1);
+      },
+    };
+    return {
+      worker,
+      finish: (state = 'installed') => {
+        worker.state = state;
+        listeners.slice().forEach((fn) => fn());
+      },
+    };
+  };
+
+  it('asks the server for a newer build rather than trusting what is waiting', async () => {
+    const update = jest.fn(async () => {});
+    mockRegistration({ waiting: { id: 'old' }, update });
+
+    await refreshRegistration(1_000);
+
+    expect(update).toHaveBeenCalled();
+  });
+
+  it('waits for a newer build to finish installing before handing back', async () => {
+    const { worker, finish } = installingWorker();
+    const registration = mockRegistration({
+      waiting: { id: 'superseded' },
+      installing: worker,
+      update: jest.fn(async () => {}),
+    });
+
+    let settled = false;
+    const pending = refreshRegistration(5_000).then((r) => {
+      settled = true;
+      return r;
+    });
+
+    // Still installing, so nothing has been handed back — activating now would
+    // apply the build this one is replacing.
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    registration.waiting = { id: 'newest' };
+    finish('installed');
+
+    await expect(pending).resolves.toBe(registration);
+    expect(registration.waiting).toEqual({ id: 'newest' });
+  });
+
+  it('gives up waiting rather than hanging on a worker that never lands', async () => {
+    const { worker } = installingWorker();
+    mockRegistration({ installing: worker, update: jest.fn(async () => {}) });
+
+    // Never finished. The timeout is what stops the card sitting at
+    // "checking…" forever on a tablet with bad wifi.
+    await expect(refreshRegistration(30)).resolves.toBeTruthy();
+  });
+
+  it('applies what is already waiting when the check cannot reach the server', async () => {
+    const registration = mockRegistration({
+      waiting: { id: 'installed-earlier' },
+      update: jest.fn(async () => {
+        throw new Error('offline');
+      }),
+    });
+
+    // Offline is not a reason to refuse the update: the waiting build is still
+    // newer than the one running.
+    await expect(refreshRegistration(1_000)).resolves.toBe(registration);
+  });
+
+  it('copes with a browser whose registration has no update method', async () => {
+    const registration = mockRegistration({ waiting: { id: 'w' }, update: undefined });
+
+    await expect(refreshRegistration(1_000)).resolves.toBe(registration);
+  });
+
+  it('returns nothing when the app was never registered', async () => {
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: { getRegistration: jest.fn(async () => undefined) },
+      configurable: true,
+      writable: true,
+    });
+
+    await expect(refreshRegistration(1_000)).resolves.toBeNull();
+  });
+
+  it('activates the build the refresh found, not the one that was waiting first', async () => {
+    const newest = { postMessage: jest.fn() };
+    const stale = { postMessage: jest.fn() };
+    const registration = { waiting: stale, update: jest.fn(async () => {}), installing: null };
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: {
+        getRegistration: jest.fn(async () => registration),
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+      },
+      configurable: true,
+      writable: true,
+    });
+    registration.update.mockImplementation(async () => {
+      registration.waiting = newest;
+    });
+    mockCaches([]);
+
+    await applyUpdate({ timeoutMs: 20, refreshMs: 500, reload: jest.fn() });
+
+    expect(newest.postMessage).toHaveBeenCalledWith({ type: SKIP_WAITING });
+    expect(stale.postMessage).not.toHaveBeenCalled();
   });
 });

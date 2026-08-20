@@ -14,6 +14,14 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.08.20.6',
+    date: 'August 2026',
+    items: [
+      '\u{2B07}\u{FE0F} One tap is enough. \u201CUpdate Now\u201D now looks for the newest version before it switches over, so it no longer lands you on a build that was already out of date and asks you to update all over again.',
+      '\u{1F522} The fridge board counts what is on each list. \u201CEat these first\u201D and the shopping list both show how many, so you can tell from across the kitchen whether there is anything to do.',
+    ],
+  },
+  {
     version: '2026.08.20.5',
     date: 'August 2026',
     items: [
