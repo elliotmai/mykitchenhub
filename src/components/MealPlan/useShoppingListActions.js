@@ -21,11 +21,12 @@ import { useToast } from '../Common';
  *   onAddItem: (input: object) => Promise<object>,
  *   onToggleBought: (item: object, bought: boolean) => Promise<void>,
  *   onRemoveItem: (item: object) => Promise<void>,
+ *   onEditItem: (item: object, changes: object) => Promise<object>,
  *   onClearBought: () => Promise<void>,
  * }}
  */
 export const useShoppingListActions = () => {
-  const { addItem, setBought, removeItem, clearBought } = useShoppingList();
+  const { addItem, updateItem, setBought, removeItem, clearBought } = useShoppingList();
   const { showError, showInfo } = useToast();
   const [busyItemId, setBusyItemId] = useState(null);
 
@@ -66,13 +67,26 @@ export const useShoppingListActions = () => {
     [removeItem, showError, showInfo]
   );
 
+  const onEditItem = useCallback(
+    async (item, changes) => {
+      setBusyItemId(item.id);
+      const result = await updateItem(item.id, changes);
+      setBusyItemId(null);
+      if (!result.success) showError(result.error || 'Could not save that change.');
+      // Handed back so the row can stay open on failure rather than closing
+      // over a correction that never landed.
+      return result;
+    },
+    [updateItem, showError]
+  );
+
   const onClearBought = useCallback(async () => {
     const result = await clearBought();
     if (!result.success) showError(result.error || 'Could not clear what you have bought.');
     else if (result.cleared) showInfo(`Cleared ${result.cleared} item(s) off your shopping list.`);
   }, [clearBought, showError, showInfo]);
 
-  return { busyItemId, onAddItem, onToggleBought, onRemoveItem, onClearBought };
+  return { busyItemId, onAddItem, onToggleBought, onRemoveItem, onEditItem, onClearBought };
 };
 
 export default useShoppingListActions;

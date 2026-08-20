@@ -260,6 +260,58 @@ const useShoppingList = () => {
    * `createdAt` is untouched — the rules pin it, and a tick is not the moment
    * the cook wrote the item down.
    */
+  /**
+   * Amend a typed item: fix a spelling, change how many, add a unit.
+   *
+   * Only manual rows have documents, so only they can be edited — a derived
+   * line is the week's arithmetic and changing it here would be changing the
+   * answer without changing the question.
+   *
+   * `normalized` is recomputed rather than carried over: it is what duplicate
+   * detection and the aisle lookup key off, so leaving the old one behind after
+   * a rename would file "Milk" under whatever it used to be called.
+   */
+  const updateItem = useCallback(
+    async (itemId, changes = {}) => {
+      if (!user?.uid) return { success: false, error: 'Not authenticated' };
+      if (!itemId) return { success: false, error: 'Unknown item.' };
+
+      const patch = {};
+
+      if (changes.name !== undefined) {
+        const cleanName = String(changes.name).trim();
+        // The rules refuse a blank name, and rightly — a nameless row is
+        // unreadable on the list and unnameable in a conversation about it.
+        // Saying so here beats letting the write bounce off the server.
+        if (!cleanName) return { success: false, error: 'Give the item a name.' };
+        patch.name = cleanName;
+        patch.normalized = normalizeName(cleanName);
+      }
+
+      if (changes.quantity !== undefined) {
+        const cleanQuantity = Number(changes.quantity);
+        if (!Number.isFinite(cleanQuantity) || cleanQuantity <= 0) {
+          return { success: false, error: 'How many? It needs to be more than zero.' };
+        }
+        patch.quantity = cleanQuantity;
+      }
+
+      if (changes.unit !== undefined) patch.unit = String(changes.unit).trim();
+      if (changes.notes !== undefined) patch.notes = String(changes.notes).trim();
+
+      if (Object.keys(patch).length === 0) return { success: true, unchanged: true };
+
+      try {
+        await updateDoc(doc(db, 'users', user.uid, 'shoppingItems', itemId), patch);
+        return { success: true };
+      } catch (err) {
+        console.error('Error editing shopping item:', err);
+        return { success: false, error: friendlyError(err, { action: 'save that change' }) };
+      }
+    },
+    [user?.uid]
+  );
+
   const setBought = useCallback(
     async (itemId, isBought = true) => {
       if (!user?.uid) return { success: false, error: 'Not authenticated' };
@@ -351,6 +403,7 @@ const useShoppingList = () => {
     loading,
     error,
     addItem,
+    updateItem,
     setBought,
     removeItem,
     clearBought,

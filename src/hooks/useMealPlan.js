@@ -519,6 +519,63 @@ const useMealPlan = () => {
     [user?.uid]
   );
 
+  /**
+   * Amend a scheduled meal: how many it feeds, which sitting it is, what it is
+   * called, a note to self.
+   *
+   * `rescheduleMeal` already moves a meal between days and `markCooked` already
+   * ticks it off; this is everything else the rules allow to change. Kept
+   * separate from both because moving a meal and rewriting it are different
+   * intentions, and a drag that quietly renamed something would be a surprise.
+   *
+   * `createdAt` is never touched — the rules pin it, and editing tonight's
+   * servings should not restamp when the meal was planned.
+   */
+  const updateMeal = useCallback(
+    async (entryId, changes = {}) => {
+      if (!user?.uid) return { success: false, error: 'Not authenticated' };
+      if (!entryId) return { success: false, error: 'Unknown meal.' };
+
+      const patch = {};
+
+      if (changes.recipeName !== undefined) {
+        const name = String(changes.recipeName).trim();
+        if (!name) return { success: false, error: 'Give the meal a name.' };
+        patch.recipeName = name;
+      }
+
+      if (changes.servings !== undefined) {
+        const servings = Number(changes.servings);
+        // The rules require servings > 0, so a zero would bounce off the
+        // server with a permission error that says nothing useful.
+        if (!Number.isFinite(servings) || servings <= 0) {
+          return { success: false, error: 'Servings needs to be more than zero.' };
+        }
+        patch.servings = servings;
+      }
+
+      if (changes.mealType !== undefined) {
+        if (!MEAL_TYPES.includes(changes.mealType)) {
+          return { success: false, error: 'That is not a meal we know about.' };
+        }
+        patch.mealType = changes.mealType;
+      }
+
+      if (changes.notes !== undefined) patch.notes = String(changes.notes).trim();
+
+      if (Object.keys(patch).length === 0) return { success: true, unchanged: true };
+
+      try {
+        await updateDoc(doc(db, 'users', user.uid, 'mealPlanEntries', entryId), patch);
+        return { success: true };
+      } catch (err) {
+        console.error('Error editing meal:', err);
+        return { success: false, error: friendlyError(err, { action: 'save that change' }) };
+      }
+    },
+    [user?.uid]
+  );
+
   const rescheduleMeal = useCallback(
     async (entryId, date, mealType) => {
       if (!user?.uid) return { success: false, error: 'Not authenticated' };
@@ -719,6 +776,7 @@ const useMealPlan = () => {
     error,
     generating,
     scheduleMeal,
+    updateMeal,
     rescheduleMeal,
     removeMeal,
     markCooked,

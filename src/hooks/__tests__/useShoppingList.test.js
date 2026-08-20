@@ -622,4 +622,57 @@ describe('clearing what has been bought', () => {
       expect((await result.current.clearBought()).success).toBe(false);
     });
   });
+
+  describe('updateItem', () => {
+    it('saves a corrected name, and re-keys it for duplicate and aisle lookups', async () => {
+      const { result } = await renderList();
+      await act(async () => {
+        await result.current.updateItem('item-1', { name: '  Milk  ' });
+      });
+      expect(fs.updateDoc).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ name: 'Milk', normalized: 'milk' })
+      );
+    });
+
+    it('refuses a blank name rather than letting the rules bounce it back', async () => {
+      const { result } = await renderList();
+      let outcome;
+      await act(async () => {
+        outcome = await result.current.updateItem('item-1', { name: '   ' });
+      });
+      expect(outcome.success).toBe(false);
+      expect(fs.updateDoc).not.toHaveBeenCalled();
+    });
+
+    it('refuses a quantity of zero, which the rules require to be positive', async () => {
+      const { result } = await renderList();
+      let outcome;
+      await act(async () => {
+        outcome = await result.current.updateItem('item-1', { quantity: 0 });
+      });
+      expect(outcome.success).toBe(false);
+      expect(fs.updateDoc).not.toHaveBeenCalled();
+    });
+
+    it('writes nothing when nothing changed', async () => {
+      const { result } = await renderList();
+      let outcome;
+      await act(async () => {
+        outcome = await result.current.updateItem('item-1', {});
+      });
+      expect(outcome).toEqual({ success: true, unchanged: true });
+      expect(fs.updateDoc).not.toHaveBeenCalled();
+    });
+
+    it('never touches createdAt, which the rules pin', async () => {
+      const { result } = await renderList();
+      await act(async () => {
+        await result.current.updateItem('item-1', { name: 'Bread', quantity: 2 });
+      });
+      const patch = fs.updateDoc.mock.calls[0][1];
+      expect(patch).not.toHaveProperty('createdAt');
+      expect(patch).not.toHaveProperty('source');
+    });
+  });
 });

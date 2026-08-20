@@ -1270,4 +1270,65 @@ describe('a meal a HelloFresh delivery scheduled', () => {
     expect(tips).toHaveLength(1);
     expect(tips[0].title).toMatch(/Prep Spinach once/);
   });
+
+  describe('updateMeal', () => {
+    it('saves a new serving count', async () => {
+      const { result } = await renderMealPlan({ entries: [makeMealPlanEntry({ id: 'e1' })] });
+      await act(async () => {
+        await result.current.updateMeal('e1', { servings: 4 });
+      });
+      expect(fs.updateDoc).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ servings: 4 })
+      );
+    });
+
+    it('refuses zero servings, which the rules require to be positive', async () => {
+      const { result } = await renderMealPlan({ entries: [makeMealPlanEntry({ id: 'e1' })] });
+      let outcome;
+      await act(async () => {
+        outcome = await result.current.updateMeal('e1', { servings: 0 });
+      });
+      expect(outcome.success).toBe(false);
+      expect(fs.updateDoc).not.toHaveBeenCalled();
+    });
+
+    it('refuses a meal type the rules do not list', async () => {
+      const { result } = await renderMealPlan({ entries: [makeMealPlanEntry({ id: 'e1' })] });
+      let outcome;
+      await act(async () => {
+        outcome = await result.current.updateMeal('e1', { mealType: 'brunch' });
+      });
+      expect(outcome.success).toBe(false);
+      expect(fs.updateDoc).not.toHaveBeenCalled();
+    });
+
+    it('refuses a blank name', async () => {
+      const { result } = await renderMealPlan({ entries: [makeMealPlanEntry({ id: 'e1' })] });
+      let outcome;
+      await act(async () => {
+        outcome = await result.current.updateMeal('e1', { recipeName: '  ' });
+      });
+      expect(outcome.success).toBe(false);
+    });
+
+    // Editing tonight's servings must not restamp when the meal was planned.
+    it('never touches createdAt, which the rules pin', async () => {
+      const { result } = await renderMealPlan({ entries: [makeMealPlanEntry({ id: 'e1' })] });
+      await act(async () => {
+        await result.current.updateMeal('e1', { servings: 3, notes: 'double it' });
+      });
+      expect(fs.updateDoc.mock.calls[0][1]).not.toHaveProperty('createdAt');
+    });
+
+    it('writes nothing when nothing changed', async () => {
+      const { result } = await renderMealPlan({ entries: [makeMealPlanEntry({ id: 'e1' })] });
+      let outcome;
+      await act(async () => {
+        outcome = await result.current.updateMeal('e1', {});
+      });
+      expect(outcome).toEqual({ success: true, unchanged: true });
+      expect(fs.updateDoc).not.toHaveBeenCalled();
+    });
+  });
 });

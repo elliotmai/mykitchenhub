@@ -18,7 +18,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Badge, Button, Card, Form, Spinner } from 'react-bootstrap';
-import { Check, Plus, ShoppingCart, X } from 'lucide-react';
+import { Check, Pencil, Plus, ShoppingCart, X } from 'lucide-react';
 
 import { amountLabel } from '../../hooks/useShoppingList';
 import { groupByStoreSection } from '../../config/storeSections';
@@ -67,9 +67,100 @@ const TickSpacer = () => (
  * no needed-versus-on-hand comparison behind it, so it does not carry that
  * field at all.
  */
-const ManualRow = ({ item, duplicate, busy, onToggleBought, onRemove }) => {
+/**
+ * Editing happens in place rather than in a modal.
+ *
+ * The edit is nearly always a small correction — a typo, a wrong number — made
+ * while looking at the row next to it. A dialog would cover the rest of the
+ * list to change one word, and on a phone it would cover all of it.
+ */
+const ManualRow = ({ item, duplicate, busy, onToggleBought, onRemove, onEdit }) => {
   const bought = item.status === 'bought';
   const amount = amountLabel(item);
+
+  const [editing, setEditing] = useState(false);
+  const [draftName, setDraftName] = useState(item.name);
+  const [draftQuantity, setDraftQuantity] = useState(String(item.quantity ?? ''));
+  const [draftUnit, setDraftUnit] = useState(item.unit ?? '');
+  const [saving, setSaving] = useState(false);
+
+  const startEditing = () => {
+    // Seeded from the item each time it opens, not held across closes: the row
+    // may have changed underneath from another device since the last edit.
+    setDraftName(item.name);
+    setDraftQuantity(String(item.quantity ?? ''));
+    setDraftUnit(item.unit ?? '');
+    setEditing(true);
+  };
+
+  const save = async (event) => {
+    event.preventDefault();
+    if (!draftName.trim() || saving) return;
+    setSaving(true);
+    const result = await onEdit(item, {
+      name: draftName,
+      quantity: draftQuantity,
+      unit: draftUnit,
+    });
+    setSaving(false);
+    // Left open on failure so the correction is not lost — the toast says what
+    // went wrong and the words are still there to fix.
+    if (result?.success) setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <li style={SMALL}>
+        <Form onSubmit={save} className="d-flex flex-column gap-1">
+          <Form.Control
+            size="sm"
+            value={draftName}
+            autoFocus
+            onChange={(event) => setDraftName(event.target.value)}
+            aria-label={`Name for ${item.name}`}
+          />
+          <div className="d-flex gap-1">
+            <Form.Control
+              size="sm"
+              type="number"
+              min="0"
+              step="any"
+              value={draftQuantity}
+              onChange={(event) => setDraftQuantity(event.target.value)}
+              aria-label={`How many ${item.name}`}
+              style={{ maxWidth: '4.5rem' }}
+            />
+            <Form.Control
+              size="sm"
+              value={draftUnit}
+              onChange={(event) => setDraftUnit(event.target.value)}
+              placeholder="unit"
+              aria-label={`Unit for ${item.name}`}
+            />
+            <Button
+              type="submit"
+              size="sm"
+              variant="outline-secondary"
+              disabled={!draftName.trim() || saving}
+              className="flex-shrink-0"
+            >
+              {saving ? <Spinner animation="border" size="sm" /> : 'Save'}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="link"
+              className="text-muted flex-shrink-0"
+              onClick={() => setEditing(false)}
+              disabled={saving}
+            >
+              Cancel
+            </Button>
+          </div>
+        </Form>
+      </li>
+    );
+  }
 
   return (
     <li style={SMALL}>
@@ -92,6 +183,18 @@ const ManualRow = ({ item, duplicate, busy, onToggleBought, onRemove }) => {
           {item.name}
         </span>
         {amount && <span className="text-muted text-nowrap">{amount}</span>}
+        {onEdit && (
+          <Button
+            variant="link"
+            size="sm"
+            className="p-0 text-muted flex-shrink-0 d-flex align-items-center"
+            disabled={busy}
+            onClick={startEditing}
+            aria-label={`Edit ${item.name}`}
+          >
+            <Pencil size={13} />
+          </Button>
+        )}
         <Button
           variant="link"
           size="sm"
@@ -160,6 +263,7 @@ const ShoppingList = ({
   onAddItem,
   onToggleBought,
   onRemoveItem,
+  onEditItem,
   onClearBought,
 }) => {
   const [name, setName] = useState('');
@@ -305,6 +409,7 @@ const ShoppingList = ({
                             busy={busyItemId === item.id}
                             onToggleBought={onToggleBought}
                             onRemove={onRemoveItem}
+                            onEdit={onEditItem}
                           />
                         ) : (
                           <DerivedRow key={rowKey(item)} item={item} />

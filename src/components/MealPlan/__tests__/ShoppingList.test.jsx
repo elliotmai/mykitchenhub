@@ -445,4 +445,118 @@ describe('amountLabel', () => {
     expect(amountLabel({ quantity: 0, unit: 'bunch' })).toBe('bunch');
     expect(amountLabel({})).toBeNull();
   });
+
+  describe('editing a typed item', () => {
+    const manual = [
+      {
+        id: 'sl-1',
+        name: 'Mlik',
+        normalized: 'mlik',
+        quantity: 1,
+        unit: '',
+        notes: '',
+        status: 'pending',
+        source: 'manual',
+      },
+    ];
+
+    it('offers an edit control on a typed row', () => {
+      render(<ShoppingList items={[]} manualItems={manual} onEditItem={jest.fn()} />);
+      expect(screen.getByRole('button', { name: 'Edit Mlik' })).toBeInTheDocument();
+    });
+
+    // A derived row is the week's arithmetic — there is no document to amend.
+    it('offers none on a row the week computed', () => {
+      render(
+        <ShoppingList
+          items={[{ key: 'd1', name: 'Flour', quantity: 2, unit: 'cups' }]}
+          onEditItem={jest.fn()}
+        />
+      );
+      expect(screen.queryByRole('button', { name: /^Edit Flour$/ })).not.toBeInTheDocument();
+    });
+
+    it('opens the row for editing, seeded with what is there', async () => {
+      const user = userEvent.setup();
+      render(<ShoppingList items={[]} manualItems={manual} onEditItem={jest.fn()} />);
+
+      await user.click(screen.getByRole('button', { name: 'Edit Mlik' }));
+      expect(screen.getByLabelText('Name for Mlik')).toHaveValue('Mlik');
+    });
+
+    it('saves the correction', async () => {
+      const user = userEvent.setup();
+      const onEditItem = jest.fn().mockResolvedValue({ success: true });
+      render(<ShoppingList items={[]} manualItems={manual} onEditItem={onEditItem} />);
+
+      await user.click(screen.getByRole('button', { name: 'Edit Mlik' }));
+      const field = screen.getByLabelText('Name for Mlik');
+      await user.clear(field);
+      await user.type(field, 'Milk');
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+
+      expect(onEditItem).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'sl-1' }),
+        expect.objectContaining({ name: 'Milk' })
+      );
+    });
+
+    it('closes on a save that worked', async () => {
+      const user = userEvent.setup();
+      render(
+        <ShoppingList
+          items={[]}
+          manualItems={manual}
+          onEditItem={jest.fn().mockResolvedValue({ success: true })}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Edit Mlik' }));
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      await waitFor(() => expect(screen.queryByLabelText('Name for Mlik')).not.toBeInTheDocument());
+    });
+
+    // The correction must survive a failed write, or the cook types it twice.
+    it('stays open when the save fails, keeping what was typed', async () => {
+      const user = userEvent.setup();
+      render(
+        <ShoppingList
+          items={[]}
+          manualItems={manual}
+          onEditItem={jest.fn().mockResolvedValue({ success: false, error: 'nope' })}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Edit Mlik' }));
+      const field = screen.getByLabelText('Name for Mlik');
+      await user.clear(field);
+      await user.type(field, 'Milk');
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+
+      await waitFor(() => expect(screen.getByLabelText('Name for Mlik')).toHaveValue('Milk'));
+    });
+
+    it('abandons the edit on cancel', async () => {
+      const user = userEvent.setup();
+      const onEditItem = jest.fn();
+      render(<ShoppingList items={[]} manualItems={manual} onEditItem={onEditItem} />);
+
+      await user.click(screen.getByRole('button', { name: 'Edit Mlik' }));
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      expect(onEditItem).not.toHaveBeenCalled();
+      expect(screen.queryByLabelText('Name for Mlik')).not.toBeInTheDocument();
+    });
+
+    it('will not save an empty name', async () => {
+      const user = userEvent.setup();
+      const onEditItem = jest.fn();
+      render(<ShoppingList items={[]} manualItems={manual} onEditItem={onEditItem} />);
+
+      await user.click(screen.getByRole('button', { name: 'Edit Mlik' }));
+      await user.clear(screen.getByLabelText('Name for Mlik'));
+
+      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    });
+  });
 });

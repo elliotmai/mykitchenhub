@@ -40,6 +40,15 @@ import { friendlyError } from '../utils/firebaseErrors';
  */
 export const cookDayOffset = (index) => index * 2;
 
+/**
+ * The statuses a delivery can hold.
+ *
+ * Same list the `deliveries` update rule enforces in firestore.rules. Stated
+ * here so a bad value is refused with a sentence a cook can read, rather than
+ * bouncing off the server as a permission error that explains nothing.
+ */
+export const DELIVERY_STATUSES = ['scheduled', 'received', 'cooked'];
+
 /** Human day-of-week name, which is what `helloFresh.deliveryDay` stores. */
 export const WEEKDAYS = [
   'sunday',
@@ -291,6 +300,55 @@ const useDeliveries = () => {
   // ---------------------------------------------------------------------------
   // Delete
   // ---------------------------------------------------------------------------
+  /**
+   * Amend a logged delivery: correct the date it arrived, mark it cooked, add
+   * a note.
+   *
+   * `source` is deliberately not editable. The rules pin it to 'hellofresh',
+   * and rightly: this history is what the HelloFresh screen counts, so letting
+   * a delivery be relabelled would quietly take it out of the record it
+   * belongs to. `createdAt` is pinned for the same reason — correcting a
+   * delivery date should not rewrite when it was logged.
+   *
+   * The counts are left alone too. `mealCount` and `itemsAdded` describe what
+   * the import actually put in the kitchen; editing them here would make the
+   * history disagree with the inventory it produced.
+   */
+  const updateDelivery = useCallback(
+    async (deliveryId, changes = {}) => {
+      if (!user?.uid) return { success: false, error: 'Not authenticated' };
+      if (!deliveryId) return { success: false, error: 'Unknown delivery.' };
+
+      const patch = {};
+
+      if (changes.status !== undefined) {
+        if (!DELIVERY_STATUSES.includes(changes.status)) {
+          return { success: false, error: 'That is not a delivery status we know about.' };
+        }
+        patch.status = changes.status;
+      }
+
+      if (changes.deliveredAt !== undefined) {
+        if (!changes.deliveredAt) return { success: false, error: 'Pick the day it arrived.' };
+        patch.deliveredAt = changes.deliveredAt;
+      }
+
+      if (changes.weekOf !== undefined) patch.weekOf = String(changes.weekOf).trim();
+      if (changes.notes !== undefined) patch.notes = String(changes.notes).trim();
+
+      if (Object.keys(patch).length === 0) return { success: true, unchanged: true };
+
+      try {
+        await updateDoc(doc(db, 'users', user.uid, 'deliveries', deliveryId), patch);
+        return { success: true };
+      } catch (err) {
+        console.error('Error editing delivery:', err);
+        return { success: false, error: friendlyError(err, { action: 'save that change' }) };
+      }
+    },
+    [user?.uid]
+  );
+
   const deleteDelivery = useCallback(
     async (deliveryId) => {
       if (!user?.uid) return { success: false, error: 'Not authenticated' };
@@ -306,7 +364,7 @@ const useDeliveries = () => {
     [user?.uid]
   );
 
-  return { deliveries, loading, saving, error, addDelivery, deleteDelivery };
+  return { deliveries, loading, saving, error, addDelivery, updateDelivery, deleteDelivery };
 };
 
 export default useDeliveries;

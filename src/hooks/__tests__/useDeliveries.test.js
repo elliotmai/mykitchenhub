@@ -449,4 +449,56 @@ describe('deleteDelivery', () => {
 
     expect(outcome.success).toBe(false);
   });
+
+  describe('updateDelivery', () => {
+    it('saves a status the rules allow', async () => {
+      const { result } = renderDeliveries();
+      await act(async () => {
+        await result.current.updateDelivery('d1', { status: 'cooked' });
+      });
+      expect(fs.updateDoc).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ status: 'cooked' })
+      );
+    });
+
+    it('refuses a status the rules would reject', async () => {
+      const { result } = renderDeliveries();
+      let outcome;
+      await act(async () => {
+        outcome = await result.current.updateDelivery('d1', { status: 'eaten' });
+      });
+      expect(outcome.success).toBe(false);
+      expect(fs.updateDoc).not.toHaveBeenCalled();
+    });
+
+    // source is what keeps a delivery inside the history the HelloFresh screen
+    // counts, and the counts describe what the import actually put away.
+    it('leaves source and the counts alone', async () => {
+      const { result } = renderDeliveries();
+      await act(async () => {
+        await result.current.updateDelivery('d1', {
+          status: 'cooked',
+          source: 'manual',
+          mealCount: 99,
+          itemsAdded: 99,
+        });
+      });
+      const patch = fs.updateDoc.mock.calls[0][1];
+      expect(patch).not.toHaveProperty('source');
+      expect(patch).not.toHaveProperty('mealCount');
+      expect(patch).not.toHaveProperty('itemsAdded');
+      expect(patch).not.toHaveProperty('createdAt');
+    });
+
+    it('writes nothing when nothing changed', async () => {
+      const { result } = renderDeliveries();
+      let outcome;
+      await act(async () => {
+        outcome = await result.current.updateDelivery('d1', {});
+      });
+      expect(outcome).toEqual({ success: true, unchanged: true });
+      expect(fs.updateDoc).not.toHaveBeenCalled();
+    });
+  });
 });
