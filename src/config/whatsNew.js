@@ -14,6 +14,15 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.08.20.3',
+    date: 'August 2026',
+    items: [
+      '\u{1F504} \u201CUpdate Now\u201D now actually updates. It used to put the new version in place and then quietly fail to switch to it \u2014 the popup vanished and you carried on running the old app. Tapping it installs the new version, clears out the old files and reloads.',
+      '\u{23F3} And you can see it happening: the card stays up with a progress bar and tells you which step it is on, instead of disappearing and leaving you wondering whether the tap registered.',
+      '\u{1F4FA} On the fridge tablet the whole thing is scaled up so you can read it from across the kitchen.',
+    ],
+  },
+  {
     version: '2026.08.20.2',
     date: 'August 2026',
     items: [

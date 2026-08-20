@@ -3,7 +3,8 @@
 // renamed or a page that was removed from the barrel export.
 
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 import App from '../App';
 import * as authMock from '../test-utils/mocks/auth';
@@ -14,6 +15,16 @@ import { makeUserProfile } from '../test-utils/factories';
 jest.mock('../serviceWorkerRegistration', () => ({
   register: jest.fn(),
   unregister: jest.fn(),
+}));
+
+jest.mock('../utils/appUpdate', () => ({
+  ...jest.requireActual('../utils/appUpdate'),
+  applyUpdate: jest.fn(async ({ onStage }) => {
+    onStage('activating');
+    onStage('clearing');
+    onStage('reloading');
+    return { tookControl: true, cleared: [] };
+  }),
 }));
 
 const signIn = () => {
@@ -121,6 +132,38 @@ describe('app shell', () => {
     visit('/login');
 
     expect(swRegistration.register).toHaveBeenCalled();
+  });
+
+  it('offers the update when the registration says one is waiting', async () => {
+    authMock.__setUser(null);
+    const swRegistration = require('../serviceWorkerRegistration');
+    visit('/login');
+
+    // Fire the callback the app handed to register(), the way a waiting worker
+    // would an hour into a session on the fridge tablet.
+    const { onUpdate } = swRegistration.register.mock.calls.at(-1)[0];
+    await act(async () => onUpdate({ id: 'sw-1' }));
+
+    expect(await screen.findByText('Update Available')).toBeInTheDocument();
+  });
+
+  it('shows the update running instead of hiding the card', async () => {
+    // The old handler hid the card on its first line and left the page exactly
+    // as it was for however long the worker took — the "it does nothing" bug.
+    const user = userEvent.setup();
+    authMock.__setUser(null);
+    const swRegistration = require('../serviceWorkerRegistration');
+    const { applyUpdate } = require('../utils/appUpdate');
+    visit('/login');
+
+    const { onUpdate } = swRegistration.register.mock.calls.at(-1)[0];
+    await act(async () => onUpdate({ id: 'sw-1' }));
+    await user.click(await screen.findByRole('button', { name: /update now/i }));
+
+    expect(applyUpdate).toHaveBeenCalledTimes(1);
+    // Still on screen, now reporting the last stage it reached.
+    expect(screen.getByText('Updating')).toBeInTheDocument();
+    expect(screen.getByText(/reloading/i)).toBeInTheDocument();
   });
 
   it('mounts without crashing when Firebase config is present', () => {

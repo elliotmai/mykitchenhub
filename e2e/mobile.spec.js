@@ -501,7 +501,14 @@ test.describe('mobile navigation', () => {
         underThumb[label] = await page.evaluate(
           ([x, y]) => {
             const el = document.elementFromPoint(x, y);
-            return el?.closest('.mobile-nav__link') ? 'the bar' : (el?.className ?? 'nothing');
+            if (el?.closest('.mobile-nav__link')) return 'the bar';
+            if (!el) return 'nothing';
+            // Whatever is in the way, name it well enough to fix: a bare
+            // className is '' for the inline-styled overlays, which tells you
+            // only that something is there.
+            return `${el.tagName.toLowerCase()}${el.className ? `.${el.className}` : ''}${
+              el.getAttribute('style') ? ` [style: ${el.getAttribute('style').slice(0, 120)}]` : ''
+            }`;
           },
           [box.x + box.width / 2, box.y + box.height / 2]
         );

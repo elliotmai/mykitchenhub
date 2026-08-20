@@ -1,6 +1,6 @@
 {
   "name": "mykitchenhub",
-  "version": "0.10.3",
+  "version": "0.10.4",
   "private": true,
   "description": "Recipe & Inventory Management Progressive Web Application",
   "dependencies": {

@@ -96,6 +96,9 @@ test.describe('navigation', () => {
   });
 });
 
+/** Does `name` match any of the prefixes the update clear-out preserves? */
+const keep = (name, prefixes) => prefixes.some((prefix) => name.startsWith(prefix));
+
 test.describe('progressive web app', () => {
   test('serves a manifest with the metadata needed to install', async ({ page }) => {
     const response = await page.request.get('/manifest.json');
@@ -179,6 +182,66 @@ test.describe('progressive web app', () => {
     // `cache.add('/offline.html')`, and a rejected add fails the whole install.
     const response = await page.request.get('/offline.html');
     expect(response.status()).toBe(200);
+  });
+
+  // -------------------------------------------------------------------------
+  // What the update clear-out is allowed to delete
+  //
+  // Applying an update empties the runtime caches and keeps two of them, on
+  // the grounds that the incoming worker built those two during its install
+  // and they hold the *new* content. That reasoning is only sound if the
+  // prefixes it keeps actually match what a real browser ends up naming those
+  // caches — `workbox-precache-v2-<origin>/` is workbox's business, not ours,
+  // and a rename would turn "keep the app shell" into "delete the app shell
+  // and take the fridge tablet offline until the next release".
+  //
+  // So the list is read out of the module rather than restated here: this
+  // fails if the names drift apart, which is the only way it can go wrong.
+  // -------------------------------------------------------------------------
+  test('keeps exactly the caches the incoming worker built', async ({ authedPage: page }) => {
+    const source = require('fs').readFileSync('src/utils/appUpdate.js', 'utf8');
+    const declaration = source.match(/KEEP_CACHE_PREFIXES = \[([^\]]*)\]/);
+    expect(declaration, 'KEEP_CACHE_PREFIXES not found in src/utils/appUpdate.js').toBeTruthy();
+    const keepPrefixes = [...declaration[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
+    expect(keepPrefixes.length).toBeGreaterThan(0);
+
+    await expect(page.locator('.app-footer__version')).toBeVisible();
+    await page.waitForFunction(() => navigator.serviceWorker?.controller != null, undefined, {
+      timeout: 30_000,
+    });
+
+    // Both are written during install, so they exist by the time the worker
+    // controls the page.
+    const names = await page.evaluate(() => caches.keys());
+    const kept = names.filter((name) => keep(name, keepPrefixes));
+
+    expect(
+      names.some((name) => name.startsWith('workbox-precache')),
+      `no workbox precache among ${JSON.stringify(names)}`
+    ).toBe(true);
+    expect(
+      names.some((name) => name.startsWith('offline-fallback')),
+      `no offline fallback cache among ${JSON.stringify(names)}`
+    ).toBe(true);
+
+    // Every cache the worker built during install survives the clear-out...
+    expect(kept).toEqual(
+      expect.arrayContaining(names.filter((n) => /^(workbox-precache|offline-fallback)/.test(n)))
+    );
+
+    // ...and the app shell is genuinely in the one being kept, rather than the
+    // prefix matching an empty cache that happens to be named right.
+    const precacheName = names.find((name) => name.startsWith('workbox-precache'));
+    const precached = await page.evaluate(
+      async (name) => (await (await caches.open(name)).keys()).map((r) => r.url),
+      precacheName
+    );
+    // Workbox stores a revisioned entry under a cache-busted key
+    // (`/index.html?__WB_REVISION__=…`), so this cannot be an endsWith.
+    expect(
+      precached.some((url) => url.includes('/index.html')),
+      `no index.html among ${JSON.stringify(precached)}`
+    ).toBe(true);
   });
 
   test('and the app actually registers it, so the precache exists', async ({

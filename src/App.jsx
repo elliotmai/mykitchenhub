@@ -25,6 +25,7 @@ import { lazyWithRetry } from './utils/lazyWithRetry';
 // PWA Components
 import InstallPrompt from './components/InstallPrompt';
 import UpdateNotification from './components/UpdateNotification';
+import { applyUpdate } from './utils/appUpdate';
 import OfflineIndicator from './components/OfflineIndicator';
 
 // Service Worker Registration
@@ -140,17 +141,22 @@ const AppRoutes = () => {
 const App = () => {
   // PWA update state
   const [showUpdateNotification, setShowUpdateNotification] = useState(false);
-  const [workbox, setWorkbox] = useState(null);
+  const [updating, setUpdating] = useState(false);
+  const [updateStage, setUpdateStage] = useState(null);
 
-  // Handle service worker update - tell the waiting SW to take over
-  const handleUpdate = () => {
-    if (workbox) {
-      // Send message to service worker to skip waiting
-      workbox.messageSkipWaiting();
-      setShowUpdateNotification(false);
-      // The page will reload automatically when the new SW takes control
-      // (handled by the 'controlling' event in serviceWorkerRegistration.js)
-    }
+  // Apply the waiting update: activate it, clear the stale caches, reload.
+  //
+  // The card stays up for the whole thing and reports each stage. It used to
+  // be hidden on the first line of this function, which meant that if anything
+  // downstream stalled — and on a long-lived page it reliably did — the button
+  // was indistinguishable from one that did nothing.
+  const handleUpdate = async () => {
+    if (updating) return;
+    setUpdating(true);
+    await applyUpdate({ onStage: setUpdateStage });
+    // No cleanup after this: applyUpdate always reloads, so this component is
+    // on its way out. Leaving the card up means the last thing on screen is
+    // "Reloading…" rather than a card that blinks away first.
   };
 
   // Register service worker on mount
@@ -160,10 +166,9 @@ const App = () => {
     // does not mean the chunk did, and clearing it on mount turned a
     // permanently missing chunk into an endless reload loop.
     serviceWorkerRegistration.register({
-      onUpdate: (wb) => {
-        // New content is available - store the workbox instance
+      onUpdate: () => {
+        // A new build is installed and waiting to take over.
         console.log('New content is available; please refresh.');
-        setWorkbox(wb);
         setShowUpdateNotification(true);
       },
       onSuccess: () => {
@@ -185,6 +190,8 @@ const App = () => {
             <OfflineIndicator />
             <UpdateNotification
               show={showUpdateNotification}
+              updating={updating}
+              stage={updateStage}
               onUpdate={handleUpdate}
               onDismiss={() => setShowUpdateNotification(false)}
             />
