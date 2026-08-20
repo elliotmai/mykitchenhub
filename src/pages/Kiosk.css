@@ -123,12 +123,12 @@
 .kiosk__item {
   display: flex;
   align-items: center;
-  gap: 2vmin;
-  padding: 1.4vmin 0;
+  gap: 1.4vmin;
+  padding: 0.7vmin 0;
   border-bottom: 1px solid var(--mkh-border-light, var(--mkh-border));
-  /* A shade smaller than it was: this panel is the narrower column now, and a
-     long item name has less room before it has to be cut off. */
-  font-size: 3.4vmin;
+  /* Small deliberately. Both panels that use this are the narrow column, and
+     the point of them is how many lines fit, not how big one line is. */
+  font-size: 2.4vmin;
 }
 
 .kiosk__item:last-child {
@@ -137,8 +137,8 @@
 
 .kiosk__item-dot {
   flex: 0 0 auto;
-  width: 2vmin;
-  height: 2vmin;
+  width: 1.4vmin;
+  height: 1.4vmin;
   border-radius: 50%;
 }
 
@@ -154,40 +154,25 @@
 
 .kiosk__item-when {
   flex: 0 0 auto;
-  font-size: 2.5vmin;
+  font-size: 1.9vmin;
   color: var(--mkh-text-secondary);
 }
 
 /* --------------------------------------------------------------------------
-   Eat these first
+   The two right-column panels
 
-   Deliberately the quietest panel on the board. It answers a question nobody
-   walked over to ask — you are at the fridge for the week or the list, and
-   this is the thing you notice on the way past. Set smaller than both so it
-   reads as a footnote to them rather than competing for the same glance.
-   Scoped to the panel: the week and the shopping list keep their own sizes.
+   "Eat these first" and the shopping list are set to the same scale, smaller
+   than the week. The week is what you walked over to read; these two are the
+   column beside it, and two lists of short lines sitting one above the other
+   at different sizes reads as a rendering fault rather than as a hierarchy.
+
+   Only the heading needs scoping — .kiosk__item and .kiosk__all-clear belong
+   to exactly these two panels, so their base rules already are this rule. The
+   week's rows are .kiosk__day and keep their own, larger, size.
    -------------------------------------------------------------------------- */
-.kiosk__panel--eat .kiosk__panel-title {
+.kiosk__panel--eat .kiosk__panel-title,
+.kiosk__panel--shopping .kiosk__panel-title {
   font-size: 2.5vmin;
-}
-
-.kiosk__panel--eat .kiosk__item {
-  font-size: 2.4vmin;
-  padding: 0.7vmin 0;
-  gap: 1.4vmin;
-}
-
-.kiosk__panel--eat .kiosk__item-when {
-  font-size: 1.9vmin;
-}
-
-.kiosk__panel--eat .kiosk__item-dot {
-  width: 1.4vmin;
-  height: 1.4vmin;
-}
-
-.kiosk__panel--eat .kiosk__all-clear {
-  font-size: 2.4vmin;
 }
 
 /* --------------------------------------------------------------------------
@@ -407,7 +392,7 @@
   display: flex;
   align-items: center;
   gap: 2vmin;
-  font-size: 3.6vmin;
+  font-size: 2.4vmin;
   color: var(--mkh-success, var(--mkh-text-secondary));
   margin: 0;
 }

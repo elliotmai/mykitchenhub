@@ -146,6 +146,61 @@ test.describe('fridge board', () => {
     }
   });
 
+  // The two right-column panels are set to one scale on purpose. It is the
+  // kind of thing that drifts the moment either panel is touched on its own,
+  // and it is immediately visible on a wall display: two lists of short lines,
+  // one above the other, at different sizes.
+  test('sets the shopping list and the expiring list to the same scale', async ({
+    authedPage: page,
+  }) => {
+    const name = `Board Scale ${Date.now()}`;
+    const id = await seedShoppingItem({ name });
+
+    try {
+      await page.goto('/kiosk', { waitUntil: 'domcontentloaded' });
+
+      const rowSize = (testId) =>
+        page
+          .getByTestId(testId)
+          .locator('li')
+          .first()
+          .evaluate((el) => {
+            const style = getComputedStyle(el);
+            const when = el.querySelector('.kiosk__item-when');
+            return {
+              font: style.fontSize,
+              padding: style.paddingTop,
+              amount: when ? getComputedStyle(when).fontSize : null,
+            };
+          });
+
+      const headingSize = (panelTestId) =>
+        page
+          .getByTestId(panelTestId)
+          .locator('.kiosk__panel-title')
+          .evaluate((el) => getComputedStyle(el).fontSize);
+
+      await expect(page.getByTestId('kiosk-shopping').locator('li').first()).toBeVisible();
+      const shopping = await rowSize('kiosk-shopping-list');
+      const eating = await rowSize('kiosk-eat-list');
+
+      expect(shopping.font).toBe(eating.font);
+      expect(shopping.padding).toBe(eating.padding);
+      expect(shopping.amount).toBe(eating.amount);
+      expect(await headingSize('kiosk-shopping')).toBe(await headingSize('kiosk-eat-panel'));
+
+      // The week deliberately stays larger — it is what you walked over to
+      // read. Asserted so "make them all match" cannot quietly flatten it.
+      const week = await page
+        .getByTestId('kiosk-week-panel')
+        .locator('.kiosk__panel-title')
+        .evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+      expect(week).toBeGreaterThan(parseFloat(shopping.font));
+    } finally {
+      await deleteShoppingItem(id);
+    }
+  });
+
   test('scrolls the expiring list inside its own panel too', async ({ authedPage: page }) => {
     await page.goto('/kiosk', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Eat these first' })).toBeVisible();

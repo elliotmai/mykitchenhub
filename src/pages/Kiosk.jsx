@@ -174,7 +174,11 @@ export const Kiosk = () => {
         {/* The week leads, and takes the wider column. Standing at the fridge
             the question is usually "what am I cooking", and the answer is worth
             more space than the list of what is going off. */}
-        <section className="kiosk__panel kiosk__panel--week" aria-labelledby="kiosk-meals">
+        <section
+          className="kiosk__panel kiosk__panel--week"
+          aria-labelledby="kiosk-meals"
+          data-testid="kiosk-week-panel"
+        >
           <h2 id="kiosk-meals" className="kiosk__panel-title">
             <UtensilsCrossed size={32} aria-hidden="true" />
             This week
@@ -237,7 +241,11 @@ export const Kiosk = () => {
           )}
         </section>
 
-        <section className="kiosk__panel kiosk__panel--eat" aria-labelledby="kiosk-eat">
+        <section
+          className="kiosk__panel kiosk__panel--eat"
+          aria-labelledby="kiosk-eat"
+          data-testid="kiosk-eat-panel"
+        >
           <h2 id="kiosk-eat" className="kiosk__panel-title">
             <AlertTriangle size={24} aria-hidden="true" />
             Eat these first
@@ -247,7 +255,7 @@ export const Kiosk = () => {
             <p className="kiosk__quiet">Checking the kitchen…</p>
           ) : expiringItems.length === 0 ? (
             <p className="kiosk__all-clear">
-              <Snowflake size={40} aria-hidden="true" />
+              <Snowflake size={28} aria-hidden="true" />
               Nothing about to go off. Nice.
             </p>
           ) : (
@@ -291,7 +299,7 @@ export const Kiosk = () => {
           data-testid="kiosk-shopping"
         >
           <h2 id="kiosk-shopping" className="kiosk__panel-title">
-            <ShoppingCart size={32} aria-hidden="true" />
+            <ShoppingCart size={24} aria-hidden="true" />
             Shopping list
           </h2>
 
@@ -301,7 +309,7 @@ export const Kiosk = () => {
             <>
               {toBuy.length === 0 ? (
                 <p className="kiosk__all-clear kiosk__all-clear--list">
-                  <Check size={40} aria-hidden="true" />
+                  <Check size={28} aria-hidden="true" />
                   Nothing to pick up.
                 </p>
               ) : (
