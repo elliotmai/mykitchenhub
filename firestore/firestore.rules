@@ -213,6 +213,63 @@ service cloud.firestore {
       }
 
       // ============================================
+      // SHOPPING ITEMS SUBCOLLECTION (manual ad-hoc list)
+      // ============================================
+
+      // Things a cook wants from the shop that no recipe asked for: batteries,
+      // milk, a birthday cake. The rest of the shopping list is *derived* —
+      // buildShoppingList in src/hooks/useMealPlan.js computes it from the
+      // week's meals minus the kitchen, and stores nothing. This is the only
+      // part of that list with documents behind it.
+      //
+      // Deliberately NOT keyed on a week. A derived line exists because *this*
+      // week's meals need it and is gone when the week rolls over; "buy
+      // batteries" is not a fact about a week. An item lives until it is
+      // ticked off and cleared, or deleted.
+      match /shoppingItems/{shoppingItemId} {
+        // Users can read their own list
+        allow read: if isOwner(userId);
+
+        // Users can add an item
+        allow create: if isOwner(userId)
+          && hasRequiredFields(['name', 'normalized', 'quantity', 'unit',
+                                'status', 'source', 'createdAt'])
+          // A blank line is unreadable on the list and unnameable in a
+          // conversation about it. Trimmed before measuring, because a row
+          // named "   " renders exactly as blank as one named "" — the hook
+          // trims too, and this is that contract enforced rather than trusted.
+          && request.resource.data.name is string
+          && request.resource.data.name.trim().size() > 0
+          && request.resource.data.status in ['pending', 'bought']
+          // One value on purpose. Everything else on the shopping list is
+          // derived and has no document, so `manual` is the only way an item
+          // gets here — and naming it keeps a future writer from quietly
+          // mixing a second kind of row into a collection the UI renders as
+          // "things you asked for yourself".
+          && request.resource.data.source == 'manual'
+          && request.resource.data.quantity > 0;
+
+        // Ticking an item off is an update, so update re-checks everything
+        // create did — otherwise every constraint above is one edit away from
+        // being bypassed: an item could be blanked out, or have `source`
+        // rewritten so it stops being a manual row while still rendering as
+        // one. `createdAt` is pinned so ticking off cannot rewrite when the
+        // cook added it.
+        allow update: if isOwner(userId)
+          && hasRequiredFields(['name', 'normalized', 'quantity', 'unit',
+                                'status', 'source', 'createdAt'])
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.name is string
+          && request.resource.data.name.trim().size() > 0
+          && request.resource.data.status in ['pending', 'bought']
+          && request.resource.data.source == 'manual'
+          && request.resource.data.quantity > 0;
+
+        // Users can take an item off the list for good
+        allow delete: if isOwner(userId);
+      }
+
+      // ============================================
       // MEAL PLAN ENTRIES SUBCOLLECTION
       // One scheduled meal. Written by the meal plan page, by HelloFresh
       // auto-scheduling, and by the waste-prevention "Add to Meal Plan"

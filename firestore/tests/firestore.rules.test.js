@@ -164,6 +164,23 @@ const validMealPlanEntry = (overrides = {}) => ({
   ...overrides,
 });
 
+// The document useShoppingList.buildShoppingItem produces, field for field,
+// plus the serverTimestamp() the hook adds on the way out. Manual shopping
+// items carry no `haveInInventory` or `onHand` — those belong to derived rows,
+// which have no documents at all.
+const validShoppingItem = (overrides = {}) => ({
+  name: 'Batteries',
+  normalized: 'batteries',
+  quantity: 1,
+  unit: '',
+  notes: '',
+  status: 'pending',
+  source: 'manual',
+  createdAt: new Date().toISOString(),
+  boughtAt: null,
+  ...overrides,
+});
+
 const validMealPlan = (overrides = {}) => ({
   weekStart: '2026-08-10',
   createdAt: new Date().toISOString(),
@@ -1822,6 +1839,173 @@ describe('recipes', () => {
 // ---------------------------------------------------------------------------
 // syncMetadata + default deny
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// users/{userId}/shoppingItems/{itemId}
+//
+// The manual, ad-hoc part of the shopping list — the only part with documents
+// behind it. The rest is derived by buildShoppingList() and stored nowhere.
+// ---------------------------------------------------------------------------
+
+describe('manual shopping items', () => {
+  const itemPath = (uid, id = 'shopping-1') => `users/${uid}/shoppingItems/${id}`;
+
+  it('accepts the document useShoppingList writes', async () => {
+    await assertSucceeds(as(OWNER).doc(itemPath(OWNER)).set(validShoppingItem()));
+  });
+
+  it('requires the documented fields', async () => {
+    await assertFails(as(OWNER).doc(itemPath(OWNER)).set({ name: 'Batteries' }));
+  });
+
+  it('lets an owner read their own list', async () => {
+    await seed((db) => db.doc(itemPath(OWNER)).set(validShoppingItem()));
+    await assertSucceeds(as(OWNER).doc(itemPath(OWNER)).get());
+  });
+
+  it("keeps one cook out of another cook's list", async () => {
+    await seed((db) => db.doc(itemPath(OWNER)).set(validShoppingItem()));
+
+    await assertFails(as(INTRUDER).doc(itemPath(OWNER)).get());
+    await assertFails(as(INTRUDER).doc(itemPath(OWNER, 'intruded')).set(validShoppingItem()));
+    await assertFails(as(INTRUDER).doc(itemPath(OWNER)).delete());
+  });
+
+  it('stops a signed-out visitor touching a list at all', async () => {
+    await seed((db) => db.doc(itemPath(OWNER)).set(validShoppingItem()));
+
+    await assertFails(anon().doc(itemPath(OWNER)).get());
+    await assertFails(anon().doc(itemPath(OWNER, 'anon')).set(validShoppingItem()));
+  });
+
+  it('rejects a nameless row — it would be unreadable and unnameable', async () => {
+    await assertFails(
+      as(OWNER)
+        .doc(itemPath(OWNER))
+        .set(validShoppingItem({ name: '' }))
+    );
+    // A row named "   " renders exactly as blank as one named "". The hook
+    // trims before writing; the rule trims before measuring, so the two do not
+    // have to trust each other.
+    await assertFails(
+      as(OWNER)
+        .doc(itemPath(OWNER))
+        .set(validShoppingItem({ name: '   ' }))
+    );
+    await assertFails(
+      as(OWNER)
+        .doc(itemPath(OWNER))
+        .set(validShoppingItem({ name: 42 }))
+    );
+  });
+
+  it.each(['pending', 'bought'])('accepts status "%s"', async (status) => {
+    await assertSucceeds(
+      as(OWNER)
+        .doc(itemPath(OWNER, `shopping-${status}`))
+        .set(validShoppingItem({ status }))
+    );
+  });
+
+  it('rejects an unrecognised status', async () => {
+    await assertFails(
+      as(OWNER)
+        .doc(itemPath(OWNER))
+        .set(validShoppingItem({ status: 'maybe' }))
+    );
+  });
+
+  it('rejects any source but manual — nothing else writes this collection', async () => {
+    await assertFails(
+      as(OWNER)
+        .doc(itemPath(OWNER))
+        .set(validShoppingItem({ source: 'ai' }))
+    );
+    await assertFails(
+      as(OWNER)
+        .doc(itemPath(OWNER))
+        .set(validShoppingItem({ source: 'derived' }))
+    );
+  });
+
+  it('requires a positive quantity', async () => {
+    await assertFails(
+      as(OWNER)
+        .doc(itemPath(OWNER))
+        .set(validShoppingItem({ quantity: 0 }))
+    );
+    await assertFails(
+      as(OWNER)
+        .doc(itemPath(OWNER))
+        .set(validShoppingItem({ quantity: -1 }))
+    );
+  });
+
+  it('ticks an item off with exactly the patch setBought sends', async () => {
+    const item = validShoppingItem();
+    await seed((db) => db.doc(itemPath(OWNER)).set(item));
+
+    // The hook sends these two fields and nothing else. `request.resource` is
+    // the *resulting* document, so the required-field check still passes —
+    // which is the whole reason a partial update is safe here.
+    await assertSucceeds(
+      as(OWNER).doc(itemPath(OWNER)).update({ status: 'bought', boughtAt: new Date().toISOString() })
+    );
+  });
+
+  it('puts an item back on the list with the patch that untick sends', async () => {
+    await seed((db) => db.doc(itemPath(OWNER)).set(validShoppingItem({ status: 'bought' })));
+
+    await assertSucceeds(
+      as(OWNER).doc(itemPath(OWNER)).update({ status: 'pending', boughtAt: null })
+    );
+  });
+
+  it('refuses to let ticking off restamp when the cook wrote the item down', async () => {
+    await seed((db) => db.doc(itemPath(OWNER)).set(validShoppingItem()));
+
+    await assertFails(
+      as(OWNER)
+        .doc(itemPath(OWNER))
+        .update({ status: 'bought', createdAt: new Date(2099, 0, 1).toISOString() })
+    );
+  });
+
+  it('re-applies every create-time check on update', async () => {
+    const item = validShoppingItem();
+    await seed((db) => db.doc(itemPath(OWNER)).set(item));
+
+    // Each of these is a constraint that would be one edit away from being
+    // bypassed if update only checked ownership.
+    await assertFails(as(OWNER).doc(itemPath(OWNER)).update({ name: '' }));
+    await assertFails(as(OWNER).doc(itemPath(OWNER)).update({ status: 'maybe' }));
+    await assertFails(as(OWNER).doc(itemPath(OWNER)).update({ source: 'ai' }));
+    await assertFails(as(OWNER).doc(itemPath(OWNER)).update({ quantity: 0 }));
+  });
+
+  it('refuses an update that drops a required field', async () => {
+    await seed((db) => db.doc(itemPath(OWNER)).set(validShoppingItem()));
+
+    // `set` without merge replaces the document, so this is the update path
+    // that can leave a row the list renders blank.
+    const { normalized, ...withoutNormalized } = validShoppingItem();
+    await assertFails(as(OWNER).doc(itemPath(OWNER)).set(withoutNormalized));
+  });
+
+  it('lets an owner clear an item off the list for good', async () => {
+    await seed((db) => db.doc(itemPath(OWNER)).set(validShoppingItem({ status: 'bought' })));
+    await assertSucceeds(as(OWNER).doc(itemPath(OWNER)).delete());
+  });
+
+  it('keeps an item that is not week-bound — no weekId to validate', async () => {
+    // A manual item outlives the week it was added in, so nothing in the rules
+    // ties it to one. Written here so that stays a decision rather than an
+    // oversight: if a weekId is ever added, this test has to change with it.
+    const stored = validShoppingItem();
+    await assertSucceeds(as(OWNER).doc(itemPath(OWNER, 'no-week')).set(stored));
+    expect(Object.keys(stored)).not.toContain('weekId');
+  });
+});
 
 describe('syncMetadata', () => {
   it('is readable by signed-in users so the sync dashboard can show status', async () => {
