@@ -477,3 +477,78 @@ describe('Kiosk board', () => {
     });
   });
 });
+
+/* The count beside each panel's name. It answers the question you ask from
+   across the room — is there anything to do — without reading the list. */
+describe('the counts on the two right-column panels', () => {
+  const eatCount = () => screen.queryByTestId('kiosk-eat-count');
+  const shoppingCount = () => screen.queryByTestId('kiosk-shopping-count');
+
+  it('counts everything going off, not just what fits on screen', async () => {
+    const items = Array.from({ length: 9 }, (_, i) =>
+      makeItem({ id: `x${i}`, name: `Going Off ${i}`, expiresAt: daysFromNow(1) })
+    );
+    await renderBoard({ items });
+
+    expect(eatCount()).toHaveTextContent('9');
+  });
+
+  it('counts both halves of the errand list', async () => {
+    await renderBoard({
+      shopping: [
+        makeShoppingItem({ id: 's1', name: 'Batteries' }),
+        makeShoppingItem({ id: 's2', name: 'Kitchen Roll' }),
+      ],
+      entries: [mealNeeding('Chorizo')],
+    });
+
+    // Two typed and one the week worked out — the panel shows all three as one
+    // list of errands, so the count has to agree with it.
+    expect(shoppingCount()).toHaveTextContent('3');
+  });
+
+  it('leaves out anything already ticked off', async () => {
+    await renderBoard({
+      shopping: [
+        makeShoppingItem({ id: 's1', name: 'Batteries' }),
+        makeShoppingItem({ id: 's2', name: 'Kitchen Roll', status: 'bought' }),
+      ],
+    });
+
+    expect(shoppingCount()).toHaveTextContent('1');
+  });
+
+  it('agrees with the number of rows actually rendered', async () => {
+    await renderBoard({
+      shopping: Array.from({ length: 5 }, (_, i) =>
+        makeShoppingItem({ id: `s${i}`, name: `Thing ${i}` })
+      ),
+    });
+
+    const rows = within(screen.getByTestId('kiosk-shopping-list')).getAllByRole('listitem');
+    expect(shoppingCount()).toHaveTextContent(String(rows.length));
+  });
+
+  it('shows no count rather than a nought when there is nothing to do', async () => {
+    await renderBoard({ items: [], shopping: [] });
+
+    // Both panels already say so in words; a 0 beside the name is one more
+    // thing to focus on and dismiss from across a kitchen.
+    expect(eatCount()).not.toBeInTheDocument();
+    expect(shoppingCount()).not.toBeInTheDocument();
+    expect(screen.getByText(/nothing about to go off/i)).toBeInTheDocument();
+    expect(screen.getByText(/nothing to pick up/i)).toBeInTheDocument();
+  });
+
+  it('counts one errand once when both halves name it', async () => {
+    await renderBoard({
+      entries: [mealNeeding('Milk', { quantity: 200, unit: 'g' })],
+      shopping: [makeShoppingItem({ id: 's1', name: 'Milk', quantity: 2, unit: 'l' })],
+    });
+
+    // One row on the board, so one on the count — the two must not disagree.
+    const rows = within(screen.getByTestId('kiosk-shopping-list')).getAllByRole('listitem');
+    expect(rows).toHaveLength(1);
+    expect(shoppingCount()).toHaveTextContent('1');
+  });
+});

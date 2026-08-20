@@ -126,6 +126,12 @@ test.describe('fridge board', () => {
       await expect(panel.locator('li')).toHaveCount(VISIBLE_ROWS + 4);
       await expect(panel.getByText(/scroll for \d+ more/)).toBeVisible();
 
+      // And the count beside the heading agrees with the rows. It is derived
+      // separately from the list it labels, so this is the one place the two
+      // can drift — and a wrong number on a wall display is worse than none,
+      // because it is the part you trust without checking.
+      await expect(page.getByTestId('kiosk-shopping-count')).toHaveText(String(VISIBLE_ROWS + 4));
+
       const list = page.getByTestId('kiosk-shopping-list');
       const geometry = await list.evaluate((el) => ({
         scrolls: el.scrollHeight > el.clientHeight + 1,

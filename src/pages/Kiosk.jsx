@@ -249,6 +249,15 @@ export const Kiosk = () => {
           <h2 id="kiosk-eat" className="kiosk__panel-title">
             <AlertTriangle size={24} aria-hidden="true" />
             Eat these first
+            {/* Only once there is something to count. A panel whose own body
+                already says "nothing about to go off" does not also need a
+                nought beside its name, and on a board read from across a
+                kitchen a zero is a thing you have to focus on to dismiss. */}
+            {!loading && expiringItems.length > 0 && (
+              <span className="kiosk__count" data-testid="kiosk-eat-count">
+                {expiringItems.length}
+              </span>
+            )}
           </h2>
 
           {loading ? (
@@ -301,6 +310,13 @@ export const Kiosk = () => {
           <h2 id="kiosk-shopping" className="kiosk__panel-title">
             <ShoppingCart size={24} aria-hidden="true" />
             Shopping list
+            {/* Both halves of the errand list, which is what the panel below
+                shows — not just the rows that were typed in. */}
+            {!loading && !shoppingLoading && toBuy.length > 0 && (
+              <span className="kiosk__count" data-testid="kiosk-shopping-count">
+                {toBuy.length}
+              </span>
+            )}
           </h2>
 
           {loading || shoppingLoading ? (

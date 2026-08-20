@@ -175,6 +175,24 @@
   font-size: 2.5vmin;
 }
 
+/* The count beside a panel's name.
+
+   Pushed to the far end of the heading row rather than sitting against the
+   title, so the eye finds it in the same place on both panels instead of
+   wherever that panel's name happens to end. Tabular figures so it does not
+   jitter sideways as the number changes under you — this board redraws itself
+   whenever the kitchen does, with nobody touching it.
+
+   Weight rather than colour or a filled badge: both panels here were
+   deliberately quietened, and a pill would put the loudest thing on the board
+   in the corner meant to be the calmest. */
+.kiosk__count {
+  margin-left: auto;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--mkh-text-secondary);
+}
+
 /* --------------------------------------------------------------------------
    The week, Monday to Sunday
 
