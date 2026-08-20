@@ -26,6 +26,62 @@ const suppressWhatsNewPopup = (page) =>
     [WHATS_NEW_KEY, WHATS_NEW[0].version]
   );
 
+/** How long one sign-in attempt gets before it is treated as failed. */
+const LOGIN_TIMEOUT_MS = 20_000;
+
+/** How many times to try before giving up and failing the worker. */
+const LOGIN_ATTEMPTS = 3;
+
+/**
+ * One pass at the login form. Throws with a *reason* rather than a timeout.
+ *
+ * The previous version waited only for the dashboard URL, which meant every
+ * way of not reaching it — a refused sign-in, a dropped click, a request that
+ * never came back — looked identical: thirty seconds of nothing, then
+ * "waitForURL timed out". A flake reported that way cannot be diagnosed from
+ * its own failure output, which is exactly the position this suite was in.
+ *
+ * So it waits for whichever of the two outcomes happens first. Refusals are
+ * near-instant and now say what the app said.
+ */
+const attemptLogin = async (page, account) => {
+  await page.goto('/login', { waitUntil: 'domcontentloaded' });
+
+  const email = page.getByPlaceholder('you@example.com');
+  await email.fill(account.email);
+  await page.getByPlaceholder('••••••••').first().fill(account.password);
+
+  // The form's inputs are React-controlled: `fill` sets the DOM value and
+  // dispatches the event React listens for, but the component only submits
+  // what its own state holds. Reading the value back confirms that round trip
+  // finished before the click — otherwise a submit can carry an empty form,
+  // and an empty form is refused with a message about the email being invalid,
+  // which sends the reader looking in entirely the wrong place.
+  await expect(email).toHaveValue(account.email);
+
+  await page.getByRole('button', { name: 'Sign In' }).click();
+
+  // One wait for both outcomes rather than a Promise.race of two: the loser of
+  // a race keeps running and rejects into nothing, which Node reports as an
+  // unhandled rejection long after the test that caused it has finished.
+  await page.waitForFunction(
+    () =>
+      window.location.pathname.startsWith('/dashboard') ||
+      document.querySelector('.alert-danger') !== null,
+    null,
+    { timeout: LOGIN_TIMEOUT_MS }
+  );
+
+  if (new URL(page.url()).pathname.startsWith('/dashboard')) return;
+
+  const message = await page
+    .locator('.alert-danger')
+    .first()
+    .textContent()
+    .catch(() => null);
+  throw new Error(`sign-in refused: ${message?.trim() || 'no message shown'}`);
+};
+
 /**
  * Signs in through the real login form and waits for the dashboard.
  *
@@ -33,17 +89,34 @@ const suppressWhatsNewPopup = (page) =>
  * the storageState fixture below. Every other spec starts from the captured
  * state, because a login costs ~15s.
  *
+ * Retries, because this is worker set-up: a single hiccup here does not fail
+ * one test, it fails every test in the worker with an error pointing at
+ * whichever spec happened to be first — which is how the suite came to have
+ * three separate "flaky specs" that were all this one function.
+ *
  * Selectors target placeholders rather than labels: the login form's
  * Form.Label elements are not associated with their inputs via htmlFor.
  */
 const login = async (page, account = TEST_USER) => {
-  await page.goto('/login', { waitUntil: 'domcontentloaded' });
+  const failures = [];
 
-  await page.getByPlaceholder('you@example.com').fill(account.email);
-  await page.getByPlaceholder('••••••••').first().fill(account.password);
-  await page.getByRole('button', { name: 'Sign In' }).click();
+  for (let attempt = 1; attempt <= LOGIN_ATTEMPTS; attempt += 1) {
+    try {
+      await attemptLogin(page, account);
+      return;
+    } catch (error) {
+      failures.push(`attempt ${attempt}: ${String(error).split('\n')[0]}`);
+      if (attempt === LOGIN_ATTEMPTS) break;
+      // Backs off a little further each time. Whatever the transient cause,
+      // hammering it on the same tick is the least likely thing to help.
+      await page.waitForTimeout(500 * attempt);
+    }
+  }
 
-  await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
+  throw new Error(
+    `Could not sign in as ${account.email} after ${LOGIN_ATTEMPTS} attempts:\n  ` +
+      failures.join('\n  ')
+  );
 };
 
 /**
@@ -232,7 +305,7 @@ const test = withWhatsNewOption(base).extend({
    *
    * Specs that want a different route just navigate again.
    */
-  authedPage: async ({ page }, use) => {
+  authedPage: async ({ page, workerAccount }, use) => {
     await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
 
     // Wait for the app to finish deciding whether it is signed in. Until then
@@ -253,8 +326,14 @@ const test = withWhatsNewOption(base).extend({
     // has nothing to do with the spec. Signing in costs ~15s and only happens
     // on the rare run that needs it; the alternative is a suite that fails at
     // random on a different test each time.
+    //
+    // As this worker's own account, not the default. It used to call `login(page)`
+    // bare, which signs in as TEST_USER — so on the rare run that needed the
+    // fallback, the browser was driving one account while e2e/firestore-admin.js
+    // read back from another, and every assertion that checks the database saw
+    // an empty result for a write it had just watched succeed.
     if (new URL(page.url()).pathname.startsWith('/login')) {
-      await login(page);
+      await login(page, workerAccount);
     }
 
     await use(page);
