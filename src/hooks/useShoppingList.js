@@ -161,6 +161,10 @@ export const combineShoppingList = (manualItems = [], derivedItems = []) => {
     name: item.name,
     amount: amountLabel(item),
     kind: 'manual',
+    // The document itself, for surfaces that can act on the row rather than
+    // only show it. A derived row deliberately has no equivalent: there is no
+    // document behind it to tick off or take away.
+    item,
   }));
 
   derivedItems

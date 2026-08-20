@@ -14,6 +14,15 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.08.20.4',
+    date: 'August 2026',
+    items: [
+      '\u{1F4FA} On the fridge board, tap a meal to open its recipe \u2014 method and ingredients, without going and finding it on your phone.',
+      '\u{1F4DC} The two lists on the board scroll now. \u201CEat these first\u201D and the shopping list used to stop after a few items and tell you there were more; now the whole list is there, and the panel says how many are below the fold.',
+      '\u{1F6D2} And you can work the shopping list from the fridge: tick things off as you think of them, take off anything you typed by mistake, and add what you have just noticed you are out of \u2014 all without unlocking anything.',
+    ],
+  },
+  {
     version: '2026.08.20.3',
     date: 'August 2026',
     items: [

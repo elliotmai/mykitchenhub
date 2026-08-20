@@ -18,12 +18,12 @@
 // so the footer can never silently lie about what's deployed.
 
 /** Version string rendered in the footer, e.g. "0.8.2". */
-export const APP_VERSION = '0.10.4';
+export const APP_VERSION = '0.10.5';
 
 /** The roadmap step this build completes, e.g. "8.2". */
-export const ROADMAP_STEP = '10.4';
+export const ROADMAP_STEP = '10.5';
 
 /** Human-readable name of that roadmap step — shown in the footer tooltip. */
-export const ROADMAP_STEP_NAME = 'Reliable Updates';
+export const ROADMAP_STEP_NAME = 'Kiosk Reach';
 
 export default APP_VERSION;

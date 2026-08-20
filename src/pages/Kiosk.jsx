@@ -2,9 +2,17 @@
 // The fridge-door board.
 //
 // Read from across the kitchen, by someone holding a pan. That is the whole
-// brief, and it is what every choice here answers to: very large type, a
-// handful of things rather than everything, no scrolling, and no state that a
-// passing elbow can put wrong.
+// brief, and it is what every choice here answers to: very large type, and the
+// thing you came to the fridge to find already on screen.
+//
+// It used to be strictly read-only and strictly one screen. Both have given a
+// little, deliberately. The two list panels scroll, because a list truncated at
+// four with "and 6 more" sends you to another device to read the rest — which
+// is the failure the board exists to prevent. And the shopping list can be
+// edited here, because noticing you are out of milk happens at the fridge, not
+// at a desk. Everything else still holds: the week is glanceable without
+// touching anything, and no gesture here can destroy a record — ticking off is
+// reversible and the only removal is of a line you typed yourself.
 //
 // It reuses the same hooks as the rest of the app, so it is live for free —
 // Firestore pushes a change and the board redraws. There is deliberately no
@@ -12,7 +20,7 @@
 // and the level colours are the ones the inventory cards already use, so the
 // board can never disagree with the page it is summarising.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Settings2,
@@ -21,31 +29,85 @@ import {
   Snowflake,
   ShoppingCart,
   Check,
+  Plus,
+  X,
 } from 'lucide-react';
 
 import useWasteAlerts from '../hooks/useWasteAlerts';
 import useMealPlan from '../hooks/useMealPlan';
 import useShoppingList, { combineShoppingList } from '../hooks/useShoppingList';
+import { useShoppingListActions } from '../components/MealPlan/useShoppingListActions';
 import useWakeLock from '../hooks/useWakeLock';
 import { getExpirationLabel, getExpirationLevel, EXPIRATION_LEVELS } from '../hooks/useInventory';
 
 import './Kiosk.css';
 
-/** How many expiring items fit on the board before it stops being glanceable. */
-export const KIOSK_ITEM_LIMIT = 6;
+/**
+ * How many rows are visible in a list panel before it needs scrolling.
+ *
+ * Nothing is cut off at this number any more — both list panels scroll, so the
+ * whole list is always reachable. It is used only to decide whether to say so:
+ * a scrollbar on a wall-mounted tablet, viewed from two metres, is not a
+ * visible affordance, so a panel with more than this says "scroll for N more"
+ * in words. Roughly what fits a Fire HD 8 panel at these type sizes.
+ */
+export const KIOSK_VISIBLE_ROWS = 5;
 
 /**
- * How many things to buy fit before the shopping panel stops being glanceable.
+ * Type something onto the list without leaving the fridge.
  *
- * Lower than KIOSK_ITEM_LIMIT because this is the smallest panel on the board —
- * the grid gives it 2fr against the "eat these first" panel's 3fr, and it sits
- * under it. Four is measured rather than picked: the panel's list gets ~100px
- * on a Fire HD 8, a row is ~37px, and Kiosk.css lays these out in two columns,
- * so four is two rows with room left over. Past it the panel says how many more
- * there are rather than growing — the board is one screen, and a wall display
- * you have to scroll is one nobody reads.
+ * One field and no quantity box. Standing at the fridge the thought is "milk",
+ * not "2 litres of milk", and a second field to tab through on a tablet
+ * keyboard would cost more than it collects — `addItem` defaults the quantity,
+ * and the amount can be corrected later on a device with a real keyboard.
  */
-export const KIOSK_SHOPPING_LIMIT = 4;
+const KioskAddItem = ({ onAdd }) => {
+  const [name, setName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef(null);
+
+  const submit = async (event) => {
+    event.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed || saving) return;
+
+    setSaving(true);
+    const result = await onAdd({ name: trimmed });
+    setSaving(false);
+
+    if (result?.success) {
+      setName('');
+      // Focus is kept so a second item can be typed straight away — at a fridge
+      // things are remembered in threes, and re-aiming at a small field between
+      // each one is the slow part.
+      inputRef.current?.focus();
+    }
+  };
+
+  return (
+    <form className="kiosk__add" onSubmit={submit}>
+      <input
+        ref={inputRef}
+        type="text"
+        className="kiosk__add-input"
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+        placeholder="Add to the list…"
+        aria-label="Add an item to the shopping list"
+        enterKeyHint="done"
+        autoComplete="off"
+      />
+      <button
+        type="submit"
+        className="kiosk__add-button"
+        disabled={!name.trim() || saving}
+        aria-label="Add to the shopping list"
+      >
+        <Plus size={28} aria-hidden="true" />
+      </button>
+    </form>
+  );
+};
 
 /** A ticking clock, because a dark screen and a stopped clock look identical. */
 const useClock = () => {
@@ -63,11 +125,14 @@ export const Kiosk = () => {
   const { items, expiringItems, loading: alertsLoading } = useWasteAlerts();
   const { weekDays, entriesByDay, shoppingList, loading: planLoading } = useMealPlan();
   const { items: manualItems, loading: shoppingLoading } = useShoppingList();
+  const { busyItemId, onAddItem, onToggleBought, onRemoveItem } = useShoppingListActions();
   const { active: screenHeld, supported: wakeLockSupported } = useWakeLock(true);
   const now = useClock();
 
-  const shown = expiringItems.slice(0, KIOSK_ITEM_LIMIT);
-  const overflow = expiringItems.length - shown.length;
+  // Nothing is sliced off any more; the panel scrolls. The count is only used
+  // to say "scroll for N more" out loud, because a scrollbar two metres away
+  // is not an affordance anyone can see.
+  const eatOverflow = expiringItems.length - KIOSK_VISIBLE_ROWS;
   const loading = alertsLoading || planLoading;
 
   // Both halves of the list, as one errand list. The board answers a single
@@ -76,8 +141,7 @@ export const Kiosk = () => {
   // another was typed in on Sunday. Anything already ticked off is gone from
   // here, because it is no longer something to pick up.
   const toBuy = combineShoppingList(manualItems, shoppingList);
-  const shownToBuy = toBuy.slice(0, KIOSK_SHOPPING_LIMIT);
-  const toBuyOverflow = toBuy.length - shownToBuy.length;
+  const toBuyOverflow = toBuy.length - KIOSK_VISIBLE_ROWS;
 
   return (
     <div className="kiosk">
@@ -143,7 +207,28 @@ export const Kiosk = () => {
                     </span>
                     <span className="kiosk__day-meal">
                       {entries.length > 0
-                        ? entries.map((entry) => entry.recipeName).join(', ')
+                        ? entries.map((entry, index) => (
+                            <span key={entry.id}>
+                              {index > 0 && ', '}
+                              {/* Only a meal with a recipe behind it is a link.
+                                  A meal typed straight onto the plan, or one
+                                  scheduled from a delivery before its card was
+                                  imported, has nothing to open — and a link
+                                  that goes nowhere is worse on a wall display
+                                  than no link, because the tap is the only way
+                                  to find out. */}
+                              {entry.recipeId ? (
+                                <Link
+                                  to={`/recipes?recipe=${entry.recipeId}`}
+                                  className="kiosk__meal-link"
+                                >
+                                  {entry.recipeName}
+                                </Link>
+                              ) : (
+                                entry.recipeName
+                              )}
+                            </span>
+                          ))
                         : '—'}
                     </span>
                   </li>
@@ -161,15 +246,15 @@ export const Kiosk = () => {
 
           {loading ? (
             <p className="kiosk__quiet">Checking the kitchen…</p>
-          ) : shown.length === 0 ? (
+          ) : expiringItems.length === 0 ? (
             <p className="kiosk__all-clear">
               <Snowflake size={40} aria-hidden="true" />
               Nothing about to go off. Nice.
             </p>
           ) : (
             <>
-              <ul className="kiosk__items">
-                {shown.map((item) => {
+              <ul className="kiosk__items kiosk__scroller" data-testid="kiosk-eat-list">
+                {expiringItems.map((item) => {
                   const level = getExpirationLevel(item.expiresAt);
                   return (
                     <li key={item.id} className="kiosk__item">
@@ -184,9 +269,7 @@ export const Kiosk = () => {
                   );
                 })}
               </ul>
-              {overflow > 0 && (
-                <p className="kiosk__quiet">and {overflow} more on the Waste Alerts page</p>
-              )}
+              {eatOverflow > 0 && <p className="kiosk__quiet">scroll for {eatOverflow} more</p>}
             </>
           )}
         </section>
@@ -196,11 +279,13 @@ export const Kiosk = () => {
             because a corner showing only the ad-hoc items would be actively
             misleading about what needs buying.
 
-            The smallest of the three panels, so it is the one most at risk of
-            pushing the board past one screen. Two things stop that: the count
-            is capped at KIOSK_SHOPPING_LIMIT with an "and N more" line, and
-            Kiosk.css lays the rows out in two columns at their natural height —
-            measured to fit, not assumed to. */}
+            This is the panel that gained hands. A typed row can be ticked off
+            or taken away; a derived row can only be read, because there is no
+            document behind it — it is a fact about this week's meals minus the
+            kitchen, and it goes away by itself when the ingredient is in the
+            fridge. Giving it a tick box would mean writing a document to record
+            that a computed line had been dealt with, and then the same list
+            would be true in two places. */}
         <section
           className="kiosk__panel kiosk__panel--shopping"
           aria-labelledby="kiosk-shopping"
@@ -213,22 +298,64 @@ export const Kiosk = () => {
 
           {loading || shoppingLoading ? (
             <p className="kiosk__quiet">Checking the list…</p>
-          ) : shownToBuy.length === 0 ? (
-            <p className="kiosk__all-clear">
-              <Check size={40} aria-hidden="true" />
-              Nothing to pick up.
-            </p>
           ) : (
             <>
-              <ul className="kiosk__items kiosk__shopping">
-                {shownToBuy.map((row) => (
-                  <li key={row.key} className="kiosk__item">
-                    <span className="kiosk__item-name">{row.name}</span>
-                    {row.amount && <span className="kiosk__item-when">{row.amount}</span>}
-                  </li>
-                ))}
-              </ul>
-              {toBuyOverflow > 0 && <p className="kiosk__quiet">and {toBuyOverflow} more</p>}
+              {toBuy.length === 0 ? (
+                <p className="kiosk__all-clear kiosk__all-clear--list">
+                  <Check size={40} aria-hidden="true" />
+                  Nothing to pick up.
+                </p>
+              ) : (
+                <ul
+                  className="kiosk__items kiosk__shopping kiosk__scroller"
+                  data-testid="kiosk-shopping-list"
+                >
+                  {toBuy.map((row) => {
+                    const busy = row.item ? busyItemId === row.item.id : false;
+
+                    return (
+                      <li key={row.key} className="kiosk__item kiosk__item--buy">
+                        {row.kind === 'manual' ? (
+                          <input
+                            type="checkbox"
+                            className="kiosk__tick"
+                            checked={false}
+                            disabled={busy}
+                            onChange={() => onToggleBought(row.item, true)}
+                            aria-label={`Tick ${row.name} off the shopping list`}
+                          />
+                        ) : (
+                          /* Keeps the names in one column whether or not the
+                             row has a box, so the list reads as a list rather
+                             than as two ragged halves. */
+                          <span className="kiosk__tick kiosk__tick--none" aria-hidden="true" />
+                        )}
+
+                        <span className="kiosk__item-name">{row.name}</span>
+                        {row.amount && <span className="kiosk__item-when">{row.amount}</span>}
+
+                        {row.kind === 'manual' && (
+                          <button
+                            type="button"
+                            className="kiosk__row-remove"
+                            disabled={busy}
+                            onClick={() => onRemoveItem(row.item)}
+                            aria-label={`Take ${row.name} off the shopping list`}
+                          >
+                            <X size={24} aria-hidden="true" />
+                          </button>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
+              {toBuyOverflow > 0 && <p className="kiosk__quiet">scroll for {toBuyOverflow} more</p>}
+
+              {/* Always on screen, empty list or not — the commonest reason to
+                  touch this panel is to put something on it. */}
+              <KioskAddItem onAdd={onAddItem} />
             </>
           )}
         </section>

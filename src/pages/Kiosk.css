@@ -2,9 +2,14 @@
    Kiosk board — a Fire HD 8 on a fridge door
 
    1280x800, read from a metre or two away by someone with their hands full.
-   Type is sized for that distance rather than for a desk, and the whole board
-   is one screen: a wall display you have to scroll is a display you will not
-   read.
+   Type is sized for that distance rather than for a desk.
+
+   The board itself is still one screen — it never scrolls as a page, and the
+   week is always whole and always visible. What scrolls is the inside of the
+   two list panels, which is a different thing: the alternative was cutting the
+   list off at four items and naming a count, and a board that tells you there
+   are six more things to buy without telling you what they are has sent you to
+   another device to do the job it exists for.
 
    Sizes are in vmin so the board fills whatever it is mounted on. On the Fire
    HD 8 in landscape vmin is the 800px edge, which puts the item names around
@@ -74,8 +79,13 @@
   /* The week spans both rows down the left; the right column carries the food
      to use up above the shopping list. Rows rather than a third column: seven
      meal names need width, and squeezing them to a third would start cutting
-     the names off. */
-  grid-template-rows: 3fr 2fr;
+     the names off.
+
+     Even halves rather than the 3fr/2fr it had. The shopping panel is no longer
+     a corner that reports a number — it holds a scrolling list, a tick box per
+     row and a field to type into, and it is the panel most likely to be used
+     with your hands rather than only read. */
+  grid-template-rows: 1fr 1fr;
   gap: 3vmin;
   flex: 1 1 auto;
   min-height: 0;
@@ -229,57 +239,186 @@
 }
 
 /* --------------------------------------------------------------------------
-   The shopping list
+   Scrolling inside a panel
 
-   The smallest panel on the board — the grid gives it 2fr against the "eat
-   these first" panel's 3fr, and it sits underneath — so it is the one a long
-   list would push off the bottom first.
+   Momentum scrolling, because Fire OS's WebView needs telling, and
+   `overscroll-behavior: contain` so a flick that runs out of list does not
+   start dragging the page behind it — on a wall-mounted tablet that shows as
+   the whole board sliding and slowly bouncing back, which reads as a fault.
 
-   Two columns, because one does not hold enough to be worth walking over to.
-
-   Measured on the board rather than reasoned about: this panel gives its list
-   100px on a Fire HD 8 (1280x800) and 90px on a 1280x720 desktop, and a
-   comfortable single-column row is 43px. That is two items. Two columns at
-   2.9vmin fit four in the same space with 26px to spare, and clip no name a
-   single column would have shown — product names are short, and the ones that
-   are not ellipsise to one line exactly as they already do in "Eat these
-   first". Reading order is left to right then down, the way a written list
-   goes.
+   No scrollbar is drawn. From two metres it is invisible anyway, and it would
+   eat width from the names; the "scroll for N more" line in the panel is what
+   actually tells a reader there is more, because it is the only thing at this
+   distance that can.
    -------------------------------------------------------------------------- */
-.kiosk__shopping {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 3vmin;
-  align-content: start;
+.kiosk__scroller {
   flex: 1 1 auto;
   min-height: 0;
-  /* Belt and braces with KIOSK_SHOPPING_LIMIT: the count is what keeps the list
-     short, and this is what keeps a freak row — a name that wraps on a narrower
-     board than the Fire HD 8 — from pushing the panel past its corner. */
-  overflow: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
 
-.kiosk__shopping .kiosk__item {
-  /* Natural height, deliberately NOT `flex: 1 1 0`. Sharing the panel's height
-     out between the rows sounds tidier and is worse: each row becomes whatever
-     is left over, which at four rows measured 22px of box around 31px of text —
-     the type spilled out of its own row and was clipped. Rows keep their size;
-     the count is what gives. */
-  padding: 0.5vmin 0;
-  line-height: 1.2;
-  /* A shade under the expiry list's 3.4vmin: these are single product names
-     rather than a name plus a dated phrase, and this panel has the least height
-     on the board to spend. Still ~23px on a Fire HD 8 — kitchen-readable. */
-  font-size: 2.9vmin;
+.kiosk__scroller::-webkit-scrollbar {
+  display: none;
+}
+
+/* --------------------------------------------------------------------------
+   The shopping list
+
+   One column now, not two. Two columns fitted more names into a corner that
+   could not scroll, which was the right trade when the panel was four rows and
+   read-only. It is the wrong one now: every row carries a 44px tick box and a
+   remove button, two of those side by side leaves nothing for the name, and a
+   list you scroll is read top to bottom rather than left to right then down.
+   -------------------------------------------------------------------------- */
+.kiosk__shopping {
+  display: flex;
+  flex-direction: column;
+}
+
+.kiosk__item--buy {
+  /* Not `flex: 1 1 0`. The rows keep their own height and the panel scrolls;
+     sharing a fixed height out between them is what previously produced 22px
+     of box around 31px of text. */
+  flex: 0 0 auto;
   gap: 1.5vmin;
 }
 
-/* The overflow line costs the list a whole row if it is left at the shared
-   size — 39px of a 100px budget. Smaller and closer here, where it is a
-   footnote rather than a finding. */
-.kiosk__panel--shopping .kiosk__quiet {
-  margin-top: 0.4vmin;
-  font-size: 2.2vmin;
+/* Both the box and the × clear the 44px tap floor the mobile suite enforces.
+   That floor was written for a phone held in one hand; a tablet on a fridge,
+   tapped with a wet or full hand from an angle, is the harder case, so these
+   are sized past it rather than to it. */
+.kiosk__tick {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  margin: 0;
+  accent-color: var(--mkh-primary, #2f6f4f);
+  cursor: pointer;
+}
+
+/* A derived row has nothing to tick, but its name still lines up with the ones
+   that do — a ragged left edge reads as two lists rather than one. */
+.kiosk__tick--none {
+  display: inline-block;
+  cursor: default;
+}
+
+.kiosk__row-remove {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  background: none;
+  border-radius: var(--mkh-radius-md, 0.5rem);
+  color: var(--mkh-text-secondary);
+  /* Present but quiet. Removing is the rarer of the two actions and the only
+     one that does not undo itself, so it should not be the thing a thumb lands
+     on by accident while reaching for the tick. */
+  opacity: 0.4;
+  cursor: pointer;
+}
+
+.kiosk__row-remove:hover,
+.kiosk__row-remove:focus-visible {
+  opacity: 1;
+  color: var(--mkh-danger, #b3261e);
+}
+
+.kiosk__tick:disabled,
+.kiosk__row-remove:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+/* --------------------------------------------------------------------------
+   Adding an item from the fridge
+   -------------------------------------------------------------------------- */
+.kiosk__add {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 1.5vmin;
+  margin-top: 1.5vmin;
+  padding-top: 1.5vmin;
+  border-top: 1px solid var(--mkh-border-light, var(--mkh-border));
+}
+
+.kiosk__add-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0.8vmin 1.5vmin;
+  border: 1px solid var(--mkh-border);
+  border-radius: var(--mkh-radius-md, 0.5rem);
+  background: var(--mkh-bg-primary);
+  color: var(--mkh-text-primary);
+  /* 16px is the floor below which mobile WebKit zooms the page on focus. The
+     board pins the viewport at 1x so it cannot zoom, but a field this size is
+     also simply what is typeable on a tablet at arm's length. */
+  /* Never below 16px, whatever the board's size works out to. */
+  font-size: max(16px, 2.8vmin);
+}
+
+.kiosk__add-input:focus {
+  outline: 2px solid var(--mkh-primary, #2f6f4f);
+  outline-offset: 1px;
+}
+
+.kiosk__add-button {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: none;
+  border-radius: var(--mkh-radius-md, 0.5rem);
+  background: var(--mkh-primary, #2f6f4f);
+  color: #fff;
+  cursor: pointer;
+}
+
+.kiosk__add-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* --------------------------------------------------------------------------
+   Opening a recipe from the week
+
+   Underlined rather than only coloured: at two metres, and on a tablet whose
+   colour rendering is nobody's idea of accurate, a hue difference is not a
+   reliable signal that something can be tapped.
+   -------------------------------------------------------------------------- */
+.kiosk__meal-link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--mkh-primary, #2f6f4f);
+  text-decoration-thickness: 0.3vmin;
+  text-underline-offset: 0.5vmin;
+}
+
+.kiosk__meal-link:hover,
+.kiosk__meal-link:focus-visible {
+  color: var(--mkh-primary, #2f6f4f);
+}
+
+/* Holds the list's space when there is no list, so the add field below it
+   stays put at the foot of the panel instead of jumping up under the title the
+   moment the last item is ticked off. */
+.kiosk__all-clear--list {
+  flex: 1 1 auto;
+  align-items: flex-start;
 }
 
 .kiosk__all-clear {
@@ -340,5 +479,14 @@
   .kiosk__shopping .kiosk__item {
     flex: 0 0 auto;
     font-size: 4.5vmin;
+  }
+
+  /* The page itself scrolls in this layout, so the panels must not. A scroll
+     area inside a scroll area means a flick that lands on a list moves the list
+     and a flick two pixels away moves the page — on a phone, holding it, that
+     is not a distinction anyone can aim for. Let the panels grow instead. */
+  .kiosk__scroller {
+    overflow-y: visible;
+    flex: 0 0 auto;
   }
 }

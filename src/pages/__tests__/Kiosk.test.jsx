@@ -3,7 +3,7 @@
 
 import React from 'react';
 
-import Kiosk, { KIOSK_ITEM_LIMIT, KIOSK_SHOPPING_LIMIT } from '../Kiosk';
+import Kiosk, { KIOSK_VISIBLE_ROWS } from '../Kiosk';
 import {
   renderWithProviders,
   screen,
@@ -84,17 +84,36 @@ describe('Kiosk board', () => {
     expect(await screen.findByText(/Nothing about to go off/i)).toBeInTheDocument();
   });
 
-  // A board you have to scroll is not a board. Past the limit it stops listing
-  // and points at the page that shows the rest.
-  it('stops at the limit rather than growing off the screen', async () => {
-    const many = Array.from({ length: KIOSK_ITEM_LIMIT + 4 }, (_, i) =>
+  // The panel scrolls, so nothing is cut off. What it must not do is quietly
+  // show a subset — the old behaviour — because a board that hides two items
+  // behind a count sends you to another device to read them.
+  it('keeps every expiring item on the board, however many there are', async () => {
+    const many = Array.from({ length: KIOSK_VISIBLE_ROWS + 4 }, (_, i) =>
       makeItem({ id: `x${i}`, name: `Item ${i}`, expiresAt: daysFromNow(1) })
     );
     await renderBoard({ items: many });
 
-    expect(screen.getByText(`Item 0`)).toBeInTheDocument();
-    expect(screen.queryByText(`Item ${KIOSK_ITEM_LIMIT}`)).not.toBeInTheDocument();
-    expect(screen.getByText(/and 4 more/i)).toBeInTheDocument();
+    expect(screen.getByText('Item 0')).toBeInTheDocument();
+    expect(screen.getByText(`Item ${KIOSK_VISIBLE_ROWS + 3}`)).toBeInTheDocument();
+    expect(within(screen.getByTestId('kiosk-eat-list')).getAllByRole('listitem')).toHaveLength(
+      KIOSK_VISIBLE_ROWS + 4
+    );
+  });
+
+  // A scrollbar is not visible from two metres away, so the panel says it.
+  it('says how many more are below the fold', async () => {
+    const many = Array.from({ length: KIOSK_VISIBLE_ROWS + 4 }, (_, i) =>
+      makeItem({ id: `x${i}`, name: `Item ${i}`, expiresAt: daysFromNow(1) })
+    );
+    await renderBoard({ items: many });
+
+    expect(screen.getByText(/scroll for 4 more/i)).toBeInTheDocument();
+  });
+
+  it('stays quiet when the whole list already fits', async () => {
+    await renderBoard();
+
+    expect(screen.queryByText(/scroll for/i)).not.toBeInTheDocument();
   });
 
   it('counts the whole kitchen, not just the expiring corner of it', async () => {
@@ -254,22 +273,18 @@ describe('Kiosk board', () => {
       expect(within(panel()).queryAllByRole('listitem')).toHaveLength(0);
     });
 
-    // The constraint that governs this whole page: the board is one screen.
-    it('stops at the limit rather than growing off the screen', async () => {
-      const many = Array.from({ length: KIOSK_SHOPPING_LIMIT + 3 }, (_, i) =>
+    it('keeps the whole errand list on the board, however long it is', async () => {
+      const many = Array.from({ length: KIOSK_VISIBLE_ROWS + 3 }, (_, i) =>
         makeShoppingItem({ id: `s${i}`, name: `Thing ${i}` })
       );
       await renderBoard({ shopping: many });
 
-      expect(within(panel()).queryAllByRole('listitem')).toHaveLength(KIOSK_SHOPPING_LIMIT);
-      expect(within(panel()).getByText('Thing 0')).toBeInTheDocument();
-      expect(within(panel()).queryByText(`Thing ${KIOSK_SHOPPING_LIMIT}`)).not.toBeInTheDocument();
-      expect(within(panel()).getByText(/and 3 more/i)).toBeInTheDocument();
+      expect(within(panel()).getAllByRole('listitem')).toHaveLength(KIOSK_VISIBLE_ROWS + 3);
+      expect(within(panel()).getByText(`Thing ${KIOSK_VISIBLE_ROWS + 2}`)).toBeInTheDocument();
+      expect(within(panel()).getByText(/scroll for 3 more/i)).toBeInTheDocument();
     });
 
-    it('counts the derived half toward that limit too', async () => {
-      // Otherwise four typed items plus six the week needs is ten rows on a
-      // panel with room for four.
+    it('counts the derived half toward what is below the fold too', async () => {
       const shopping = Array.from({ length: 2 }, (_, i) =>
         makeShoppingItem({ id: `s${i}`, name: `Typed ${i}` })
       );
@@ -278,8 +293,8 @@ describe('Kiosk board', () => {
       );
       await renderBoard({ shopping, entries });
 
-      expect(within(panel()).queryAllByRole('listitem')).toHaveLength(KIOSK_SHOPPING_LIMIT);
-      expect(within(panel()).getByText(/and 3 more/i)).toBeInTheDocument();
+      expect(within(panel()).getAllByRole('listitem')).toHaveLength(7);
+      expect(within(panel()).getByText(/scroll for 2 more/i)).toBeInTheDocument();
     });
 
     it('gives one errand one row when both halves name it', async () => {
@@ -304,6 +319,157 @@ describe('Kiosk board', () => {
 
       const row = within(panel()).getByText('Batteries').closest('li');
       expect(within(row).queryByText('1')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('editing the list from the fridge', () => {
+    const panel = () => screen.getByTestId('kiosk-shopping');
+
+    it('ticks a typed item off without leaving the board', async () => {
+      const { user } = await renderBoard({
+        shopping: [makeShoppingItem({ id: 's1', name: 'Batteries' })],
+      });
+
+      await user.click(within(panel()).getByRole('checkbox', { name: /tick batteries off/i }));
+
+      await waitFor(() => expect(fs.updateDoc).toHaveBeenCalled());
+      expect(fs.pathOf(fs.updateDoc.mock.calls.at(-1)[0])).toBe(`users/${UID}/shoppingItems/s1`);
+      expect(fs.updateDoc.mock.calls.at(-1)[1]).toMatchObject({ status: 'bought' });
+    });
+
+    it('takes a typed item off the list altogether', async () => {
+      const { user } = await renderBoard({
+        shopping: [makeShoppingItem({ id: 's1', name: 'Batteries' })],
+      });
+
+      await user.click(within(panel()).getByRole('button', { name: /take batteries off/i }));
+
+      await waitFor(() => expect(fs.deleteDoc).toHaveBeenCalled());
+      expect(fs.pathOf(fs.deleteDoc.mock.calls.at(-1)[0])).toBe(`users/${UID}/shoppingItems/s1`);
+    });
+
+    // A derived row is computed from the week's meals minus the kitchen. There
+    // is no document to mark, and creating one on a tick would make the same
+    // list true in two places.
+    it('offers no tick box and no remove on a row the week worked out', async () => {
+      await renderBoard({ entries: [mealNeeding('Chorizo')] });
+
+      const row = within(panel()).getByText('Chorizo').closest('li');
+      expect(within(row).queryByRole('checkbox')).not.toBeInTheDocument();
+      expect(within(row).queryByRole('button')).not.toBeInTheDocument();
+    });
+
+    it('adds what the cook typed, and clears the field for the next one', async () => {
+      const { user } = await renderBoard();
+
+      const field = screen.getByLabelText(/add an item to the shopping list/i);
+      await user.type(field, 'Kitchen roll');
+      await user.click(screen.getByRole('button', { name: /add to the shopping list/i }));
+
+      await waitFor(() => expect(fs.addDoc).toHaveBeenCalled());
+      expect(fs.addDoc.mock.calls.at(-1)[1]).toMatchObject({ name: 'Kitchen roll' });
+      await waitFor(() => expect(field).toHaveValue(''));
+    });
+
+    it('will not add a blank line', async () => {
+      const { user } = await renderBoard();
+
+      await user.type(screen.getByLabelText(/add an item to the shopping list/i), '   ');
+
+      expect(screen.getByRole('button', { name: /add to the shopping list/i })).toBeDisabled();
+      expect(fs.addDoc).not.toHaveBeenCalled();
+    });
+
+    it('keeps what was typed when the write is refused, so it is not lost', async () => {
+      const { user } = await renderBoard();
+      fs.addDoc.mockRejectedValueOnce(
+        Object.assign(new Error('nope'), { code: 'permission-denied' })
+      );
+
+      const field = screen.getByLabelText(/add an item to the shopping list/i);
+      await user.type(field, 'Kitchen roll');
+      await user.click(screen.getByRole('button', { name: /add to the shopping list/i }));
+
+      await waitFor(() => expect(fs.addDoc).toHaveBeenCalled());
+      expect(field).toHaveValue('Kitchen roll');
+    });
+
+    // The add field is the reason to walk over to the board, so it must be
+    // there before there is a list — not appear once one exists.
+    it('offers the field even when there is nothing to buy', async () => {
+      await renderBoard();
+
+      expect(within(panel()).getByText(/nothing to pick up/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/add an item to the shopping list/i)).toBeInTheDocument();
+    });
+  });
+
+  describe('opening a recipe from the week', () => {
+    it('links a planned meal to its recipe', async () => {
+      await renderBoard({
+        entries: [
+          makeMealPlanEntry({
+            id: 'm1',
+            date: dayKey(0),
+            recipeId: 'r-salmon',
+            recipeName: 'Sheet Pan Salmon',
+          }),
+        ],
+      });
+
+      expect(screen.getByRole('link', { name: 'Sheet Pan Salmon' })).toHaveAttribute(
+        'href',
+        '/recipes?recipe=r-salmon'
+      );
+    });
+
+    // A meal typed straight onto the plan has no recipe behind it. A link that
+    // goes nowhere is worse than none on a wall display: the tap is the only
+    // way to discover it does nothing.
+    it('leaves a meal with no recipe behind it as plain text', async () => {
+      await renderBoard({
+        entries: [
+          makeMealPlanEntry({
+            id: 'm1',
+            date: dayKey(0),
+            recipeId: null,
+            recipeName: 'Leftovers',
+          }),
+        ],
+      });
+
+      expect(screen.getByText('Leftovers')).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Leftovers' })).not.toBeInTheDocument();
+    });
+
+    it('links each meal separately when a day holds two', async () => {
+      await renderBoard({
+        entries: [
+          makeMealPlanEntry({
+            id: 'm1',
+            date: dayKey(0),
+            recipeId: 'r-1',
+            recipeName: 'Porridge',
+            mealType: 'breakfast',
+          }),
+          makeMealPlanEntry({
+            id: 'm2',
+            date: dayKey(0),
+            recipeId: 'r-2',
+            recipeName: 'Salmon',
+            mealType: 'dinner',
+          }),
+        ],
+      });
+
+      expect(screen.getByRole('link', { name: 'Porridge' })).toHaveAttribute(
+        'href',
+        '/recipes?recipe=r-1'
+      );
+      expect(screen.getByRole('link', { name: 'Salmon' })).toHaveAttribute(
+        'href',
+        '/recipes?recipe=r-2'
+      );
     });
   });
 });

@@ -187,6 +187,7 @@ const mealPlanEntry = async (recipeName) => {
 const seedMealPlanEntry = async ({
   date,
   recipeName,
+  recipeId = null,
   mealType = 'dinner',
   servings = 2,
   source = 'manual',
@@ -196,7 +197,7 @@ const seedMealPlanEntry = async ({
   const ref = await admin.firestore().collection(`users/${uid}/mealPlanEntries`).add({
     date,
     mealType,
-    recipeId: null,
+    recipeId,
     recipeName,
     servings,
     status: 'planned',
@@ -210,6 +211,12 @@ const seedMealPlanEntry = async ({
   });
   return ref.id;
 };
+/** Take a seeded meal off the plan again, so the next spec's week is clean. */
+const deleteMealPlanEntry = async (id) => {
+  const uid = await testUserId();
+  await admin.firestore().doc(`users/${uid}/mealPlanEntries/${id}`).delete();
+};
+
 /**
  * Every manual shopping item belonging to the seeded account.
  *
@@ -331,6 +338,7 @@ module.exports = {
   mealPlanEntries,
   mealPlanEntry,
   seedMealPlanEntry,
+  deleteMealPlanEntry,
   deliveries,
   seedDelivery,
   deliveryById,
