@@ -325,38 +325,42 @@ describe('Kiosk board', () => {
   describe('editing the list from the fridge', () => {
     const panel = () => screen.getByTestId('kiosk-shopping');
 
-    it('ticks a typed item off without leaving the board', async () => {
-      const { user } = await renderBoard({
+    // Adding is the only thing this surface does to the list. Ticking an item
+    // off and taking one away both happen in the shop, on the phone in your
+    // hand — and on a display anyone walks past, a button that deletes a row
+    // is a thing an elbow can do. The phone and the Shopping List tab keep
+    // both; this asserts the fridge does not.
+    it('offers no way to tick a typed item off from the board', async () => {
+      await renderBoard({
         shopping: [makeShoppingItem({ id: 's1', name: 'Batteries' })],
       });
 
-      await user.click(within(panel()).getByRole('checkbox', { name: /tick batteries off/i }));
-
-      await waitFor(() => expect(fs.updateDoc).toHaveBeenCalled());
-      expect(fs.pathOf(fs.updateDoc.mock.calls.at(-1)[0])).toBe(`users/${UID}/shoppingItems/s1`);
-      expect(fs.updateDoc.mock.calls.at(-1)[1]).toMatchObject({ status: 'bought' });
-    });
-
-    it('takes a typed item off the list altogether', async () => {
-      const { user } = await renderBoard({
-        shopping: [makeShoppingItem({ id: 's1', name: 'Batteries' })],
-      });
-
-      await user.click(within(panel()).getByRole('button', { name: /take batteries off/i }));
-
-      await waitFor(() => expect(fs.deleteDoc).toHaveBeenCalled());
-      expect(fs.pathOf(fs.deleteDoc.mock.calls.at(-1)[0])).toBe(`users/${UID}/shoppingItems/s1`);
-    });
-
-    // A derived row is computed from the week's meals minus the kitchen. There
-    // is no document to mark, and creating one on a tick would make the same
-    // list true in two places.
-    it('offers no tick box and no remove on a row the week worked out', async () => {
-      await renderBoard({ entries: [mealNeeding('Chorizo')] });
-
-      const row = within(panel()).getByText('Chorizo').closest('li');
+      const row = within(panel()).getByText('Batteries').closest('li');
       expect(within(row).queryByRole('checkbox')).not.toBeInTheDocument();
       expect(within(row).queryByRole('button')).not.toBeInTheDocument();
+    });
+
+    it('offers no way to delete a row, typed or derived', async () => {
+      await renderBoard({
+        shopping: [makeShoppingItem({ id: 's1', name: 'Batteries' })],
+        entries: [mealNeeding('Chorizo')],
+      });
+
+      const rows = within(panel()).getAllByRole('listitem');
+      expect(rows.length).toBeGreaterThanOrEqual(2);
+      rows.forEach((row) => {
+        expect(within(row).queryByRole('button')).not.toBeInTheDocument();
+        expect(within(row).queryByRole('checkbox')).not.toBeInTheDocument();
+      });
+    });
+
+    it('never writes to an item just from rendering the board', async () => {
+      await renderBoard({
+        shopping: [makeShoppingItem({ id: 's1', name: 'Batteries' })],
+      });
+
+      expect(fs.updateDoc).not.toHaveBeenCalled();
+      expect(fs.deleteDoc).not.toHaveBeenCalled();
     });
 
     it('adds what the cook typed, and clears the field for the next one', async () => {

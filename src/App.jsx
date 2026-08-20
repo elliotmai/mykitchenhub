@@ -25,7 +25,8 @@ import { lazyWithRetry } from './utils/lazyWithRetry';
 // PWA Components
 import InstallPrompt from './components/InstallPrompt';
 import UpdateNotification from './components/UpdateNotification';
-import { applyUpdate } from './utils/appUpdate';
+import { applyUpdate, didUpdateStall, clearUpdateAttempt, forceReinstall } from './utils/appUpdate';
+import { APP_VERSION } from './config/version';
 import OfflineIndicator from './components/OfflineIndicator';
 
 // Service Worker Registration
@@ -143,6 +144,10 @@ const App = () => {
   const [showUpdateNotification, setShowUpdateNotification] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [updateStage, setUpdateStage] = useState(null);
+  // True when the *last* tap on this card reloaded us straight back onto the
+  // build that asked for it. Set in the mount effect below, which is the only
+  // place that reads the marker.
+  const [stalled, setStalled] = useState(false);
 
   // Apply the waiting update: activate it, clear the stale caches, reload.
   //
@@ -153,14 +158,36 @@ const App = () => {
   const handleUpdate = async () => {
     if (updating) return;
     setUpdating(true);
-    await applyUpdate({ onStage: setUpdateStage });
+    await applyUpdate({ onStage: setUpdateStage, version: APP_VERSION });
     // No cleanup after this: applyUpdate always reloads, so this component is
     // on its way out. Leaving the card up means the last thing on screen is
     // "Reloading…" rather than a card that blinks away first.
   };
 
+  // Nothing gentler is left to try: unregister the worker, empty every cache,
+  // and reload with no worker able to serve the old shell back.
+  const handleForceUpdate = async () => {
+    if (updating) return;
+    setUpdating(true);
+    setUpdateStage('reloading');
+    await forceReinstall();
+  };
+
   // Register service worker on mount
   useEffect(() => {
+    // Did the previous tap on the update card land us back on the same build?
+    // Read and cleared in one go: if the marker outlived the report, a tab
+    // reloaded by hand would keep claiming an update had failed.
+    //
+    // A stalled update means a worker is still waiting, so the card is going to
+    // appear anyway — but on the ordinary path it would appear with the same
+    // button that has already been tried, which is the loop the user sees.
+    if (didUpdateStall(APP_VERSION)) {
+      setStalled(true);
+      setShowUpdateNotification(true);
+    }
+    clearUpdateAttempt();
+
     // The chunk reload guard is re-armed by lazyWithRetry, on a chunk that
     // actually loads. It used to be cleared here instead — but the app booting
     // does not mean the chunk did, and clearing it on mount turned a
@@ -192,8 +219,12 @@ const App = () => {
               show={showUpdateNotification}
               updating={updating}
               stage={updateStage}
-              onUpdate={handleUpdate}
-              onDismiss={() => setShowUpdateNotification(false)}
+              stalled={stalled}
+              onUpdate={stalled ? handleForceUpdate : handleUpdate}
+              onDismiss={() => {
+                setStalled(false);
+                setShowUpdateNotification(false);
+              }}
             />
           </ToastProvider>
         </AuthProvider>

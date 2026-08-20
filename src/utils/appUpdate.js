@@ -130,6 +130,94 @@ export const getWaitingWorker = async () => {
   }
 };
 
+/* --------------------------------------------------------------------------
+   Noticing an update that did not take
+
+   `applyUpdate` reloads whatever happens, which is the right call — a button
+   that silently does nothing is the bug this module exists to fix. But it has
+   a failure mode of its own: if the new worker never activates, the reload
+   lands on the *same* build, that worker is still waiting, and the card comes
+   straight back. Tap, wait, card. Tap, wait, card. From the fridge that reads
+   as "it keeps asking me to update", which is exactly the report that led here.
+
+   So the build asking for the reload writes its own version down first, and
+   the page that comes back compares. Same version means the update stalled and
+   the ordinary path has already been tried once — offer the bigger hammer
+   instead of the same button again.
+
+   sessionStorage rather than localStorage on purpose: this is a fact about one
+   reload of one tab, and it should not outlive the tab that recorded it.
+   -------------------------------------------------------------------------- */
+
+const ATTEMPT_KEY = 'mykitchenhub.updateAttempt';
+
+/** Note that `version` is the build that asked for the reload. */
+export const markUpdateAttempt = (version) => {
+  try {
+    sessionStorage.setItem(ATTEMPT_KEY, version);
+  } catch {
+    // Private mode, or storage full. The guard is a nicety; losing it costs
+    // the old behaviour, not a broken update.
+  }
+};
+
+/** Did the last attempt reload us straight back onto the build that started it? */
+export const didUpdateStall = (version) => {
+  try {
+    return sessionStorage.getItem(ATTEMPT_KEY) === version;
+  } catch {
+    return false;
+  }
+};
+
+/** Forget the last attempt, so a stall is reported once rather than forever. */
+export const clearUpdateAttempt = () => {
+  try {
+    sessionStorage.removeItem(ATTEMPT_KEY);
+  } catch {
+    /* nothing to clear */
+  }
+};
+
+/**
+ * The last resort: throw the service worker away entirely and reload.
+ *
+ * Unregistering means the next load has no worker to serve a stale shell, so
+ * index.html and the bundle come from the network — which is the one thing
+ * that cannot be defeated by a worker that will not activate.
+ *
+ * Unlike `applyUpdate` this does delete the precache, because keeping it is
+ * pointless once the worker that owns it is gone. The cost is that the app is
+ * not available offline until a new worker installs, which on the next load it
+ * does. IndexedDB is still left alone: Firebase Auth keeps the session there,
+ * and a wall tablet signing itself out is a worse outcome than a slow reload.
+ */
+export const forceReinstall = async ({ reload = () => window.location.reload() } = {}) => {
+  applying = true;
+
+  if ('serviceWorker' in navigator) {
+    try {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((r) => r.unregister().catch(() => false)));
+    } catch {
+      // Nothing to unregister, or the browser refused. The reload below is
+      // still worth doing.
+    }
+  }
+
+  if (typeof caches !== 'undefined') {
+    try {
+      const names = await caches.keys();
+      await Promise.all(names.map((name) => caches.delete(name).catch(() => false)));
+    } catch {
+      /* same reasoning as above */
+    }
+  }
+
+  clearUpdateAttempt();
+  reload();
+};
+
 /**
  * Apply a waiting update: activate it, clear the stale caches, reload.
  *
@@ -143,9 +231,14 @@ export const applyUpdate = async ({
   onStage = () => {},
   timeoutMs = CONTROL_TIMEOUT_MS,
   reload = () => window.location.reload(),
+  version = null,
 } = {}) => {
   applying = true;
   onStage('activating');
+
+  // Written before anything else can go wrong. If the reload below lands on
+  // this same version, the page that comes back knows the update stalled.
+  if (version) markUpdateAttempt(version);
 
   const waiting = await getWaitingWorker();
   let tookControl = false;

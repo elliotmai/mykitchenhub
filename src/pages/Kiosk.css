@@ -81,11 +81,10 @@
      meal names need width, and squeezing them to a third would start cutting
      the names off.
 
-     Even halves rather than the 3fr/2fr it had. The shopping panel is no longer
-     a corner that reports a number — it holds a scrolling list, a tick box per
-     row and a field to type into, and it is the panel most likely to be used
-     with your hands rather than only read. */
-  grid-template-rows: 1fr 1fr;
+     The food going off takes the smaller share. It is a prompt rather than a
+     job — you read it, you cook something, you are done — whereas the list
+     below it is worked from, added to, and is the reason to walk over. */
+  grid-template-rows: 2fr 3fr;
   gap: 3vmin;
   flex: 1 1 auto;
   min-height: 0;
@@ -157,6 +156,38 @@
   flex: 0 0 auto;
   font-size: 2.5vmin;
   color: var(--mkh-text-secondary);
+}
+
+/* --------------------------------------------------------------------------
+   Eat these first
+
+   Deliberately the quietest panel on the board. It answers a question nobody
+   walked over to ask — you are at the fridge for the week or the list, and
+   this is the thing you notice on the way past. Set smaller than both so it
+   reads as a footnote to them rather than competing for the same glance.
+   Scoped to the panel: the week and the shopping list keep their own sizes.
+   -------------------------------------------------------------------------- */
+.kiosk__panel--eat .kiosk__panel-title {
+  font-size: 2.5vmin;
+}
+
+.kiosk__panel--eat .kiosk__item {
+  font-size: 2.4vmin;
+  padding: 0.7vmin 0;
+  gap: 1.4vmin;
+}
+
+.kiosk__panel--eat .kiosk__item-when {
+  font-size: 1.9vmin;
+}
+
+.kiosk__panel--eat .kiosk__item-dot {
+  width: 1.4vmin;
+  height: 1.4vmin;
+}
+
+.kiosk__panel--eat .kiosk__all-clear {
+  font-size: 2.4vmin;
 }
 
 /* --------------------------------------------------------------------------
@@ -267,11 +298,15 @@
 /* --------------------------------------------------------------------------
    The shopping list
 
-   One column now, not two. Two columns fitted more names into a corner that
-   could not scroll, which was the right trade when the panel was four rows and
-   read-only. It is the wrong one now: every row carries a 44px tick box and a
-   remove button, two of those side by side leaves nothing for the name, and a
-   list you scroll is read top to bottom rather than left to right then down.
+   One column, not two. Two columns fitted more names into a corner that could
+   not scroll; a list you scroll is read top to bottom rather than left to
+   right then down.
+
+   No tick box and no remove button. Ticking a thing off and taking it away are
+   both done in the shop, on the phone in your hand, not on a tablet screwed to
+   a fridge — and on a wall display anyone walks past, a 44px box that deletes
+   a row is a thing an elbow can do. Adding is the one that belongs here: you
+   are at the fridge, you have just seen you are out of milk.
    -------------------------------------------------------------------------- */
 .kiosk__shopping {
   display: flex;
@@ -284,59 +319,6 @@
      of box around 31px of text. */
   flex: 0 0 auto;
   gap: 1.5vmin;
-}
-
-/* Both the box and the × clear the 44px tap floor the mobile suite enforces.
-   That floor was written for a phone held in one hand; a tablet on a fridge,
-   tapped with a wet or full hand from an angle, is the harder case, so these
-   are sized past it rather than to it. */
-.kiosk__tick {
-  flex: 0 0 auto;
-  width: 44px;
-  height: 44px;
-  min-width: 44px;
-  min-height: 44px;
-  margin: 0;
-  accent-color: var(--mkh-primary, #2f6f4f);
-  cursor: pointer;
-}
-
-/* A derived row has nothing to tick, but its name still lines up with the ones
-   that do — a ragged left edge reads as two lists rather than one. */
-.kiosk__tick--none {
-  display: inline-block;
-  cursor: default;
-}
-
-.kiosk__row-remove {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border: none;
-  background: none;
-  border-radius: var(--mkh-radius-md, 0.5rem);
-  color: var(--mkh-text-secondary);
-  /* Present but quiet. Removing is the rarer of the two actions and the only
-     one that does not undo itself, so it should not be the thing a thumb lands
-     on by accident while reaching for the tick. */
-  opacity: 0.4;
-  cursor: pointer;
-}
-
-.kiosk__row-remove:hover,
-.kiosk__row-remove:focus-visible {
-  opacity: 1;
-  color: var(--mkh-danger, #b3261e);
-}
-
-.kiosk__tick:disabled,
-.kiosk__row-remove:disabled {
-  opacity: 0.25;
-  cursor: default;
 }
 
 /* --------------------------------------------------------------------------

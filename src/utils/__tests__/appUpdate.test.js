@@ -8,8 +8,12 @@
 import {
   applyUpdate,
   clearRuntimeCaches,
+  clearUpdateAttempt,
+  didUpdateStall,
+  forceReinstall,
   getWaitingWorker,
   isApplyingUpdate,
+  markUpdateAttempt,
   SKIP_WAITING,
   UPDATE_STAGES,
 } from '../appUpdate';
@@ -48,6 +52,7 @@ const mockServiceWorker = ({ waiting = null } = {}) => {
 
 afterEach(() => {
   delete global.caches;
+  sessionStorage.clear();
   jest.useRealTimers();
 });
 
@@ -226,5 +231,145 @@ describe('applyUpdate', () => {
     });
 
     expect(flagDuringClear).toBe(true);
+  });
+});
+
+/* --------------------------------------------------------------------------
+   The stall guard
+
+   The reload at the end of applyUpdate is unconditional, which is right — but
+   it means a worker that never activates lands the page back on the same build
+   with the same worker still waiting, and the card comes straight back. That
+   reads from the fridge as "it keeps asking me to update".
+   -------------------------------------------------------------------------- */
+
+describe('recognising an update that did not take', () => {
+  it('reports a stall when the reload landed on the build that asked for it', () => {
+    markUpdateAttempt('0.10.5');
+
+    expect(didUpdateStall('0.10.5')).toBe(true);
+  });
+
+  it('reports no stall when the build actually moved', () => {
+    markUpdateAttempt('0.10.5');
+
+    expect(didUpdateStall('0.10.6')).toBe(false);
+  });
+
+  it('reports no stall when no update was attempted at all', () => {
+    expect(didUpdateStall('0.10.5')).toBe(false);
+  });
+
+  it('forgets the attempt once it has been reported', () => {
+    markUpdateAttempt('0.10.5');
+    clearUpdateAttempt();
+
+    // Otherwise a tab reloaded by hand would go on claiming an update failed.
+    expect(didUpdateStall('0.10.5')).toBe(false);
+  });
+
+  it('survives storage being unavailable rather than taking the app down', () => {
+    const setItem = jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('quota');
+    });
+    const getItem = jest.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('denied');
+    });
+
+    expect(() => markUpdateAttempt('0.10.5')).not.toThrow();
+    expect(didUpdateStall('0.10.5')).toBe(false);
+
+    setItem.mockRestore();
+    getItem.mockRestore();
+  });
+
+  it('writes the marker down before applyUpdate reloads', async () => {
+    mockServiceWorker({ waiting: null });
+    mockCaches([]);
+
+    await applyUpdate({ timeoutMs: 1, reload: () => {}, version: '0.10.5' });
+
+    expect(didUpdateStall('0.10.5')).toBe(true);
+  });
+
+  it('leaves no marker when no version was handed in', async () => {
+    mockServiceWorker({ waiting: null });
+    mockCaches([]);
+
+    await applyUpdate({ timeoutMs: 1, reload: () => {} });
+
+    expect(sessionStorage.getItem('mykitchenhub.updateAttempt')).toBeNull();
+  });
+});
+
+describe('forceReinstall', () => {
+  const mockRegistrations = (count) => {
+    const unregister = jest.fn(async () => true);
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: {
+        getRegistrations: jest.fn(async () =>
+          Array.from({ length: count }, () => ({ unregister }))
+        ),
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+      },
+      configurable: true,
+      writable: true,
+    });
+    return unregister;
+  };
+
+  it('unregisters every worker, so none can serve the old shell back', async () => {
+    const unregister = mockRegistrations(2);
+    mockCaches([]);
+
+    await forceReinstall({ reload: () => {} });
+
+    expect(unregister).toHaveBeenCalledTimes(2);
+  });
+
+  it('empties every cache, precache included', async () => {
+    mockRegistrations(1);
+    // applyUpdate spares these two; this path does not, because the worker
+    // that owns them is being thrown away.
+    const deleted = mockCaches([
+      'workbox-precache-v2-https://mykitchenhub.web.app/',
+      'offline-fallback-v1',
+      'api-cache-v1',
+    ]);
+
+    await forceReinstall({ reload: () => {} });
+
+    expect(deleted).toHaveLength(3);
+  });
+
+  it('reloads even when unregistering throws', async () => {
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: {
+        getRegistrations: jest.fn(async () => {
+          throw new Error('nope');
+        }),
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+      },
+      configurable: true,
+      writable: true,
+    });
+    mockCaches([]);
+    const reload = jest.fn();
+
+    await forceReinstall({ reload });
+
+    expect(reload).toHaveBeenCalled();
+  });
+
+  it('clears the stall marker, so the next load starts clean', async () => {
+    mockRegistrations(1);
+    mockCaches([]);
+    markUpdateAttempt('0.10.5');
+
+    await forceReinstall({ reload: () => {} });
+
+    expect(didUpdateStall('0.10.5')).toBe(false);
   });
 });

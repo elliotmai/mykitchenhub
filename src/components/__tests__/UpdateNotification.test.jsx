@@ -139,3 +139,46 @@ it('dismisses on both “Later” and the close button', async () => {
 
   expect(onDismiss).toHaveBeenCalledTimes(2);
 });
+
+/* An update that reloaded straight back onto the same build. Showing the same
+   "Update Now" button again is what makes it read as an endless loop. */
+describe('when the last update did not take', () => {
+  it('says so rather than announcing the same update again', () => {
+    setup({ stalled: true });
+
+    expect(screen.getByText(/didn’t take/i)).toBeInTheDocument();
+    expect(screen.getByText(/still on the old version/i)).toBeInTheDocument();
+    expect(
+      screen.queryByText(/a new version of mykitchenhub is available/i)
+    ).not.toBeInTheDocument();
+  });
+
+  it('offers the stronger action, not the one already tried', () => {
+    setup({ stalled: true });
+
+    expect(screen.getByRole('button', { name: /force update/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^update now$/i })).not.toBeInTheDocument();
+  });
+
+  it('warns that this one clears everything', () => {
+    setup({ stalled: true });
+
+    expect(screen.getByText(/clear everything and reinstall/i)).toBeInTheDocument();
+  });
+
+  it('can still be put off', async () => {
+    const user = userEvent.setup();
+    const { onDismiss } = setup({ stalled: true });
+
+    await user.click(screen.getByRole('button', { name: /later/i }));
+
+    expect(onDismiss).toHaveBeenCalled();
+  });
+
+  it('shows progress the same way once it starts', () => {
+    setup({ stalled: true, updating: true, stage: 'reloading' });
+
+    expect(screen.getByRole('progressbar')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /force update/i })).not.toBeInTheDocument();
+  });
+});

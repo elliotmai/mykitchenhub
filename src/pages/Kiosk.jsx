@@ -30,7 +30,6 @@ import {
   ShoppingCart,
   Check,
   Plus,
-  X,
 } from 'lucide-react';
 
 import useWasteAlerts from '../hooks/useWasteAlerts';
@@ -125,7 +124,7 @@ export const Kiosk = () => {
   const { items, expiringItems, loading: alertsLoading } = useWasteAlerts();
   const { weekDays, entriesByDay, shoppingList, loading: planLoading } = useMealPlan();
   const { items: manualItems, loading: shoppingLoading } = useShoppingList();
-  const { busyItemId, onAddItem, onToggleBought, onRemoveItem } = useShoppingListActions();
+  const { onAddItem } = useShoppingListActions();
   const { active: screenHeld, supported: wakeLockSupported } = useWakeLock(true);
   const now = useClock();
 
@@ -240,7 +239,7 @@ export const Kiosk = () => {
 
         <section className="kiosk__panel kiosk__panel--eat" aria-labelledby="kiosk-eat">
           <h2 id="kiosk-eat" className="kiosk__panel-title">
-            <AlertTriangle size={32} aria-hidden="true" />
+            <AlertTriangle size={24} aria-hidden="true" />
             Eat these first
           </h2>
 
@@ -310,44 +309,12 @@ export const Kiosk = () => {
                   className="kiosk__items kiosk__shopping kiosk__scroller"
                   data-testid="kiosk-shopping-list"
                 >
-                  {toBuy.map((row) => {
-                    const busy = row.item ? busyItemId === row.item.id : false;
-
-                    return (
-                      <li key={row.key} className="kiosk__item kiosk__item--buy">
-                        {row.kind === 'manual' ? (
-                          <input
-                            type="checkbox"
-                            className="kiosk__tick"
-                            checked={false}
-                            disabled={busy}
-                            onChange={() => onToggleBought(row.item, true)}
-                            aria-label={`Tick ${row.name} off the shopping list`}
-                          />
-                        ) : (
-                          /* Keeps the names in one column whether or not the
-                             row has a box, so the list reads as a list rather
-                             than as two ragged halves. */
-                          <span className="kiosk__tick kiosk__tick--none" aria-hidden="true" />
-                        )}
-
-                        <span className="kiosk__item-name">{row.name}</span>
-                        {row.amount && <span className="kiosk__item-when">{row.amount}</span>}
-
-                        {row.kind === 'manual' && (
-                          <button
-                            type="button"
-                            className="kiosk__row-remove"
-                            disabled={busy}
-                            onClick={() => onRemoveItem(row.item)}
-                            aria-label={`Take ${row.name} off the shopping list`}
-                          >
-                            <X size={24} aria-hidden="true" />
-                          </button>
-                        )}
-                      </li>
-                    );
-                  })}
+                  {toBuy.map((row) => (
+                    <li key={row.key} className="kiosk__item kiosk__item--buy">
+                      <span className="kiosk__item-name">{row.name}</span>
+                      {row.amount && <span className="kiosk__item-when">{row.amount}</span>}
+                    </li>
+                  ))}
                 </ul>
               )}
 

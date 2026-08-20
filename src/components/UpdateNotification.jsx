@@ -27,7 +27,17 @@ const STAGE_PROGRESS = {
   reloading: 1,
 };
 
-const UpdateNotification = ({ show, updating = false, stage = null, onUpdate, onDismiss }) => {
+const UpdateNotification = ({
+  show,
+  updating = false,
+  stage = null,
+  // The previous tap reloaded the page straight back onto the same build. The
+  // card says so and offers the stronger action, rather than showing the same
+  // button a second time and looking like it is asking on a loop.
+  stalled = false,
+  onUpdate,
+  onDismiss,
+}) => {
   if (!show) return null;
 
   // The fridge tablet sits at arm's length across a room, not six inches from
@@ -195,7 +205,9 @@ const UpdateNotification = ({ show, updating = false, stage = null, onUpdate, on
         >
           <div style={styles.header}>
             <RefreshCw size={Math.round(20 * scale)} style={styles.icon} aria-hidden="true" />
-            <span style={styles.title}>{updating ? 'Updating' : 'Update Available'}</span>
+            <span style={styles.title}>
+              {updating ? 'Updating' : stalled ? 'Update Didn’t Take' : 'Update Available'}
+            </span>
             {!updating && (
               <button style={styles.closeBtn} onClick={onDismiss} aria-label="Dismiss">
                 <X size={Math.round(18 * scale)} />
@@ -207,7 +219,9 @@ const UpdateNotification = ({ show, updating = false, stage = null, onUpdate, on
             <p style={styles.bodyText}>
               {updating
                 ? (UPDATE_STAGES[stage] ?? 'Starting…')
-                : 'A new version of MyKitchenHub is available!'}
+                : stalled
+                  ? 'That last update didn’t apply — you’re still on the old version. This will clear everything and reinstall.'
+                  : 'A new version of MyKitchenHub is available!'}
             </p>
 
             {updating && (
@@ -227,7 +241,7 @@ const UpdateNotification = ({ show, updating = false, stage = null, onUpdate, on
           {!updating && (
             <div style={styles.actions}>
               <button style={styles.btnPrimary} onClick={onUpdate}>
-                Update Now
+                {stalled ? 'Force Update' : 'Update Now'}
               </button>
               <button style={styles.btnSecondary} onClick={onDismiss}>
                 Later

@@ -181,8 +181,13 @@ test.describe('fridge board', () => {
     }
   });
 
-  test('ticks an item off from the board', async ({ authedPage: page }) => {
-    const name = `Fridge Tick ${Date.now()}`;
+  // The board reads the list and adds to it. It does not tick items off and it
+  // does not delete them — those are shop-aisle actions, done on the phone in
+  // your hand, and a destructive control on a wall display is one a passing
+  // elbow can press. This asserts the absence, and that the row survives a
+  // deliberate tap on it.
+  test('offers no way to tick off or delete a row', async ({ authedPage: page }) => {
+    const name = `Fridge Read Only ${Date.now()}`;
     const id = await seedShoppingItem({ name });
 
     try {
@@ -190,14 +195,13 @@ test.describe('fridge board', () => {
       const panel = page.getByTestId('kiosk-shopping');
       await expect(panel.getByText(name)).toBeVisible();
 
-      await panel.getByRole('checkbox', { name: `Tick ${name} off the shopping list` }).click();
+      const row = panel.getByRole('listitem').filter({ hasText: name });
+      await expect(row.getByRole('checkbox')).toHaveCount(0);
+      await expect(row.getByRole('button')).toHaveCount(0);
 
-      // Ticked off means gone from the board — it is no longer something to
-      // pick up — and marked `bought` rather than deleted in the database.
-      await expect(panel.getByText(name)).toHaveCount(0);
-      await expect
-        .poll(async () => (await shoppingItems()).find((i) => i.id === id)?.status)
-        .toBe('bought');
+      await row.click();
+      await expect(panel.getByText(name)).toBeVisible();
+      expect((await shoppingItems()).find((i) => i.id === id)?.status).toBe('pending');
     } finally {
       await deleteShoppingItem(id);
     }

@@ -14,12 +14,21 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.08.20.5',
+    date: 'August 2026',
+    items: [
+      '\u{1F4FA} The fridge board is calmer. \u201CEat these first\u201D is smaller and quieter \u2014 it is a nudge on your way past, not the thing you walked over to read \u2014 which leaves the shopping list the room it was short of.',
+      '\u{1F6D2} That list is now read-and-add only on the fridge. No tick boxes and no delete buttons on a screen anyone can brush past; ticking off and clearing out still live on your phone and the Shopping List tab, where you actually are when you are doing it.',
+      '\u{1F504} If an update ever fails to take hold, the app now notices instead of asking you again and again. It says so plainly and offers a Force Update that clears everything out and reinstalls from scratch.',
+    ],
+  },
+  {
     version: '2026.08.20.4',
     date: 'August 2026',
     items: [
       '\u{1F4FA} On the fridge board, tap a meal to open its recipe \u2014 method and ingredients, without going and finding it on your phone.',
       '\u{1F4DC} The two lists on the board scroll now. \u201CEat these first\u201D and the shopping list used to stop after a few items and tell you there were more; now the whole list is there, and the panel says how many are below the fold.',
-      '\u{1F6D2} And you can work the shopping list from the fridge: tick things off as you think of them, take off anything you typed by mistake, and add what you have just noticed you are out of \u2014 all without unlocking anything.',
+      '\u{1F6D2} And you can add to the shopping list from the fridge \u2014 type in what you have just noticed you are out of, without unlocking anything.',
     ],
   },
   {
