@@ -14,6 +14,15 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.08.20',
+    date: 'August 2026',
+    items: [
+      '\u{1F6D2} The shopping list will now take things the recipes never asked for. Batteries, kitchen roll, a birthday cake \u2014 type it in the box on the meal plan page and it stays there, through a reload and into next week, until you have bought it.',
+      '\u2705 Tick something off as it goes in the trolley. Tapped the wrong one in the middle of the shop? Tap it again and it comes straight back. \u201cClear\u201d empties the trolley when you get home.',
+      '\u{1F95B} If you write down milk and the week\u2019s meals need milk too, you get both lines and a note saying so \u2014 rather than one line with a number that came from two different places.',
+    ],
+  },
+  {
     version: '2026.08.15.8',
     date: 'August 2026',
     items: [

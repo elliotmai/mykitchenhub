@@ -270,7 +270,10 @@ const useShoppingList = () => {
           };
     } catch (err) {
       console.error('Error clearing bought shopping items:', err);
-      return { success: false, error: friendlyError(err, { action: 'clear what you have bought' }) };
+      return {
+        success: false,
+        error: friendlyError(err, { action: 'clear what you have bought' }),
+      };
     }
   }, [user?.uid, bought]);
 
