@@ -4,26 +4,47 @@ name: Deploy frontend
 # static bundle; Firebase Hosting serves it using the credentials this
 # repository already holds, so no new account or secret is involved.
 #
-# Deploys are manual by default: the job only runs on a push once the
-# repository variable AUTO_DEPLOY_HOSTING is set to 'true' (Settings → Secrets
-# and variables → Actions → Variables). The button always works.
+# Every commit on main that passes CI publishes itself. The button still works
+# for a manual deploy of any branch.
+#
+# The trigger is `workflow_run` rather than `push` on purpose. A push trigger
+# fires the moment the commit lands, in parallel with CI — so a commit that
+# fails its tests would already be live by the time anyone saw the red X. The
+# build step here would catch a bundle that cannot compile, but nothing else:
+# no unit tests, no rules tests, no E2E. Waiting for CI to conclude and
+# checking that conclusion is what makes "deploys itself" safe rather than
+# merely automatic.
 on:
   workflow_dispatch:
-  push:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
     branches: [main]
 
 concurrency:
   group: deploy-hosting
-  cancel-in-progress: true
+  # Queue, do not cancel. Cancelling mid-`firebase deploy` is the one moment
+  # this workflow can leave something half-published; letting them run in
+  # order costs a couple of minutes and ends on the newest commit either way.
+  cancel-in-progress: false
 
 jobs:
   deploy:
     name: Build and publish
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || vars.AUTO_DEPLOY_HOSTING == 'true'
+    # A failed, cancelled or skipped CI run reaches here too — `types: [completed]`
+    # means finished, not passed.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
 
     steps:
+      # The commit CI actually tested, not whatever is at the tip of main by
+      # the time this starts. Two merges in quick succession would otherwise
+      # publish the second one twice and the first one never.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
       - uses: actions/setup-node@v4
         with:

@@ -61,7 +61,7 @@ contain live credentials and are committed to this repository.
 **No application code reads either file.** Everything resolves credentials from
 `process.env` or Firebase Functions config, and
 `.github/scripts/check-secrets.mjs` lists them in `KNOWN_EXPOSED` so it reports
-*new* leaks rather than re-reporting these on every run. They are dead weight
+_new_ leaks rather than re-reporting these on every run. They are dead weight
 that is also a live risk.
 
 They need to be:
@@ -87,16 +87,25 @@ the secret to the new key when you rotate.
 Three workflows deploy this project. All of them use credentials the repository
 already holds, so none of them needs a new account or secret.
 
-| Workflow | Deploys | Fires |
-| --- | --- | --- |
-| `deploy-functions.yml` | Cloud Functions | automatically, on any push to `main` touching `functions/**` |
-| `deploy-rules.yml` | Firestore rules, indexes, Storage rules | **button** (Actions -> Deploy Firestore rules and indexes -> Run workflow) |
-| `deploy-hosting.yml` | the web app | **button** (Actions -> Deploy frontend -> Run workflow) |
+| Workflow               | Deploys                                 | Fires                                                                      |
+| ---------------------- | --------------------------------------- | -------------------------------------------------------------------------- |
+| `deploy-functions.yml` | Cloud Functions                         | automatically, on any push to `main` touching `functions/**`               |
+| `deploy-rules.yml`     | Firestore rules, indexes, Storage rules | **button** (Actions -> Deploy Firestore rules and indexes -> Run workflow) |
+| `deploy-hosting.yml`   | the web app                             | **automatic**, on every `main` commit that passes CI                       |
 
-The two buttons are deliberately manual. Set the repository variable
-`AUTO_DEPLOY_RULES` or `AUTO_DEPLOY_HOSTING` to `true` (Settings -> Secrets and
-variables -> Actions -> Variables) and that one also runs on every push to
-`main`. The button keeps working either way.
+The frontend publishes itself. `deploy-hosting.yml` triggers on `workflow_run`
+after CI concludes on `main`, and runs only if that run's conclusion was
+`success` — so a commit whose tests failed never reaches production, and the
+commit that gets built is the one CI actually tested (`workflow_run.head_sha`),
+not whatever is at the tip of `main` by the time the deploy starts.
+
+A `push` trigger would not do: it fires the moment the commit lands, in parallel
+with CI, so a red build would already be live by the time anyone saw the X.
+
+Rules stay on the button. Set the repository variable `AUTO_DEPLOY_RULES` to
+`true` (Settings -> Secrets and variables -> Actions -> Variables) to have them
+deploy on every push to `main` as well. Both buttons keep working either way,
+for any branch.
 
 Rules deploy only after `npm run test:rules` passes in the same job: a bad rule
 either locks every cook out of their own kitchen or opens everyone's to
@@ -150,12 +159,12 @@ the fallback it is.
 
 At minimum, for everything to work:
 
-| Variable | Why now |
-| --- | --- |
-| `ANTHROPIC_API_KEY` | HelloFresh photo import, AI meal plans, legacy sync instructions |
-| `SPOONACULAR_API_KEY` | Legacy sync instruction lookup (much cheaper than Claude) |
+| Variable                          | Why now                                                                       |
+| --------------------------------- | ----------------------------------------------------------------------------- |
+| `ANTHROPIC_API_KEY`               | HelloFresh photo import, AI meal plans, legacy sync instructions              |
+| `SPOONACULAR_API_KEY`             | Legacy sync instruction lookup (much cheaper than Claude)                     |
 | `LEGACY_FIREBASE_SERVICE_ACCOUNT` | The legacy sync's only route to the old project — use the **new** rotated key |
-| `SYNC_ADMIN_UIDS` | See the next step |
+| `SYNC_ADMIN_UIDS`                 | See the next step                                                             |
 
 Nothing here needs an SMS key. Leave SMS unset unless and until you have a
 provider — see
@@ -280,6 +289,7 @@ step is safe to do at any point.
    records exactly one page view per session and every screen after the first is
    invisible. The app deliberately does **not** send page views itself — doing
    both would double-count every screen.
+
 5. Redeploy the frontend, open it, and check Firebase console → **Analytics →
    Realtime**. Give it a few minutes.
 
@@ -397,12 +407,12 @@ Also set per-function safety limits, because a runaway function is the realistic
 way to spend money by accident. Google Cloud console → **Cloud Functions → the
 function → Edit → Runtime**:
 
-| Function | Suggested max instances | Why |
-| --- | --- | --- |
-| `syncLegacyRecipes` | 1 | Two concurrent runs would race the same cursor and double-spend |
-| `generateMealPlan` | 3 | Each call is a paid Claude request |
-| `importHelloFreshFromPhoto` | 3 | Each call is a paid Claude Vision request |
-| `importInventoryFromCSV` | 5 | Firestore writes, not paid API calls |
+| Function                    | Suggested max instances | Why                                                             |
+| --------------------------- | ----------------------- | --------------------------------------------------------------- |
+| `syncLegacyRecipes`         | 1                       | Two concurrent runs would race the same cursor and double-spend |
+| `generateMealPlan`          | 3                       | Each call is a paid Claude request                              |
+| `importHelloFreshFromPhoto` | 3                       | Each call is a paid Claude Vision request                       |
+| `importInventoryFromCSV`    | 5                       | Firestore writes, not paid API calls                            |
 
 ---
 
@@ -420,7 +430,7 @@ channels → Email**).
 - **Condition:** rate above ~5/minute, sustained for 5 minutes
 - **Why:** for the first days after step 7, this is your early warning that a
   real user is hitting a write shape the rules reject. Later on, a sustained
-  spike means something else. Set it *before* you deploy the rules so you have a
+  spike means something else. Set it _before_ you deploy the rules so you have a
   baseline.
 
 ### 10b. Cloud Functions failures
@@ -439,7 +449,7 @@ silence — nobody gets an alert and nothing complains.
 - **Metric:** `cloudfunctions.googleapis.com/function/execution_count`
 - **Filter:** `function_name = "sendDailyWasteAlerts"`
 - **Condition:** **absence** of data for 26 hours
-- **Why:** an alert on the job *not* happening. A failure alert cannot fire for a
+- **Why:** an alert on the job _not_ happening. A failure alert cannot fire for a
   run that never started.
 
 ### 10d. Function latency
