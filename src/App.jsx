@@ -60,6 +60,7 @@ const Analytics = lazyWithRetry(() => import('./pages/Analytics'), 'Analytics');
 const Settings = lazyWithRetry(() => import('./pages/Settings'), 'Settings');
 const WasteAlerts = lazyWithRetry(() => import('./pages/WasteAlerts'), 'WasteAlerts');
 const Kiosk = lazyWithRetry(() => import('./pages/Kiosk'), 'Kiosk');
+const LinkAlexa = lazyWithRetry(() => import('./pages/LinkAlexa'), 'LinkAlexa');
 
 /**
  * App Routes Component
@@ -101,6 +102,20 @@ const AppRoutes = () => {
           <Route path="/waste-alerts" element={<WasteAlerts />} />
           <Route path="/settings" element={<Settings />} />
         </Route>
+
+        {/* Alexa account linking.
+            Signed-in, because the whole point is to establish *whose* kitchen
+            the skill is speaking for — but outside AppLayout: Amazon opens this
+            in a browser view the cook is passing through, not a page to
+            navigate away from. */}
+        <Route
+          path="/link/alexa"
+          element={
+            <ProtectedRoute>
+              <LinkAlexa />
+            </ProtectedRoute>
+          }
+        />
 
         {/* The fridge board.
             Signed-in like everything else, but deliberately outside AppLayout:

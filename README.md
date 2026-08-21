@@ -14,6 +14,7 @@ offline for reading.
 | **When something is broken** | [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) |
 | **Going to production** | [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) |
 | **First-run data** | [docs/INITIAL_DATA_SETUP.md](./docs/INITIAL_DATA_SETUP.md) |
+| **The Alexa skill** | [docs/ALEXA_SKILL.md](./docs/ALEXA_SKILL.md) |
 | **The data contract** | [firestore/SCHEMA_DOCUMENTATION.md](./firestore/SCHEMA_DOCUMENTATION.md) |
 
 ---
@@ -34,6 +35,11 @@ offline for reading.
   how many days, and which recipes would use it up tonight.
 - **Meal planning** for the week, either by hand or generated around what is
   closest to expiring, with a shopping list that knows what you already have.
+- **A shopping list you can add to by voice** — anything the week's meals do not
+  imply, typed in the app or spoken to Alexa ("Alexa, tell My Kitchen Hub to add
+  milk"). Alexa's *own* shopping list is a separate thing and stays that way;
+  Amazon closed that API to every app in 2024. See
+  [docs/ALEXA_SKILL.md](./docs/ALEXA_SKILL.md).
 - **A dashboard and analytics**: what you buy, what it costs, and where.
 
 [docs/USER_GUIDE.md](./docs/USER_GUIDE.md) walks through each of these.
@@ -152,6 +158,20 @@ Anthropic paths and the legacy credentials also accept the older
 Credentials are read from `process.env` or Functions config only. The
 service-account JSON files in `functions/` are never read by application code;
 they are being rotated out of band and must not be used or copied.
+
+### Alexa skill — optional, and off until a skill exists
+
+The voice skill (`functions/src/alexa/`) needs three values that only exist once
+the skill has been created in the Alexa developer console. Without them the
+endpoints deploy but refuse to link anyone, which is the correct behaviour for a
+skill nobody has built yet. Full setup: [docs/ALEXA_SKILL.md](./docs/ALEXA_SKILL.md).
+
+| Variable | Required for | Without it |
+| --- | --- | --- |
+| `ALEXA_SKILL_ID` | verifying requests are for *our* skill | The skill id check is skipped. Every other signature check still applies, but another developer's skill could address this endpoint — set it before going live |
+| `ALEXA_CLIENT_ID` | account linking | Linking is refused with "Alexa account linking is not configured" |
+| `ALEXA_CLIENT_SECRET` | account linking | ” |
+| `ALEXA_REDIRECT_URIS` | no | Comma-separated allowlist of redirect URIs. Unset means the three published Amazon hosts (`layla.amazon.com`, `pitangui.amazon.com`, `alexa.amazon.co.jp`), which is what a real skill uses |
 
 ### Daily waste alerts by SMS — optional, and currently off
 

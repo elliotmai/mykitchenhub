@@ -1,0 +1,68 @@
+{
+  "manifest": {
+    "manifestVersion": "1.0",
+    "publishingInformation": {
+      "locales": {
+        "en-GB": {
+          "name": "My Kitchen Hub",
+          "summary": "Add to your MyKitchenHub shopping list by voice.",
+          "description": "Keep your MyKitchenHub shopping list up to date without picking up your phone. Say \"Alexa, tell My Kitchen Hub to add milk\" while you are still standing at the fridge, ask what is on the list before you leave, and tick things off when you get back.\n\nThe list is the one in the app: whatever this skill adds shows up there, and whatever this week's meal plan needs is read back out here.\n\nRequires a MyKitchenHub account.",
+          "examplePhrases": [
+            "Alexa, tell My Kitchen Hub to add milk",
+            "Alexa, ask My Kitchen Hub what is on my shopping list",
+            "Alexa, tell My Kitchen Hub to remove milk"
+          ],
+          "keywords": ["shopping", "list", "kitchen", "groceries", "food"]
+        },
+        "en-US": {
+          "name": "My Kitchen Hub",
+          "summary": "Add to your MyKitchenHub shopping list by voice.",
+          "description": "Keep your MyKitchenHub shopping list up to date without picking up your phone. Say \"Alexa, tell My Kitchen Hub to add milk\" while you are still standing at the fridge, ask what is on the list before you leave, and check things off when you get back.\n\nThe list is the one in the app: whatever this skill adds shows up there, and whatever this week's meal plan needs is read back out here.\n\nRequires a MyKitchenHub account.",
+          "examplePhrases": [
+            "Alexa, tell My Kitchen Hub to add milk",
+            "Alexa, ask My Kitchen Hub what is on my shopping list",
+            "Alexa, tell My Kitchen Hub to remove milk"
+          ],
+          "keywords": ["shopping", "list", "kitchen", "groceries", "food"]
+        }
+      },
+      "isAvailableWorldwide": false,
+      "distributionCountries": ["GB", "US"],
+      "distributionMode": "PUBLIC",
+      "category": "COOKING_AND_RECIPE",
+      "testingInstructions": "Account linking is required. Sign in with a MyKitchenHub account, then say \"Alexa, tell My Kitchen Hub to add milk\" and confirm the item appears on the shopping list on the Meal Plan page."
+    },
+    "apis": {
+      "custom": {
+        "endpoint": {
+          "uri": "https://us-central1-REPLACE-WITH-PROJECT-ID.cloudfunctions.net/alexaSkill"
+        }
+      }
+    },
+    "manifestAttributes": {
+      "explicitprivacyDeclarations": {
+        "allowsPurchases": false,
+        "usesPersonalInfo": true,
+        "isChildDirected": false,
+        "isExportCompliant": true,
+        "containsAds": false
+      }
+    },
+    "permissions": [],
+    "privacyAndCompliance": {
+      "allowsPurchases": false,
+      "usesPersonalInfo": true,
+      "isChildDirected": false,
+      "isExportCompliant": true,
+      "containsAds": false,
+      "locales": {
+        "en-GB": {
+          "privacyPolicyUrl": "https://REPLACE-WITH-APP-DOMAIN/privacy"
+        },
+        "en-US": {
+          "privacyPolicyUrl": "https://REPLACE-WITH-APP-DOMAIN/privacy"
+        }
+      }
+    }
+  }
+}

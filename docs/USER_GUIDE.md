@@ -300,6 +300,36 @@ than failing or silently giving you something worse.
 The week's shopping list builds itself from the meals on it, and separates out
 what you already have from what you need to buy.
 
+You can add to it yourself as well — bin bags, a birthday cake, anything no meal
+implies. Type it into the box at the top of the list. Tick things off as they go
+into the trolley; a ticked row drops into **Got it** and stays there until you
+untick it. The cross beside a row you added removes it, and rows that came from
+the week's meals have no cross: those change when the meals do.
+
+### Adding to the list by voice
+
+If you have an Echo in the kitchen, you can put things on the list without
+picking up your phone:
+
+> "Alexa, tell My Kitchen Hub to add milk"
+>
+> "Alexa, ask My Kitchen Hub what is on my shopping list"
+>
+> "Alexa, tell My Kitchen Hub to remove milk"
+
+Anything added this way appears on the list with a small microphone beside it,
+so nobody has to wonder where it came from. Asking what is on the list reads
+back both what you added and what this week's meals still need.
+
+Setting it up is a one-off: enable the **My Kitchen Hub** skill in the Alexa app,
+choose **Link Account**, and sign in. To disconnect it later, open `/link/alexa`
+in the app and press **Disconnect Alexa**.
+
+**You do have to say the skill's name every time.** "Alexa, add milk to the
+shopping list" goes to Alexa's own list, which is a separate thing this app
+cannot see — Amazon closed that door to every app in July 2024, not just this
+one. Naming the skill is what routes it to your kitchen.
+
 ### Batch cooking
 
 When two meals in the week share prep or oven time, you get a nudge to cook them

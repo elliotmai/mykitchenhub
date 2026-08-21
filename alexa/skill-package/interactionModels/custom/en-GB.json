@@ -1,0 +1,157 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "my kitchen hub",
+      "modelConfiguration": {
+        "fallbackIntentSensitivity": {
+          "level": "LOW"
+        }
+      },
+      "intents": [
+        {
+          "name": "AMAZON.CancelIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.HelpIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.StopIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.NavigateHomeIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.FallbackIntent",
+          "samples": []
+        },
+        {
+          "name": "AddItemIntent",
+          "slots": [
+            {
+              "name": "item",
+              "type": "GroceryItem"
+            },
+            {
+              "name": "quantity",
+              "type": "AMAZON.NUMBER"
+            },
+            {
+              "name": "unit",
+              "type": "MeasureUnit"
+            }
+          ],
+          "samples": [
+            "add {item}",
+            "add {item} to my list",
+            "add {item} to my shopping list",
+            "add {item} to the shopping list",
+            "put {item} on my list",
+            "put {item} on the shopping list",
+            "i need {item}",
+            "we need {item}",
+            "we are out of {item}",
+            "we have run out of {item}",
+            "add {quantity} {item}",
+            "add {quantity} {item} to my list",
+            "add {quantity} {unit} of {item}",
+            "add {quantity} {unit} of {item} to my list",
+            "we need {quantity} {unit} of {item}"
+          ]
+        },
+        {
+          "name": "RemoveItemIntent",
+          "slots": [
+            {
+              "name": "item",
+              "type": "GroceryItem"
+            }
+          ],
+          "samples": [
+            "remove {item}",
+            "remove {item} from my list",
+            "remove {item} from the shopping list",
+            "take {item} off my list",
+            "take {item} off the shopping list",
+            "delete {item} from my list",
+            "we do not need {item}",
+            "i got {item}",
+            "i have got {item}"
+          ]
+        },
+        {
+          "name": "ReadListIntent",
+          "slots": [],
+          "samples": [
+            "what is on my list",
+            "what is on my shopping list",
+            "what is on the shopping list",
+            "whats on my list",
+            "whats on my shopping list",
+            "read my list",
+            "read my shopping list",
+            "read the shopping list",
+            "tell me my shopping list",
+            "what do i need to buy",
+            "what do we need from the shop",
+            "what do we need from the shops",
+            "how many things are on my list"
+          ]
+        }
+      ],
+      "types": [
+        {
+          "name": "GroceryItem",
+          "values": [
+            { "name": { "value": "milk" } },
+            { "name": { "value": "bread" } },
+            { "name": { "value": "eggs" } },
+            { "name": { "value": "butter" } },
+            { "name": { "value": "cheese" } },
+            { "name": { "value": "yoghurt" } },
+            { "name": { "value": "chicken" } },
+            { "name": { "value": "mince" } },
+            { "name": { "value": "onions" } },
+            { "name": { "value": "garlic" } },
+            { "name": { "value": "potatoes" } },
+            { "name": { "value": "carrots" } },
+            { "name": { "value": "tomatoes" } },
+            { "name": { "value": "bananas" } },
+            { "name": { "value": "apples" } },
+            { "name": { "value": "rice" } },
+            { "name": { "value": "pasta" } },
+            { "name": { "value": "flour" } },
+            { "name": { "value": "sugar" } },
+            { "name": { "value": "olive oil" } },
+            { "name": { "value": "coffee" } },
+            { "name": { "value": "tea bags" } },
+            { "name": { "value": "washing up liquid" } },
+            { "name": { "value": "bin bags" } },
+            { "name": { "value": "kitchen roll" } }
+          ]
+        },
+        {
+          "name": "MeasureUnit",
+          "values": [
+            { "name": { "value": "grams" } },
+            { "name": { "value": "kilos", "synonyms": ["kilograms", "kilogrammes"] } },
+            { "name": { "value": "millilitres" } },
+            { "name": { "value": "litres", "synonyms": ["liters"] } },
+            { "name": { "value": "packs", "synonyms": ["packets"] } },
+            { "name": { "value": "bottles" } },
+            { "name": { "value": "tins", "synonyms": ["cans"] } },
+            { "name": { "value": "jars" } },
+            { "name": { "value": "bags" } },
+            { "name": { "value": "boxes" } },
+            { "name": { "value": "punnets" } },
+            { "name": { "value": "loaves" } },
+            { "name": { "value": "bunches" } }
+          ]
+        }
+      ]
+    }
+  }
+}

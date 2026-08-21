@@ -95,7 +95,7 @@ describe('MealPlanView', () => {
       inventory: [makeItem({ name: 'Salmon', normalized: 'salmon', quantity: 4, unit: 'fillet' })],
     });
 
-    expect(screen.getByText('Already in your kitchen')).toBeInTheDocument();
+    expect(screen.getByText('Got it')).toBeInTheDocument();
   });
 
   it('surfaces a listener failure', async () => {

@@ -2,11 +2,12 @@
 // The 7-day meal plan board — roadmap 7.1, with AI generation (7.2) and
 // batch cooking tips (7.3) alongside it.
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Alert, Button, Col, Row, Spinner } from 'react-bootstrap';
 import { CalendarDays, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
 
 import useMealPlan, { fromDayKey } from '../../hooks/useMealPlan';
+import useShoppingList, { mergeShoppingList } from '../../hooks/useShoppingList';
 import { useToast } from '../Common';
 import { PageLoader } from '../Common/LoadingSpinner';
 import DayCard from './DayCard';
@@ -49,11 +50,61 @@ const MealPlanView = () => {
     goToThisWeek,
   } = useMealPlan();
 
+  // The list on screen is two lists: what the week's meals imply (derived
+  // above, never stored) and what the household put on it themselves — by hand
+  // here, or by voice through the Alexa skill.
+  const { items: storedItems, addItem, setBought, removeItem } = useShoppingList();
+
+  const mergedShoppingList = useMemo(
+    () => mergeShoppingList(shoppingList, storedItems),
+    [shoppingList, storedItems]
+  );
+
   const { showSuccess, showError, showInfo } = useToast();
 
   const [addDay, setAddDay] = useState(null);
   const [busyEntryId, setBusyEntryId] = useState(null);
   const [notice, setNotice] = useState(null);
+
+  const handleAddToList = useCallback(
+    async ({ name }) => {
+      const result = await addItem({ name });
+      if (!result.success) showError(result.error || 'Could not add that to your list.');
+      return result;
+    },
+    [addItem, showError]
+  );
+
+  /**
+   * Tick a row off, or put it back.
+   *
+   * A row the meal plan derived has no document behind it, so there is nowhere
+   * to record that it was bought — storing one that says so is the write that
+   * makes it stick, and it merges back onto the same row on the next render.
+   */
+  const handleToggleListItem = useCallback(
+    async (item) => {
+      const result = item.id
+        ? await setBought(item.id, item.status !== 'bought')
+        : await addItem({
+            name: item.name,
+            quantity: item.quantity,
+            unit: item.unit,
+            status: 'bought',
+          });
+
+      if (!result.success) showError(result.error || 'Could not update your list.');
+    },
+    [addItem, setBought, showError]
+  );
+
+  const handleRemoveListItem = useCallback(
+    async (item) => {
+      const result = await removeItem(item.id);
+      if (!result.success) showError(result.error || 'Could not remove that item.');
+    },
+    [removeItem, showError]
+  );
 
   const handleCook = useCallback(
     async (entry) => {
@@ -212,7 +263,12 @@ const MealPlanView = () => {
 
         <Col xs={12} lg={3}>
           <div className="d-flex flex-column gap-3">
-            <ShoppingList items={shoppingList} />
+            <ShoppingList
+              items={mergedShoppingList}
+              onAdd={handleAddToList}
+              onToggle={handleToggleListItem}
+              onRemove={handleRemoveListItem}
+            />
             <BatchCookingTips tips={batchTips} />
           </div>
         </Col>

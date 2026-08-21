@@ -254,6 +254,21 @@ exports.sendDailyWasteAlerts = require('./src/wasteAlerts/sendDailyWasteAlerts')
  */
 exports.generateMealPlan = require('./src/mealPlan/generateMealPlan').generateMealPlan;
 
+/**
+ * Alexa skill — roadmap 7.4.
+ *
+ * `alexaSkill` is the endpoint Amazon POSTs utterances to; the other three are
+ * account linking. Amazon shut off the List Skills API on 1 July 2024, so this
+ * skill owns MyKitchenHub's own shopping list rather than syncing with Alexa's
+ * — see docs/ALEXA_SKILL.md.
+ */
+const alexa = require('./src/alexa');
+
+exports.alexaSkill = alexa.alexaSkill;
+exports.alexaToken = alexa.alexaToken;
+exports.createAlexaAuthCode = alexa.createAlexaAuthCode;
+exports.unlinkAlexa = alexa.unlinkAlexa;
+
 // ==========================================================================
 // FUNCTION 6: Storage Location Management (Create, Update, Delete with Safety Checks)
 // ==========================================================================

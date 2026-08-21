@@ -3,6 +3,7 @@
 
 import React from 'react';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 import ShoppingList from '../ShoppingList';
 import BatchCookingTips from '../BatchCookingTips';
@@ -43,8 +44,101 @@ describe('ShoppingList', () => {
   it('moves covered ingredients into their own section', () => {
     render(<ShoppingList items={[item({ haveInInventory: true })]} />);
 
-    expect(screen.getByText('Already in your kitchen')).toBeInTheDocument();
+    expect(screen.getByText('Got it')).toBeInTheDocument();
     expect(screen.getByText(/kitchen already has everything/)).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Adding, ticking off and removing — roadmap 7.4
+// ---------------------------------------------------------------------------
+
+describe('keeping the list', () => {
+  it('has nothing to add with when no handler is given', () => {
+    render(<ShoppingList items={[item()]} />);
+    expect(screen.queryByLabelText(/Add an item/)).not.toBeInTheDocument();
+  });
+
+  it('adds what was typed, and clears the box afterwards', async () => {
+    const onAdd = jest.fn(async () => ({ success: true }));
+    render(<ShoppingList items={[]} onAdd={onAdd} />);
+
+    const box = screen.getByLabelText('Add an item to the shopping list');
+    await userEvent.type(box, 'bin bags{enter}');
+
+    expect(onAdd).toHaveBeenCalledWith({ name: 'bin bags' });
+    expect(box).toHaveValue('');
+  });
+
+  it('keeps what was typed when the write failed, so it is not lost', async () => {
+    const onAdd = jest.fn(async () => ({ success: false, error: 'offline' }));
+    render(<ShoppingList items={[]} onAdd={onAdd} />);
+
+    const box = screen.getByLabelText('Add an item to the shopping list');
+    await userEvent.type(box, 'bin bags{enter}');
+
+    expect(box).toHaveValue('bin bags');
+  });
+
+  it('will not add nothing', async () => {
+    const onAdd = jest.fn();
+    render(<ShoppingList items={[]} onAdd={onAdd} />);
+
+    await userEvent.type(screen.getByLabelText('Add an item to the shopping list'), '   {enter}');
+
+    expect(onAdd).not.toHaveBeenCalled();
+  });
+
+  it('ticks a row off', async () => {
+    const onToggle = jest.fn();
+    render(<ShoppingList items={[item({ id: 'a', fromPlan: false })]} onToggle={onToggle} />);
+
+    await userEvent.click(screen.getByLabelText('Got Salmon'));
+
+    expect(onToggle).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }));
+  });
+
+  it('offers to tick off a meal-plan row too, even though nothing is stored for it yet', async () => {
+    const onToggle = jest.fn();
+    render(<ShoppingList items={[item({ fromPlan: true })]} onToggle={onToggle} />);
+
+    await userEvent.click(screen.getByLabelText('Got Salmon'));
+
+    expect(onToggle).toHaveBeenCalled();
+  });
+
+  it('shows a bought row as done, and offers to put it back', () => {
+    render(<ShoppingList items={[item({ id: 'a', status: 'bought' })]} onToggle={jest.fn()} />);
+
+    expect(screen.getByText('Got it')).toBeInTheDocument();
+    expect(screen.getByLabelText('Put Salmon back on the list')).toBeChecked();
+    // It is no longer something to buy, so it is not in the count.
+    expect(screen.getByText('0')).toBeInTheDocument();
+  });
+
+  it('removes only rows that have a document behind them', async () => {
+    const onRemove = jest.fn();
+    render(
+      <ShoppingList
+        items={[
+          item({ id: 'a', name: 'Bin bags', normalized: 'bin bags', fromPlan: false }),
+          item({ name: 'Salmon', fromPlan: true }),
+        ]}
+        onRemove={onRemove}
+      />
+    );
+
+    await userEvent.click(screen.getByLabelText('Remove Bin bags'));
+    expect(onRemove).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }));
+
+    // The week's own rows are removed by changing the week, not by a cross here.
+    expect(screen.queryByLabelText('Remove Salmon')).not.toBeInTheDocument();
+  });
+
+  it('says which rows arrived by voice', () => {
+    render(<ShoppingList items={[item({ id: 'a', source: 'alexa', fromPlan: false })]} />);
+
+    expect(screen.getByLabelText('Added by voice')).toBeInTheDocument();
   });
 });
 

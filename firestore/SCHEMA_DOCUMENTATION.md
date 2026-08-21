@@ -661,6 +661,70 @@ holds only what belongs to the week as a whole.
 
 ---
 
+### 8. `users/{userId}/shoppingListItems` Subcollection
+
+**Purpose:** What the household put on the shopping list itself, as opposed to
+what the week's meals imply. The meal-derived rows are computed on every render
+from `mealPlanEntries` and `inventory` (`buildShoppingList` in
+`src/hooks/useMealPlan.js`) and are never stored; this collection is what a row
+needs to exist when there is no meal behind it — "we're out of bin bags", or an
+item the Alexa skill heard over the kitchen speaker.
+
+`src/hooks/useShoppingList.js` merges the two for display.
+
+**Document Structure:**
+```javascript
+{
+  id: "auto-generated",
+  name: "milk",                           // as it will be read out and rendered
+  normalized: "milk",                     // lowercase, trimmed — the match key
+  quantity: 1,                            // > 0; "add milk" means one of them
+  unit: "",                               // may be empty: not everything is measured
+  status: "pending",                      // "pending" | "bought"
+  source: "manual",                       // "manual" | "alexa"
+  addedAt: Timestamp,                     // immutable after creation
+  boughtAt: Timestamp                     // when it was ticked off, else null
+}
+```
+
+**Security Rules:**
+- Users can CRUD their own list
+- `status` must be one of: "pending", "bought"
+- `source` must be one of: "manual", "alexa" — on create **and** update
+- `quantity` must be > 0
+- `addedAt` cannot be rewritten
+- The required field set is re-checked on update, so ticking an item off cannot
+  drop the `name` the list renders
+
+**Written by the Alexa skill.** `functions/src/alexa/shoppingList.js` writes
+here through the admin SDK, which bypasses these rules — so it validates the
+same shape itself before writing. A row added by voice is identical to a
+hand-added one apart from `source`, which is what puts the microphone icon
+beside it.
+
+---
+
+### Root: `alexaAuthCodes` and `alexaTokens`
+
+**Purpose:** Alexa account linking (`functions/src/alexa/accountLinking.js`).
+Neither is readable or writable by any client — only the admin SDK touches them.
+
+Documents are keyed by a SHA-256 hash of the credential, never the credential
+itself: a leaked database export should not be a set of working access tokens.
+
+```javascript
+// alexaAuthCodes/{sha256(code)}
+{ uid, clientId, redirectUri, expiresAt: Timestamp, redeemed: false, createdAt }
+
+// alexaTokens/{sha256(token)}
+{ uid, type: "access" | "refresh", expiresAt: Timestamp | null, createdAt }
+```
+
+Access tokens expire after an hour; refresh tokens do not expire but can be
+deleted, which is what unlinking the skill does.
+
+---
+
 ## Data Relationships
 
 ### User → Storage Locations (1:Many)

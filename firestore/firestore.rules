@@ -284,6 +284,44 @@ service cloud.firestore {
         // Users can discard a week
         allow delete: if isOwner(userId);
       }
+
+      // ============================================
+      // SHOPPING LIST ITEMS SUBCOLLECTION
+      // What the household added to the list itself, rather than what the
+      // week's meals imply — including anything the Alexa skill heard.
+      // The meal-derived rows are computed, not stored; see
+      // src/hooks/useShoppingList.js.
+      // ============================================
+
+      match /shoppingListItems/{itemId} {
+        // Users can read their own list
+        allow read: if isOwner(userId);
+
+        // Users (and the Alexa skill, through the admin SDK) can add to it
+        allow create: if isOwner(userId)
+          && hasRequiredFields(['name', 'normalized', 'quantity', 'unit',
+                                'status', 'source', 'addedAt'])
+          && request.resource.data.status in ['pending', 'bought']
+          && request.resource.data.source in ['manual', 'alexa']
+          && request.resource.data.quantity > 0;
+
+        // Ticking something off, or correcting it.
+        //
+        // The field set and both enums are re-checked for the same reason as
+        // everywhere else: `request.resource` is the resulting document, so
+        // without this an update could drop `name` and leave the list with a
+        // blank line on it, or set a `source` no query counts.
+        allow update: if isOwner(userId)
+          && hasRequiredFields(['name', 'normalized', 'quantity', 'unit',
+                                'status', 'source', 'addedAt'])
+          && request.resource.data.addedAt == resource.data.addedAt
+          && request.resource.data.status in ['pending', 'bought']
+          && request.resource.data.source in ['manual', 'alexa']
+          && request.resource.data.quantity > 0;
+
+        // Users can take something off the list
+        allow delete: if isOwner(userId);
+      }
     }
     
     // ============================================
@@ -371,6 +409,27 @@ service cloud.firestore {
       allow write: if false;
     }
     
+    // ============================================
+    // ALEXA ACCOUNT LINKING COLLECTIONS
+    // ============================================
+
+    // The authorization codes and access/refresh tokens behind the Alexa
+    // skill's account linking (functions/src/alexa/accountLinking.js). Only the
+    // admin SDK touches these, and the documents are keyed by a hash of the
+    // credential rather than the credential itself — but a client that could
+    // read them could still enumerate which uids have a linked skill, and one
+    // that could write them could mint itself a token for somebody else's
+    // kitchen. The default-deny rule below would already cover both; these are
+    // spelled out so that stays true if it is ever loosened.
+
+    match /alexaAuthCodes/{codeId} {
+      allow read, write: if false;
+    }
+
+    match /alexaTokens/{tokenId} {
+      allow read, write: if false;
+    }
+
     // ============================================
     // DEFAULT DENY
     // ============================================

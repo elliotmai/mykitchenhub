@@ -180,6 +180,18 @@ const validMealPlan = (overrides = {}) => ({
   ...overrides,
 });
 
+const validShoppingListItem = (overrides = {}) => ({
+  name: 'Milk',
+  normalized: 'milk',
+  quantity: 1,
+  unit: '',
+  status: 'pending',
+  source: 'manual',
+  addedAt: new Date().toISOString(),
+  boughtAt: null,
+  ...overrides,
+});
+
 beforeAll(async () => {
   testEnv = await initializeTestEnvironment({
     projectId: process.env.GCLOUD_PROJECT || 'mykitchenhub-rules-test',
@@ -1883,6 +1895,124 @@ describe('syncMetadata', () => {
   it('hides sync status from signed-out visitors', async () => {
     await seed((db) => db.doc('syncMetadata/legacy-recipe-sync').set({ currentStatus: 'idle' }));
     await assertFails(anon().doc('syncMetadata/legacy-recipe-sync').get());
+  });
+});
+
+// ---------------------------------------------------------------------------
+// users/{userId}/shoppingListItems/{itemId}
+// ---------------------------------------------------------------------------
+
+describe('shopping list items', () => {
+  const itemPath = (uid, id = 'item-1') => `users/${uid}/shoppingListItems/${id}`;
+
+  it('accepts a row the app writes', async () => {
+    await assertSucceeds(as(OWNER).doc(itemPath(OWNER)).set(validShoppingListItem()));
+  });
+
+  it('requires the documented fields', async () => {
+    await assertFails(as(OWNER).doc(itemPath(OWNER)).set({ name: 'Milk' }));
+  });
+
+  it.each(['manual', 'alexa'])('accepts source "%s"', async (source) => {
+    await assertSucceeds(
+      as(OWNER)
+        .doc(itemPath(OWNER, `i-${source}`))
+        .set(validShoppingListItem({ source }))
+    );
+  });
+
+  it('rejects a source nothing in the app produces', async () => {
+    await assertFails(
+      as(OWNER).doc(itemPath(OWNER)).set(validShoppingListItem({ source: 'smuggled' }))
+    );
+  });
+
+  it.each(['pending', 'bought'])('accepts status "%s"', async (status) => {
+    await assertSucceeds(
+      as(OWNER)
+        .doc(itemPath(OWNER, `i-${status}`))
+        .set(validShoppingListItem({ status }))
+    );
+  });
+
+  it('rejects a status the list cannot render', async () => {
+    await assertFails(
+      as(OWNER).doc(itemPath(OWNER)).set(validShoppingListItem({ status: 'maybe' }))
+    );
+  });
+
+  it('insists on a real quantity', async () => {
+    await assertFails(as(OWNER).doc(itemPath(OWNER)).set(validShoppingListItem({ quantity: 0 })));
+    await assertFails(as(OWNER).doc(itemPath(OWNER)).set(validShoppingListItem({ quantity: -2 })));
+  });
+
+  it('lets the owner tick something off', async () => {
+    const stored = validShoppingListItem();
+    await seed((db) => db.doc(itemPath(OWNER)).set(stored));
+
+    await assertSucceeds(
+      as(OWNER)
+        .doc(itemPath(OWNER))
+        .update({ status: 'bought', boughtAt: new Date().toISOString() })
+    );
+  });
+
+  it('refuses an update that would drop the name the list renders', async () => {
+    await seed((db) => db.doc(itemPath(OWNER)).set(validShoppingListItem()));
+
+    // `set` without merge replaces the document, so this is what a careless
+    // write actually looks like.
+    await assertFails(as(OWNER).doc(itemPath(OWNER)).set({ status: 'bought' }));
+  });
+
+  it('refuses to let the added date be rewritten', async () => {
+    await seed((db) => db.doc(itemPath(OWNER)).set(validShoppingListItem()));
+
+    await assertFails(
+      as(OWNER)
+        .doc(itemPath(OWNER))
+        .update({ addedAt: new Date('2020-01-01').toISOString() })
+    );
+  });
+
+  it('refuses to let an update smuggle in a source create would reject', async () => {
+    await seed((db) => db.doc(itemPath(OWNER)).set(validShoppingListItem()));
+
+    await assertFails(as(OWNER).doc(itemPath(OWNER)).update({ source: 'smuggled' }));
+  });
+
+  it('lets the owner take something off the list', async () => {
+    await seed((db) => db.doc(itemPath(OWNER)).set(validShoppingListItem()));
+
+    await assertSucceeds(as(OWNER).doc(itemPath(OWNER)).delete());
+  });
+
+  it('keeps one household out of another shopping list', async () => {
+    await seed((db) => db.doc(itemPath(OWNER)).set(validShoppingListItem()));
+
+    await assertFails(as(INTRUDER).doc(itemPath(OWNER)).get());
+    await assertFails(as(INTRUDER).doc(itemPath(OWNER)).set(validShoppingListItem()));
+    await assertFails(as(INTRUDER).doc(itemPath(OWNER)).delete());
+    await assertFails(anon().doc(itemPath(OWNER)).get());
+  });
+});
+
+// ---------------------------------------------------------------------------
+// alexaAuthCodes/{codeId}, alexaTokens/{tokenId}
+// ---------------------------------------------------------------------------
+
+describe('alexa account linking collections', () => {
+  it('is closed to every client, signed in or not', async () => {
+    // These hold the credentials that let a speaker reach a kitchen. Only the
+    // admin SDK — which bypasses these rules — has any business in them.
+    await seed((db) => db.doc('alexaTokens/hash-1').set({ uid: OWNER, type: 'access' }));
+    await seed((db) => db.doc('alexaAuthCodes/hash-1').set({ uid: OWNER }));
+
+    await assertFails(as(OWNER).doc('alexaTokens/hash-1').get());
+    await assertFails(as(OWNER).doc('alexaTokens/hash-1').set({ uid: OWNER }));
+    await assertFails(as(OWNER).doc('alexaAuthCodes/hash-1').get());
+    await assertFails(as(OWNER).doc('alexaAuthCodes/hash-1').delete());
+    await assertFails(anon().doc('alexaTokens/hash-1').get());
   });
 });
 

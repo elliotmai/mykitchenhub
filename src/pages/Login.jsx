@@ -42,7 +42,13 @@ const Login = () => {
   const location = useLocation();
 
   // Get redirect path from location state or default to dashboard
-  const from = location.state?.from?.pathname || '/dashboard';
+  // Search string included, not just the path: the Alexa linking page is
+  // driven entirely by the query parameters Amazon puts on it, and coming back
+  // from sign-in without them lands on a page that no longer knows what it was
+  // asked to do.
+  const from = location.state?.from
+    ? `${location.state.from.pathname}${location.state.from.search || ''}`
+    : '/dashboard';
 
   /**
    * Handle form submission based on current mode

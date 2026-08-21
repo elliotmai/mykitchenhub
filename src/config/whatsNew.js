@@ -14,6 +14,15 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.08.21.1',
+    date: 'August 2026',
+    items: [
+      '\u{1F6D2} The shopping list is yours to keep now. Add anything to it \u2014 bin bags, a birthday cake \u2014 not just what this week\u2019s meals need, tick things off as you put them in the trolley, and it remembers between visits.',
+      '\u{1F5E3}\uFE0F You can also talk to it. Say \u201cAlexa, tell My Kitchen Hub to add milk\u201d while you are still standing at the fridge, or \u201cAlexa, ask My Kitchen Hub what is on my shopping list\u201d on your way out. Anything added by voice shows up on the list with a little microphone beside it.',
+      '\u{1F517} Setting that up is a one-off: enable the My Kitchen Hub skill in the Alexa app and choose \u201cLink Account\u201d. Alexa\u2019s own shopping list is separate and stays separate \u2014 Amazon closed that door to every app in 2024 \u2014 so the skill has to be named each time you ask.',
+    ],
+  },
+  {
     version: '2026.08.15.7',
     date: 'August 2026',
     items: [
