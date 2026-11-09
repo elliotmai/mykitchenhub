@@ -106,6 +106,7 @@ const RecipeDetail = ({
               <small className="text-muted">
                 From {SOURCE_LABELS[recipe.source] ?? recipe.source}
                 {recipe.importedFrom === 'pestle' && ' · imported from Pestle'}
+                {!sourceHost && recipe.sourceName && ` · ${recipe.sourceName}`}
                 {sourceHost && (
                   <>
                     {' · '}

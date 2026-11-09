@@ -58,11 +58,7 @@
   "theme_color": "#2E7D32",
   "background_color": "#ffffff",
   "orientation": "portrait-primary",
-  "categories": [
-    "food",
-    "lifestyle",
-    "utilities"
-  ],
+  "categories": ["food", "lifestyle", "utilities"],
   "shortcuts": [
     {
       "name": "Add Item",
@@ -76,8 +72,30 @@
           "type": "image/png"
         }
       ]
+    },
+    {
+      "name": "Import Recipe",
+      "short_name": "Import",
+      "description": "Paste a recipe from ChatGPT, Claude or Pestle",
+      "url": "/recipes?action=import",
+      "icons": [
+        {
+          "src": "icons/icon-96x96.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
     }
   ],
   "related_applications": [],
-  "prefer_related_applications": false
+  "prefer_related_applications": false,
+  "share_target": {
+    "action": "/recipes",
+    "method": "GET",
+    "params": {
+      "title": "share-title",
+      "text": "share-text",
+      "url": "share-url"
+    }
+  }
 }

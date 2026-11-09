@@ -1,16 +1,15 @@
-// src/hooks/usePestleImport.js
-// Brings a Pestle "Export all" (a zip of Markdown recipes) into the shared
-// library.
+// src/hooks/useRecipeImport.js
+// Brings recipes into the shared library from Markdown: a Pestle "Export all"
+// zip, loose .md files, or text pasted from ChatGPT / Claude.
 //
 // Two steps, so nothing is written until the cook has seen what will happen:
-//   1. prepare(files) — read the zip in the browser, parse every recipe, and
-//      set aside the ones already in the library (matched by name).
-//   2. commit()       — write the rest in batches under the cook's own uid.
+//   1. prepareFiles(files) / prepareText(text) — parse every recipe in the
+//      browser and set aside the ones already in the library (by name).
+//   2. commit() — write the rest in batches under the cook's own uid.
 //
 // Imported recipes are `source: 'user-created'` with `createdBy` set to the
 // importer, which is what the security rules already accept, and which lets
-// the cook delete one later. `importedFrom: 'pestle'` and the `pestle` tag say
-// where they came from.
+// the cook delete one later. `importedFrom` says where they came from.
 
 import { useCallback, useState } from 'react';
 import { collection, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
@@ -18,7 +17,7 @@ import { collection, doc, serverTimestamp, writeBatch } from 'firebase/firestore
 import { db } from '../services/firebase';
 import { useAuth } from './useAuth';
 import { friendlyError } from '../utils/firebaseErrors';
-import { extractMarkdownFiles, planPestleImport } from '../utils/pestleImport';
+import { extractMarkdownFiles, pastedTextToFiles, planRecipeImport } from '../utils/recipeImport';
 
 /** Firestore allows 500 writes per batch; smaller batches give a smoother progress bar. */
 export const BATCH_SIZE = 50;
@@ -34,12 +33,12 @@ const readFile = (file) =>
       });
 
 /**
- * usePestleImport
+ * useRecipeImport
  *
  * const { plan, preparing, committing, progress, result, error,
- *         prepare, commit, reset } = usePestleImport(existingRecipes);
+ *         prepareFiles, prepareText, commit, reset } = useRecipeImport(existingRecipes);
  */
-const usePestleImport = (existingRecipes = []) => {
+const useRecipeImport = (existingRecipes = []) => {
   const { user } = useAuth();
 
   const [plan, setPlan] = useState(null);
@@ -58,7 +57,7 @@ const usePestleImport = (existingRecipes = []) => {
     setError('');
   }, []);
 
-  const prepare = useCallback(
+  const prepareFiles = useCallback(
     async (fileList) => {
       setError('');
       setResult(null);
@@ -76,7 +75,7 @@ const usePestleImport = (existingRecipes = []) => {
           setError('No Pestle recipes found. Choose the .zip from Pestle’s “Export all”.');
           return null;
         }
-        const next = planPestleImport(markdown, existingRecipes);
+        const next = planRecipeImport(markdown, existingRecipes, 'pestle');
         setPlan(next);
         return next;
       } catch (err) {
@@ -87,6 +86,29 @@ const usePestleImport = (existingRecipes = []) => {
       } finally {
         setPreparing(false);
       }
+    },
+    [existingRecipes]
+  );
+
+  const prepareText = useCallback(
+    (text) => {
+      setError('');
+      setResult(null);
+      const chunks = pastedTextToFiles(text);
+      if (chunks.length === 0) {
+        setPlan(null);
+        setError('Paste a recipe first.');
+        return null;
+      }
+      const next = planRecipeImport(chunks, existingRecipes, 'pasted');
+      setPlan(next);
+      if (next.ready.length === 0 && next.duplicates.length === 0) {
+        setError(
+          'Couldn’t find a recipe in that text. It needs a title and an ingredients list — ' +
+            'use “Copy format” and ask the assistant to rewrite it.'
+        );
+      }
+      return next;
     },
     [existingRecipes]
   );
@@ -104,12 +126,15 @@ const usePestleImport = (existingRecipes = []) => {
     setProgress({ done: 0, total: ready.length });
 
     let imported = 0;
+    const ids = [];
     try {
       for (let start = 0; start < ready.length; start += BATCH_SIZE) {
         const chunk = ready.slice(start, start + BATCH_SIZE);
         const batch = writeBatch(db);
         for (const item of chunk) {
-          batch.set(doc(collection(db, 'recipes')), {
+          const ref = doc(collection(db, 'recipes'));
+          ids.push(ref.id);
+          batch.set(ref, {
             ...item.document,
             createdAt: serverTimestamp(),
             createdBy: user.uid,
@@ -119,7 +144,7 @@ const usePestleImport = (existingRecipes = []) => {
         imported += chunk.length;
         setProgress({ done: imported, total: ready.length });
       }
-      const outcome = { success: true, imported };
+      const outcome = { success: true, imported, ids };
       setResult(outcome);
       return outcome;
     } catch (err) {
@@ -138,7 +163,18 @@ const usePestleImport = (existingRecipes = []) => {
     }
   }, [plan, user?.uid]);
 
-  return { plan, preparing, committing, progress, result, error, prepare, commit, reset };
+  return {
+    plan,
+    preparing,
+    committing,
+    progress,
+    result,
+    error,
+    prepareFiles,
+    prepareText,
+    commit,
+    reset,
+  };
 };
 
-export default usePestleImport;
+export default useRecipeImport;

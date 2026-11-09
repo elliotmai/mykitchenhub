@@ -1,4 +1,5 @@
-// The Pestle import: pick the export, see what will come in, import it.
+// The recipe importer: paste a chat reply, or pick a Pestle export; see what
+// will come in; import it.
 // Firestore is the shared mock, so writes are checked at the batch boundary.
 
 import React from 'react';
@@ -6,8 +7,9 @@ import { strToU8, zipSync } from 'fflate';
 
 import { renderWithProviders, screen, userEvent, waitFor } from '../../../test-utils';
 import * as fs from '../../../test-utils/mocks/firestore';
-import PestleImportModal from '../PestleImportModal';
-import { BATCH_SIZE } from '../../../hooks/usePestleImport';
+import RecipeImportModal from '../RecipeImportModal';
+import { RECIPE_FORMAT_PROMPT } from '../../../utils/recipeImport';
+import { BATCH_SIZE } from '../../../hooks/useRecipeImport';
 
 const recipeMd = (name, { steps = true } = {}) =>
   `# ${name}\n\n**Servings** 2.0\n\n## Ingredients\n\n* 1 cup rice\n\n## Instructions\n\n${
@@ -37,13 +39,23 @@ const trackBatches = () => {
 const renderModal = (props = {}) => {
   const onHide = jest.fn();
   const view = renderWithProviders(
-    <PestleImportModal show onHide={onHide} existingRecipes={[]} {...props} />
+    <RecipeImportModal show onHide={onHide} existingRecipes={[]} {...props} />
   );
   return { ...view, onHide };
 };
 
 const pick = async (file) => {
-  await userEvent.upload(screen.getByLabelText(/pestle export/i), file);
+  await userEvent.click(screen.getByRole('tab', { name: /pestle export/i }));
+  await userEvent.upload(screen.getByLabelText(/pestle export/i, { selector: 'input' }), file);
+};
+
+const paste = async (text) => {
+  const box = screen.getByLabelText(/recipe text/i, { selector: 'textarea' });
+  await userEvent.clear(box);
+  // userEvent.type treats { and [ as key descriptors; paste sidesteps that.
+  box.focus();
+  await userEvent.paste(text);
+  await userEvent.click(screen.getByRole('button', { name: /preview/i }));
 };
 
 beforeEach(() => {
@@ -70,7 +82,7 @@ it('previews the export, skips what is already in the library, then imports the 
   expect(await screen.findByText(/2 recipes/)).toBeInTheDocument();
   expect(screen.getByText(/1 recipe already in your library will be skipped/)).toBeInTheDocument();
   expect(screen.getByText(/1 file couldn’t be read/)).toBeInTheDocument();
-  expect(screen.getByText(/no steps saved for Blini/)).toBeInTheDocument();
+  expect(screen.getByText(/no steps found for Blini/i)).toBeInTheDocument();
   expect(fs.writeBatch).not.toHaveBeenCalled();
 
   await userEvent.click(screen.getByRole('button', { name: /import 2/i }));
@@ -141,4 +153,88 @@ it('accepts loose markdown files and closes on Done', async () => {
   await userEvent.click(await screen.findByRole('button', { name: /import 1/i }));
   await userEvent.click(await screen.findByRole('button', { name: /done/i }));
   await waitFor(() => expect(onHide).toHaveBeenCalled());
+});
+
+describe('pasting a recipe', () => {
+  const CHAT_REPLY = `Here's a quick one!
+
+# Garlic Butter Noodles
+
+**Servings** 2
+
+## Ingredients
+* 8 oz spaghetti
+* 3 tbsp butter
+
+## Instructions
+1. Boil the pasta.
+2. Toss with butter.`;
+
+  it('opens on the paste tab, previews, and imports as a pasted recipe', async () => {
+    const { written } = trackBatches();
+    const onOpenRecipe = jest.fn();
+    const { onHide } = renderModal({ onOpenRecipe });
+
+    expect(screen.getByRole('tab', { name: /paste a recipe/i })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    await paste(CHAT_REPLY);
+
+    expect(await screen.findByText('Garlic Butter Noodles')).toBeInTheDocument();
+    expect(screen.getByText(/2 ingredients · 2 steps/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /import 1/i }));
+
+    expect(await screen.findByText(/1 recipe added/)).toBeInTheDocument();
+    expect(written[0]).toMatchObject({
+      name: 'Garlic Butter Noodles',
+      importedFrom: 'pasted',
+      servings: 2,
+    });
+    expect(written[0].tags).not.toContain('pestle');
+
+    await userEvent.click(screen.getByRole('button', { name: /open recipe/i }));
+    expect(onHide).toHaveBeenCalled();
+    expect(onOpenRecipe).toHaveBeenCalledWith(expect.any(String));
+  });
+
+  it('skips a recipe that is already in the library', async () => {
+    renderModal({ existingRecipes: [{ name: 'garlic butter noodles' }] });
+    await paste(CHAT_REPLY);
+    expect(
+      await screen.findByText(/already in your library will be skipped \(Garlic Butter Noodles\)/)
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^import/i })).toBeDisabled();
+  });
+
+  it('says what is wrong with text that is not a recipe', async () => {
+    renderModal();
+    await paste('Sure, what would you like to cook tonight?');
+    expect(await screen.findByText(/couldn’t find a recipe/i)).toBeInTheDocument();
+  });
+
+  it('prefills text shared from another app', () => {
+    renderModal({ initialText: CHAT_REPLY });
+    expect(screen.getByLabelText(/recipe text/i, { selector: 'textarea' })).toHaveValue(CHAT_REPLY);
+  });
+
+  it('copies the format for the assistant', async () => {
+    const user = userEvent.setup();
+    const writeText = jest.spyOn(navigator.clipboard, 'writeText');
+    renderModal();
+    await user.click(screen.getByRole('button', { name: /copy format/i }));
+    expect(writeText).toHaveBeenCalledWith(RECIPE_FORMAT_PROMPT);
+    expect(await screen.findByRole('button', { name: /format copied/i })).toBeInTheDocument();
+  });
+
+  it('falls back when the clipboard API is refused', async () => {
+    const user = userEvent.setup();
+    jest.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('denied'));
+    document.execCommand = jest.fn(() => true);
+    renderModal();
+    await user.click(screen.getByRole('button', { name: /copy format/i }));
+    expect(document.execCommand).toHaveBeenCalledWith('copy');
+    expect(await screen.findByRole('button', { name: /format copied/i })).toBeInTheDocument();
+    delete document.execCommand;
+  });
 });
