@@ -623,3 +623,15 @@ describe('runLegacySync — the off switch', () => {
     expect(result.imported).toBe(1);
   });
 });
+
+describe('deployment options', () => {
+  it('is publicly invokable, so every deploy grants the invoker role', () => {
+    // A failed first deploy left this function without allUsers invoker, and
+    // every call came back as a bare "internal". Updates only fix IAM when the
+    // option is stated. Auth is still enforced inside the handler.
+    const functions = require('firebase-functions');
+    expect(functions.runWith).toHaveBeenCalledWith(
+      expect.objectContaining({ invoker: 'public', timeoutSeconds: 540 })
+    );
+  });
+});
