@@ -307,8 +307,16 @@ const adminUids = (env = process.env) =>
  * Callable entry point. The admin dashboard calls this with a batch size and,
  * usually, dryRun: true first.
  */
+//
+// `invoker: 'public'` is load-bearing. The Firebase CLI only grants a 1st Gen
+// callable the allUsers invoker role when it *creates* the function, and this
+// one's first deploy (Feb 2026) failed on a missing `dotenv`, so it never got
+// it; later deploys were updates, which leave IAM alone. Without the role
+// Google rejects every call before this code runs, with no CORS headers, and
+// the client SDK can only report "internal". Stating it here makes every deploy
+// set it. Access is still gated below: a signed-in user, and SYNC_ADMIN_UIDS.
 const syncLegacyRecipes = functions
-  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .runWith({ timeoutSeconds: 540, memory: '512MB', invoker: 'public' })
   .https.onCall(async (data = {}, context) => {
     if (!context?.auth?.uid) {
       throw new functions.https.HttpsError('unauthenticated', 'Sign in to run the legacy sync.');
