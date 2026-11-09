@@ -24,6 +24,16 @@ import {
 
 import { totalTime, instructionSteps, normalizeName, SOURCE_LABELS } from '../hooks/useRecipes';
 
+/** "https://www.example.com/x" → "example.com", or null for anything that isn't an http(s) URL. */
+const hostOf = (url) => {
+  try {
+    const parsed = new URL(url);
+    return /^https?:$/.test(parsed.protocol) ? parsed.hostname.replace(/^www\./, '') : null;
+  } catch {
+    return null;
+  }
+};
+
 /**
  * RecipeDetail
  *
@@ -71,6 +81,7 @@ const RecipeDetail = ({
   const tags = Array.isArray(recipe.tags) ? recipe.tags : [];
   const have = new Set(inventoryNames.map(normalizeName));
   const isMine = recipe.source === 'user-created';
+  const sourceHost = hostOf(recipe.sourceUrl);
 
   return (
     <div className="recipe-detail">
@@ -94,6 +105,15 @@ const RecipeDetail = ({
               <h1 className="h3 mb-1">{recipe.name}</h1>
               <small className="text-muted">
                 From {SOURCE_LABELS[recipe.source] ?? recipe.source}
+                {recipe.importedFrom === 'pestle' && ' · imported from Pestle'}
+                {sourceHost && (
+                  <>
+                    {' · '}
+                    <a href={recipe.sourceUrl} target="_blank" rel="noopener noreferrer">
+                      {sourceHost}
+                    </a>
+                  </>
+                )}
               </small>
             </div>
 
@@ -126,6 +146,8 @@ const RecipeDetail = ({
               )}
             </div>
           </div>
+
+          {recipe.description && <p className="mb-3">{recipe.description}</p>}
 
           {/* Facts strip */}
           <div className="d-flex gap-3 flex-wrap mb-3 text-muted">
@@ -180,9 +202,12 @@ const RecipeDetail = ({
                         className="d-flex justify-content-between align-items-center px-0"
                       >
                         <span>
-                          {[ingredient.quantity, ingredient.unit, ingredient.name]
-                            .filter(Boolean)
-                            .join(' ')}
+                          {/* Imports keep the line as written ("½ tsp salt"),
+                              which reads better than the parsed 0.5. */}
+                          {ingredient.text ||
+                            [ingredient.quantity, ingredient.unit, ingredient.name]
+                              .filter(Boolean)
+                              .join(' ')}
                         </span>
                         {inKitchen && (
                           <Badge
@@ -217,6 +242,15 @@ const RecipeDetail = ({
                     </li>
                   ))}
                 </ol>
+              )}
+
+              {recipe.notes && (
+                <>
+                  <h2 className="h5 mt-4 mb-2">Notes</h2>
+                  <p className="mb-0" style={{ whiteSpace: 'pre-line' }}>
+                    {recipe.notes}
+                  </p>
+                </>
               )}
             </Col>
           </Row>

@@ -15,6 +15,7 @@ import useInventory from '../hooks/useInventory';
 import RecipeList from '../components/Recipes/RecipeList';
 import AddRecipeModal from '../components/Recipes/AddRecipeModal';
 import SyncDashboard from '../components/Recipes/SyncDashboard';
+import PestleImportModal from '../components/Recipes/PestleImportModal';
 import ConfirmModal from '../components/Common/ConfirmModal';
 import RecipeDetail from './RecipeDetail';
 
@@ -43,6 +44,7 @@ const Recipes = () => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [showSync, setShowSync] = useState(false);
+  const [showPestle, setShowPestle] = useState(false);
   const [actionError, setActionError] = useState('');
 
   // Inventory feeds both the ingredient autocomplete and the "in your kitchen"
@@ -130,6 +132,7 @@ const Recipes = () => {
           onDelete={setDeleteTarget}
           onCook={handleCook}
           onOpenSync={() => setShowSync(true)}
+          onOpenImport={() => setShowPestle(true)}
           currentUid={currentUid}
         />
       )}
@@ -143,6 +146,12 @@ const Recipes = () => {
       />
 
       <SyncDashboard show={showSync} onHide={() => setShowSync(false)} />
+
+      <PestleImportModal
+        show={showPestle}
+        onHide={() => setShowPestle(false)}
+        existingRecipes={recipes}
+      />
 
       <ConfirmModal
         show={Boolean(deleteTarget)}

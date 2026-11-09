@@ -14,6 +14,14 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.11.09.1',
+    date: 'November 2026',
+    items: [
+      '\u{1F4E5} Bring your Pestle recipes over in one go. On the Recipes page, tap Import and choose the zip from Pestle\u2019s \u201CExport all\u201D. You see what will come in before anything is saved, recipes already in your library are skipped, and every imported recipe is tagged \u201Cpestle\u201D so you can find them.',
+      '\u{1F4DD} Recipes now show their description, your notes, and a link back to the site they came from, and ingredient lines read the way they were written (\u201C\u00BD tsp salt\u201D rather than \u201C0.5 tsp salt\u201D).',
+    ],
+  },
+  {
     version: '2026.08.20.7',
     date: 'August 2026',
     items: [

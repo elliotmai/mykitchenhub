@@ -6,7 +6,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Row, Col, Form, InputGroup, Button, Spinner } from 'react-bootstrap';
-import { Search, Plus, X, BookOpen, RefreshCw } from 'lucide-react';
+import { Search, Plus, X, BookOpen, RefreshCw, Upload } from 'lucide-react';
 
 import { FilterPanel, ChipFilter } from '../Common';
 
@@ -40,6 +40,7 @@ const TIME_FILTERS = [
  * @param {function} onCook      - (recipe) => void
  * @param {string}   currentUid  - the signed-in cook's uid, for the delete guard
  * @param {function} onOpenSync  - () => void — opens the legacy sync dashboard
+ * @param {function} onOpenImport - () => void — opens the Pestle import
  */
 const RecipeList = ({
   recipes = [],
@@ -50,6 +51,7 @@ const RecipeList = ({
   onDelete,
   onCook,
   onOpenSync,
+  onOpenImport,
   currentUid,
 }) => {
   const [search, setSearch] = useState('');
@@ -128,6 +130,16 @@ const RecipeList = ({
             >
               <RefreshCw size={16} />
               Legacy Sync
+            </Button>
+          )}
+          {onOpenImport && (
+            <Button
+              variant="outline-secondary"
+              className="d-flex align-items-center gap-2"
+              onClick={onOpenImport}
+            >
+              <Upload size={16} />
+              Import
             </Button>
           )}
           <Button variant="primary" className="d-flex align-items-center gap-2" onClick={onAdd}>
