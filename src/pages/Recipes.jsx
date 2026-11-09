@@ -6,7 +6,7 @@
 // it is deep-linkable and the browser Back button works, without adding a
 // route to the shared App.jsx.
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Alert } from 'react-bootstrap';
 
@@ -15,10 +15,15 @@ import useInventory from '../hooks/useInventory';
 import RecipeList from '../components/Recipes/RecipeList';
 import AddRecipeModal from '../components/Recipes/AddRecipeModal';
 import SyncDashboard from '../components/Recipes/SyncDashboard';
+import RecipeImportModal from '../components/Recipes/RecipeImportModal';
 import ConfirmModal from '../components/Common/ConfirmModal';
 import RecipeDetail from './RecipeDetail';
 
 const RECIPE_PARAM = 'recipe';
+
+// The Android share sheet (manifest.json `share_target`) lands here with the
+// shared text in these params, which open the importer's paste tab.
+export const SHARE_PARAMS = ['share-text', 'share-title', 'share-url'];
 
 const Recipes = () => {
   const {
@@ -43,6 +48,27 @@ const Recipes = () => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [showSync, setShowSync] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [sharedText, setSharedText] = useState('');
+
+  // Something shared from another app: open the importer with it, then tidy
+  // the URL so Back and refresh don't import it twice.
+  // The "Import Recipe" home-screen shortcut opens /recipes?action=import.
+  useEffect(() => {
+    const text = searchParams.get('share-text') || searchParams.get('share-url') || '';
+    const fromShortcut = searchParams.get('action') === 'import';
+    if (!text.trim() && !fromShortcut) return;
+    setSharedText(text);
+    setShowImport(true);
+    const next = new URLSearchParams(searchParams);
+    [...SHARE_PARAMS, 'action'].forEach((key) => next.delete(key));
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  const closeImport = () => {
+    setShowImport(false);
+    setSharedText('');
+  };
   const [actionError, setActionError] = useState('');
 
   // Inventory feeds both the ingredient autocomplete and the "in your kitchen"
@@ -130,6 +156,7 @@ const Recipes = () => {
           onDelete={setDeleteTarget}
           onCook={handleCook}
           onOpenSync={() => setShowSync(true)}
+          onOpenImport={() => setShowImport(true)}
           currentUid={currentUid}
         />
       )}
@@ -143,6 +170,14 @@ const Recipes = () => {
       />
 
       <SyncDashboard show={showSync} onHide={() => setShowSync(false)} />
+
+      <RecipeImportModal
+        show={showImport}
+        onHide={closeImport}
+        existingRecipes={recipes}
+        initialText={sharedText}
+        onOpenRecipe={(id) => setSearchParams({ [RECIPE_PARAM]: id })}
+      />
 
       <ConfirmModal
         show={Boolean(deleteTarget)}

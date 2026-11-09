@@ -265,3 +265,27 @@ describe('Recipes page — failures', () => {
     expect(screen.getByText(/couldn.t load your recipes/i)).toBeInTheDocument();
   });
 });
+
+describe('Recipes page — importing', () => {
+  it('opens the importer from the toolbar', async () => {
+    const { user } = await renderRecipes();
+    await user.click(screen.getByRole('button', { name: /^import$/i }));
+    expect(await screen.findByRole('dialog', { name: /import recipes/i })).toBeInTheDocument();
+  });
+
+  it('opens the paste tab with text shared from another app', async () => {
+    await renderRecipes({
+      route:
+        '/recipes?share-title=ChatGPT&share-text=%23%20Tomato%20Soup%0A%0A%23%23%20Ingredients%0A*%202%20cans%20tomatoes',
+    });
+    const dialog = await screen.findByRole('dialog', { name: /import recipes/i });
+    expect(within(dialog).getByLabelText(/recipe text/i, { selector: 'textarea' })).toHaveValue(
+      '# Tomato Soup\n\n## Ingredients\n* 2 cans tomatoes'
+    );
+  });
+
+  it('opens the importer from the home-screen shortcut', async () => {
+    await renderRecipes({ route: '/recipes?action=import' });
+    expect(await screen.findByRole('dialog', { name: /import recipes/i })).toBeInTheDocument();
+  });
+});
