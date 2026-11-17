@@ -236,10 +236,10 @@ Two things to verify while you are there:
   creates a Cloud Scheduler job. Google Cloud console → **Cloud Scheduler** —
   there should be a job running `0 9 * * *` in `America/New_York`. If it is
   missing, the daily alert will never fire and nothing will report an error.
-- **The runtime.** `firebase.json` pins `nodejs20`, but `functions/package.json`
-  still declares `"engines": { "node": "18" }`, and the deploy workflow sets up
-  Node 18. The `firebase.json` runtime wins for the deployed function, but the
-  three should agree — worth reconciling on 20, which is what CI tests against.
+- **The runtime.** `firebase.json` pins `nodejs22`, `functions/package.json`
+  declares `"engines": { "node": "22" }`, and the deploy workflow sets up Node 22.
+  Keep the three in step. Google decommissioned Node.js 20 on 2026-10-31, and a
+  deploy on a retired runtime fails before anything is uploaded.
 
 ### The seed functions
 
