@@ -62,6 +62,9 @@ const REQUIRED_EXPORTS = [
   'updateStorageLocation',
   'deleteStorageLocation',
   'board',
+  'listApiTokens',
+  'createApiToken',
+  'revokeApiToken',
 ];
 
 describe('deployed function surface', () => {

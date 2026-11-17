@@ -14,6 +14,13 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.11.17',
+    date: 'November 2026',
+    items: [
+      '\u{1F50C} Connect Fridge Board, or another of your apps, yourself. Under Settings \u2192 Connected apps, tap \u201CConnect an app\u201D, give it a name and copy the code it shows you into that app. You can see when each one last checked in, and Revoke cuts one off straight away.',
+    ],
+  },
+  {
     version: '2026.11.09.1',
     date: 'November 2026',
     items: [

@@ -350,7 +350,7 @@ the same thing.
 
 ## Settings
 
-Four sections:
+Six sections:
 
 - **Profile** — your display name and a phone number for alerts.
 - **Password** — change it. Needs your current one, and a new one of at least
@@ -358,6 +358,12 @@ Four sections:
 - **Storage Locations** — add, rename, recolour and delete locations, as above.
 - **Waste Alerts** — whether you want the daily nudge, and whether you want it
   as a text as well as in the app.
+- **Fridge Display** — open the fridge board, and make this device drift back
+  to it when nobody is using it.
+- **Connected apps** — let another of your apps, such as Fridge Board, read
+  this kitchen. **Connect an app**, give it a name, and copy the token it shows
+  into that app — it is shown once, so copy it then. Each connected app lists
+  when it was last used; **Revoke** stops it working straight away.
 
 ---
 

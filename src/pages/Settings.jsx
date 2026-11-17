@@ -4,11 +4,12 @@
 import React, { useState } from 'react';
 import { Card, Form, Button, Row, Col, Alert, Spinner, Nav } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import { User, Lock, MapPin, Bell, Tv } from 'lucide-react';
+import { User, Lock, MapPin, Bell, Tv, Plug } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import useStorageLocations from '../hooks/useStorageLocations';
 import { StorageLocationsList } from '../components/StorageLocations';
 import { SmsAlertSettings } from '../components/WasteAlerts';
+import { ConnectedApps } from '../components/ConnectedApps';
 import { isKioskDevice, setKioskDevice } from '../utils/kioskMode';
 
 // ─── Section constants ───────────────────────────────────────────────────────
@@ -18,6 +19,7 @@ const SECTIONS = {
   LOCATIONS: 'locations',
   ALERTS: 'alerts',
   DISPLAY: 'display',
+  APPS: 'apps',
 };
 
 const Settings = () => {
@@ -156,6 +158,13 @@ const Settings = () => {
                   className="d-flex align-items-center gap-2 rounded-2 px-3 py-2"
                 >
                   <Tv size={16} /> Fridge Display
+                </Nav.Link>
+                <Nav.Link
+                  active={activeSection === SECTIONS.APPS}
+                  onClick={() => setActiveSection(SECTIONS.APPS)}
+                  className="d-flex align-items-center gap-2 rounded-2 px-3 py-2"
+                >
+                  <Plug size={16} /> Connected apps
                 </Nav.Link>
               </Nav>
             </Card.Body>
@@ -364,6 +373,23 @@ const Settings = () => {
                   anyone stops using it — so a half-finished form is never what greets the next
                   person. It only affects this device; your phone is unaffected.
                 </small>
+              </Card.Body>
+            </Card>
+          )}
+
+          {/* ── Connected apps ──────────────────────────────────────────── */}
+          {activeSection === SECTIONS.APPS && (
+            <Card>
+              <Card.Header className="bg-white border-bottom-0 pt-4 pb-2">
+                <h5 className="mb-0 d-flex align-items-center gap-2">
+                  <Plug size={18} /> Connected apps
+                </h5>
+                <small className="text-muted">
+                  Let another of your apps, like Fridge Board, read this one.
+                </small>
+              </Card.Header>
+              <Card.Body>
+                <ConnectedApps />
               </Card.Body>
             </Card>
           )}

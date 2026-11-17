@@ -2105,6 +2105,51 @@ describe('syncMetadata', () => {
   });
 });
 
+describe('apiTokens (Connected apps)', () => {
+  const TOKEN_DOC = `apiTokens/${'c'.repeat(64)}`;
+  const tokenDoc = (uid = OWNER) => ({
+    uid,
+    label: 'Fridge Board',
+    createdAt: new Date('2026-11-17T12:00:00Z'),
+    lastUsedAt: null,
+    revokedAt: null,
+  });
+
+  it('hides a token from its own owner', async () => {
+    await seed((db) => db.doc(TOKEN_DOC).set(tokenDoc()));
+    await assertFails(as(OWNER).doc(TOKEN_DOC).get());
+  });
+
+  it('hides a token from other cooks and signed-out visitors', async () => {
+    await seed((db) => db.doc(TOKEN_DOC).set(tokenDoc()));
+    await assertFails(as(INTRUDER).doc(TOKEN_DOC).get());
+    await assertFails(anon().doc(TOKEN_DOC).get());
+  });
+
+  it('refuses listing, even filtered to the caller’s own uid', async () => {
+    await seed((db) => db.doc(TOKEN_DOC).set(tokenDoc()));
+    await assertFails(as(OWNER).collection('apiTokens').where('uid', '==', OWNER).get());
+  });
+
+  it('refuses minting a token from the client', async () => {
+    await assertFails(as(OWNER).doc(TOKEN_DOC).set(tokenDoc()));
+  });
+
+  it('refuses un-revoking, relabelling or deleting a token from the client', async () => {
+    await seed((db) =>
+      db.doc(TOKEN_DOC).set({ ...tokenDoc(), revokedAt: new Date('2026-11-17T13:00:00Z') })
+    );
+    await assertFails(as(OWNER).doc(TOKEN_DOC).update({ revokedAt: null }));
+    await assertFails(as(OWNER).doc(TOKEN_DOC).update({ label: 'Renamed' }));
+    await assertFails(as(OWNER).doc(TOKEN_DOC).delete());
+  });
+
+  it('refuses anything nested under a token', async () => {
+    await assertFails(as(OWNER).doc(`${TOKEN_DOC}/notes/n1`).set({ any: true }));
+    await assertFails(as(OWNER).doc(`${TOKEN_DOC}/notes/n1`).get());
+  });
+});
+
 describe('default deny', () => {
   it('blocks reads and writes to collections the rules do not mention', async () => {
     await assertFails(as(OWNER).doc('somethingElse/doc-1').set({ anything: true }));

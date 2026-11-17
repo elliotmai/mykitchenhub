@@ -442,6 +442,19 @@ service cloud.firestore {
     }
     
     // ============================================
+    // API TOKENS (Settings → Connected apps)
+    // ============================================
+
+    // apiTokens/{sha256(token)} = { uid, label, createdAt, lastUsedAt, revokedAt }.
+    // Minted, listed and revoked only by the listApiTokens / createApiToken /
+    // revokeApiToken callables, and read only by the `board` API — all through
+    // the admin SDK. No client may read one (the id is the token's hash) or
+    // write one (that would be minting standing API access from a browser).
+    match /apiTokens/{document=**} {
+      allow read, write: if false;
+    }
+
+    // ============================================
     // DEFAULT DENY
     // ============================================
     

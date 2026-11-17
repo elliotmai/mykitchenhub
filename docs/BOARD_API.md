@@ -11,7 +11,7 @@ food about to go off; it can add a shopping item and tick one off.
 | **Function** | `board` — 1st gen HTTPS, default region `us-central1`, same as every other HTTP function here |
 | **URL** | `https://us-central1-mykitchenhub-db665.cloudfunctions.net/board` |
 | **Code** | `functions/src/board/` (`board.js` is the entry point) |
-| **Token script** | `functions/scripts/make-api-token.mjs` |
+| **Tokens** | **Settings → Connected apps** in the app (callables in `functions/src/apiTokens/`); legacy: `functions/scripts/make-api-token.mjs` |
 
 It uses the Firebase Admin SDK, so **Firestore security rules do not apply**.
 Every read and write is scoped in code to the one user the token belongs to;
@@ -25,35 +25,49 @@ token that never sits in a web page cannot leak from one.
 
 ## Setting up a token
 
-1. Generate one:
+1. In KitchenHub, **Settings → Connected apps → Connect an app**. Name it
+   ("Fridge Board") and press **Connect**.
 
-   ```bash
-   node functions/scripts/make-api-token.mjs
-   ```
+2. The token (`khapp_` + 32 random bytes, base64url) is shown **once**. Copy it
+   straight into the Fridge Board Netlify environment (or a password manager)
+   and press **Done**. It is generated on the server and stored nowhere — only
+   its SHA-256 hash is kept, as the document id of `apiTokens/{hash}` with the
+   owner's `uid`, the label, `createdAt`, `lastUsedAt` and `revokedAt`.
 
-   It prints a random token (32 bytes, base64url) and its SHA-256 hash. The
-   token is shown once and stored nowhere — put it straight into the Fridge
-   Board Netlify environment (or a password manager).
+3. Optional: add a string field `timezone` to your `users/{uid}` document with
+   an IANA name such as `America/Chicago`. It decides what "today" means for
+   the meals, the expiry countdown and today's cart. Without it — or with a
+   name the runtime does not recognise — the API uses `America/Chicago`.
 
-2. Firebase console → **Firestore Database → `users` → your user id**. Add the
-   **hash** (never the token) to the array field `apiTokenHashes` — create the
-   field as an *array* if it is not there. One entry per connected app, so each
-   can be revoked on its own. A single string field `apiTokenHash` also works.
+The screen lists each connected app with when it was last used. **To revoke**,
+press **Revoke** beside it and confirm; the next request with that token is a
+401. A cook can have up to 20 active tokens.
 
-3. Optional: add a string field `timezone` with an IANA name such as
-   `America/Chicago`. It decides what "today" means for the meals, the expiry
-   countdown and today's cart. Without it — or with a name the runtime does not
-   recognise — the API uses `America/Chicago`.
+The screen is backed by three callables — `listApiTokens`, `createApiToken`
+`{ label }` and `revokeApiToken` `{ id }` — which act only on the signed-in
+caller. The browser never sees a hash: each token's `id` is the first 12 hex
+characters of it, and revoke matches that against the caller's own tokens.
+`firestore.rules` denies every client read and write on `apiTokens/**`.
 
-**To revoke**, delete the array entry (or the field). It takes effect on the
-next request.
+### How a request is authenticated
 
-The app cannot write these fields: `firestore.rules` refuses any client create
-or update that adds, changes or removes `apiTokenHash` / `apiTokenHashes`, so a
-borrowed browser session cannot mint itself standing API access. Only the
-console or the admin SDK can grant or revoke a token. If the same hash ends up
-on two user documents, the API refuses it rather than guess which kitchen was
-meant.
+The API hashes the bearer token and looks, in order, at:
+
+1. **`apiTokens/{hash}`** — one `get`. A revoked token is refused; a good one
+   resolves to its `uid` and has `lastUsedAt` stamped (best-effort: a failed
+   stamp never fails the request).
+2. **Legacy fields on the user document** — the array `apiTokenHashes` or the
+   string `apiTokenHash`, set by hand from `node functions/scripts/make-api-token.mjs`.
+   These still work, so tokens made before the screen keep working, but new
+   tokens should come from Connected apps. To revoke one, delete its array
+   entry (or the field) in the Firebase console. If the same hash ends up on
+   two user documents, the API refuses it rather than guess which kitchen was
+   meant.
+
+The app cannot write the legacy fields either: `firestore.rules` refuses any
+client create or update that adds, changes or removes `apiTokenHash` /
+`apiTokenHashes`, so a borrowed browser session cannot mint itself standing API
+access outside the Connected apps screen — which needs the cook signed in.
 
 ## Deploying
 
@@ -63,8 +77,9 @@ firebase deploy --only functions:board --project mykitchenhub-db665
 ```
 
 A push to `main` touching `functions/**` also deploys every function
-automatically (`.github/workflows/deploy-functions.yml`). The rules change that
-protects the token fields deploys separately, with the **Deploy Firestore rules
+automatically (`.github/workflows/deploy-functions.yml`), including the three
+Connected apps callables. The rules that protect `apiTokens/**` and the legacy
+token fields deploy separately, with the **Deploy Firestore rules
 and indexes** workflow button or `firebase deploy --only firestore:rules`.
 
 ---
@@ -77,7 +92,7 @@ Every request carries `Authorization: Bearer <token>`. Bodies are JSON
 | Status | Meaning |
 | --- | --- |
 | 400 | The body is wrong, or the line cannot be ticked (see below) |
-| 401 | No token, a malformed or short one, an unknown one, or one on two users |
+| 401 | No token, a malformed or short one, an unknown or revoked one, or one on two users |
 | 404 | Unknown route, or an unknown shopping item id |
 | 500 | Something failed inside; the detail is in the function logs, never the response |
 

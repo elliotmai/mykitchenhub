@@ -86,3 +86,17 @@ describe('Settings waste alerts panel', () => {
     expect(screen.queryByTestId('sms-alert-settings')).not.toBeInTheDocument();
   });
 });
+
+describe('Settings connected apps panel', () => {
+  it('opens Connected apps from the sidebar', async () => {
+    await renderSettings();
+    expect(screen.queryByTestId('connected-apps')).not.toBeInTheDocument();
+
+    await act(async () => {
+      await userEvent.click(section(/Connected apps/));
+    });
+
+    expect(screen.getByTestId('connected-apps')).toBeInTheDocument();
+    expect(await screen.findByText(/No apps connected/)).toBeInTheDocument();
+  });
+});

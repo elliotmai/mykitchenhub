@@ -281,6 +281,18 @@ exports.deleteStorageLocation = deleteStorageLocation;
 // live in src/board/; setup is in docs/BOARD_API.md.
 exports.board = require('./src/board/board').board;
 
+// ==========================================================================
+// FUNCTION 8: Connected apps (mint, list, revoke tokens for the board API)
+// ==========================================================================
+
+// Callables for Settings → Connected apps. Implementation lives in
+// src/apiTokens/; tokens are stored as apiTokens/{sha256} (see auth.js).
+const { listApiTokens, createApiToken, revokeApiToken } = require('./src/apiTokens/apiTokens');
+
+exports.listApiTokens = listApiTokens;
+exports.createApiToken = createApiToken;
+exports.revokeApiToken = revokeApiToken;
+
 // ============================================================================
 // HELPER FUNCTIONS (for future implementation)
 // ============================================================================

@@ -1,8 +1,12 @@
 #!/usr/bin/env node
 /*
- * Generates a personal API token for the `board` Cloud Function
- * (functions/src/board/) and prints the SHA-256 hash to store on your
- * Firestore user document.
+ * LEGACY. New tokens for the `board` Cloud Function come from the app:
+ * Settings → Connected apps mints one (khapp_…), shows it once, stores only its
+ * hash in apiTokens/{sha256}, and revokes it with one tap. Use that.
+ *
+ * This script is kept for the hand-made tokens that predate the screen: it
+ * prints a token and the SHA-256 hash to put on your Firestore user document,
+ * and those `apiTokenHash` / `apiTokenHashes` fields still work.
  *
  *   node functions/scripts/make-api-token.mjs
  *

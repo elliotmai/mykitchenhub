@@ -48,14 +48,17 @@ This document describes the complete Firestore database structure for MyKitchenH
   },
 
   // The `board` API (docs/BOARD_API.md). Optional; console-written only.
+  // Legacy: new tokens live in the `apiTokens` collection (§9).
   apiTokenHashes: ["9f86d0…"],     // SHA-256 hex of each bearer token, one per connected app
   apiTokenHash: "9f86d0…",         // the same, as a single string — either form is accepted
   timezone: "America/Chicago"      // IANA name; what "today" means to the board API
 }
 ```
 
-**API tokens:** `apiTokenHashes` / `apiTokenHash` hold only hashes — the token
-itself is never stored. The `board` Cloud Function hashes the caller's bearer
+**API tokens (legacy):** new tokens are minted under Settings → Connected apps
+and stored in the `apiTokens` collection (§9); these fields still work for
+tokens made by hand before that. `apiTokenHashes` / `apiTokenHash` hold only
+hashes — the token itself is never stored. The `board` Cloud Function hashes the caller's bearer
 token and serves the one user whose document carries it; a hash on two users is
 refused. They are granted and revoked in the Firebase console (generate one with
 `node functions/scripts/make-api-token.mjs`), and the security rules refuse any
@@ -771,6 +774,46 @@ db.collection('users').doc(userId)
 ```
 Ordered on a single field, so the automatic single-field index covers it; no
 composite index is needed.
+
+---
+
+### 9. `apiTokens` Collection
+
+**Path:** `/apiTokens/{sha256(token)}`
+
+Tokens another of the cook's apps (Fridge Board) uses to call the `board` API,
+minted, listed and revoked under **Settings → Connected apps** through the
+`createApiToken`, `listApiTokens` and `revokeApiToken` callables
+(`functions/src/apiTokens/`). The document id is the SHA-256 hex of the token,
+so the API resolves a bearer token with one `get`.
+
+```javascript
+{
+  uid: "user123",            // owner
+  label: "Fridge Board",     // 1–60 characters, trimmed
+  createdAt: Timestamp,
+  lastUsedAt: Timestamp|null, // stamped best-effort by the board API on each use
+  revokedAt: Timestamp|null   // set by revokeApiToken; a revoked token is refused
+}
+```
+
+- The token is `khapp_` + 32 random bytes as base64url, generated on the
+  server. It is returned once by `createApiToken` and stored nowhere.
+- The hash never goes back to the browser. The screen sees a public id, the
+  first 12 hex characters of it, and revoke matches that against the caller's
+  own tokens only.
+- At most 20 active (unrevoked) tokens per cook.
+
+**Security rules:** none for the client — `apiTokens/{document=**}` denies
+every read and write. Only the admin SDK (the callables and the `board` API)
+touches it.
+
+**Queries:**
+```javascript
+// One cook's tokens — single-field equality, covered by the automatic index.
+// Sorted by createdAt in code, so no composite index is needed.
+db.collection('apiTokens').where('uid', '==', uid).get();
+```
 
 ---
 
