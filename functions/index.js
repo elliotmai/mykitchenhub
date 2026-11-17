@@ -273,6 +273,14 @@ exports.createStorageLocation = createStorageLocation;
 exports.updateStorageLocation = updateStorageLocation;
 exports.deleteStorageLocation = deleteStorageLocation;
 
+// ==========================================================================
+// FUNCTION 7: Fridge Board API (token-protected, server to server)
+// ==========================================================================
+
+// Bearer-token HTTP API for the Fridge Board kiosk. Implementation and routes
+// live in src/board/; setup is in docs/BOARD_API.md.
+exports.board = require('./src/board/board').board;
+
 // ============================================================================
 // HELPER FUNCTIONS (for future implementation)
 // ============================================================================

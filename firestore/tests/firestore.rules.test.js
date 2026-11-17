@@ -335,6 +335,41 @@ describe('users collection', () => {
       as(OWNER).doc(`users/${OWNER}`).set({ displayName: 'Chef Eli' }, { merge: true })
     );
   });
+
+  // -------------------------------------------------------------------------
+  // The board API's token hashes (functions/src/board/auth.js). Granted and
+  // revoked in the console only: a client that could write one could turn a
+  // borrowed browser session into a standing API token.
+  // -------------------------------------------------------------------------
+
+  const TOKEN_HASH = 'a'.repeat(64);
+
+  it('refuses a profile created with an API token hash on it', async () => {
+    await assertFails(as(OWNER).doc(`users/${OWNER}`).set(validUser({ apiTokenHash: TOKEN_HASH })));
+    await assertFails(
+      as(OWNER).doc(`users/${OWNER}`).set(validUser({ apiTokenHashes: [TOKEN_HASH] }))
+    );
+  });
+
+  it('refuses to let the owner add, change or remove an API token hash', async () => {
+    const profile = validUser({ apiTokenHashes: [TOKEN_HASH] });
+    await seed((db) => db.doc(`users/${OWNER}`).set(profile));
+    const ref = as(OWNER).doc(`users/${OWNER}`);
+
+    await assertFails(ref.update({ apiTokenHash: 'b'.repeat(64) }));
+    await assertFails(ref.update({ apiTokenHashes: [TOKEN_HASH, 'b'.repeat(64)] }));
+    await assertFails(ref.update({ apiTokenHashes: [] }));
+    const { apiTokenHashes, ...withoutHashes } = profile;
+    await assertFails(ref.set(withoutHashes));
+  });
+
+  it('still lets a profile with an API token hash be edited and merged', async () => {
+    await seed((db) => db.doc(`users/${OWNER}`).set(validUser({ apiTokenHashes: [TOKEN_HASH] })));
+    const ref = as(OWNER).doc(`users/${OWNER}`);
+
+    await assertSucceeds(ref.update({ displayName: 'Chef Eli' }));
+    await assertSucceeds(ref.set({ timezone: 'America/Chicago' }, { merge: true }));
+  });
 });
 
 // ---------------------------------------------------------------------------

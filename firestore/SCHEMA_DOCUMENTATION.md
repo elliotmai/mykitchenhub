@@ -45,9 +45,23 @@ This document describes the complete Firestore database structure for MyKitchenH
     mealsPerWeek: 3,              // Number of meals per delivery
     lastDeliveryDate: Timestamp,   // Last delivery received
     nextDeliveryDate: Timestamp    // Expected next delivery
-  }
+  },
+
+  // The `board` API (docs/BOARD_API.md). Optional; console-written only.
+  apiTokenHashes: ["9f86d0…"],     // SHA-256 hex of each bearer token, one per connected app
+  apiTokenHash: "9f86d0…",         // the same, as a single string — either form is accepted
+  timezone: "America/Chicago"      // IANA name; what "today" means to the board API
 }
 ```
+
+**API tokens:** `apiTokenHashes` / `apiTokenHash` hold only hashes — the token
+itself is never stored. The `board` Cloud Function hashes the caller's bearer
+token and serves the one user whose document carries it; a hash on two users is
+refused. They are granted and revoked in the Firebase console (generate one with
+`node functions/scripts/make-api-token.mjs`), and the security rules refuse any
+client write that adds, changes or removes them, so a browser session cannot
+mint itself standing API access. `timezone` is optional and client-writable;
+without it the board API counts days in `America/Chicago`.
 
 **Delivery days:**
 
@@ -65,6 +79,8 @@ rather than guessing a day.
 - Users can read/update their own document
 - Users cannot change `email` or `createdAt` after creation
 - Users cannot delete their own document
+- `apiTokenHash` and `apiTokenHashes` cannot be set on create, or added,
+  changed or removed on update — see **API tokens** above
 - `email`, `createdAt` and `preferences` are re-checked on update. A `setDoc`
   without `{ merge: true }` replaces the document, so without that check an
   update could leave a profile with no `preferences` — a state `create` would

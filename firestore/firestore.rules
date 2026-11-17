@@ -21,6 +21,17 @@ service cloud.firestore {
     function hasRequiredFields(fields) {
       return request.resource.data.keys().hasAll(fields);
     }
+
+    // The `board` API's credentials: SHA-256 hashes of bearer tokens, on the
+    // owner's own profile (functions/src/board/auth.js). They are granted and
+    // revoked from the Firebase console only. A browser session that could
+    // write one could mint itself an API token that outlives the session — a
+    // stolen tab turned into standing access — so the client may neither add
+    // these fields nor change or remove them.
+    function apiTokenFieldsUntouched() {
+      return request.resource.data.get('apiTokenHash', null) == resource.data.get('apiTokenHash', null)
+        && request.resource.data.get('apiTokenHashes', null) == resource.data.get('apiTokenHashes', null);
+    }
     
     // ============================================
     // USERS COLLECTION
@@ -32,7 +43,8 @@ service cloud.firestore {
       
       // Users can create their own profile on signup
       allow create: if isOwner(userId) 
-        && hasRequiredFields(['email', 'createdAt', 'preferences', 'helloFresh']);
+        && hasRequiredFields(['email', 'createdAt', 'preferences', 'helloFresh'])
+        && !request.resource.data.keys().hasAny(['apiTokenHash', 'apiTokenHashes']);
       
       // Users can update their own profile.
       //
@@ -55,7 +67,8 @@ service cloud.firestore {
         && hasRequiredFields(['email', 'createdAt', 'preferences'])
         // Prevent changing createdAt or email
         && request.resource.data.createdAt == resource.data.createdAt
-        && request.resource.data.email == resource.data.email;
+        && request.resource.data.email == resource.data.email
+        && apiTokenFieldsUntouched();
       
       // Users cannot delete their profile (must be done through admin)
       allow delete: if false;

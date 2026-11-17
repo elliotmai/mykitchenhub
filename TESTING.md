@@ -101,6 +101,7 @@ corpus through both implementations and asserts they agree:
 | Contract | Test | Corpus |
 | --- | --- | --- |
 | CSV validation | `src/components/CSVImport/__tests__/csvValidation.contract.test.js` | `src/test-utils/csvContractCorpus.js` |
+| Shopping list and store aisles (the `board` API) | `src/hooks/__tests__/shoppingList.contract.test.js` | `src/test-utils/shoppingContractCorpus.js` |
 
 These live in the frontend suite because only that runner transpiles ESM; it
 `require`s the CommonJS copy directly. **A change to either implementation

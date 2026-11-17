@@ -15,6 +15,7 @@ offline for reading.
 | **Going to production** | [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) |
 | **First-run data** | [docs/INITIAL_DATA_SETUP.md](./docs/INITIAL_DATA_SETUP.md) |
 | **The data contract** | [firestore/SCHEMA_DOCUMENTATION.md](./firestore/SCHEMA_DOCUMENTATION.md) |
+| **The Fridge Board API** | [docs/BOARD_API.md](./docs/BOARD_API.md) |
 
 ---
 
@@ -35,6 +36,9 @@ offline for reading.
 - **Meal planning** for the week, either by hand or generated around what is
   closest to expiring, with a shopping list that knows what you already have.
 - **A dashboard and analytics**: what you buy, what it costs, and where.
+- **An API for Fridge Board**, a kitchen kiosk: the `board` Cloud Function
+  serves the week, its recipes, the shopping list and what is going off to one
+  cook's token — see [docs/BOARD_API.md](./docs/BOARD_API.md).
 
 [docs/USER_GUIDE.md](./docs/USER_GUIDE.md) walks through each of these.
 
@@ -149,6 +153,11 @@ Anthropic paths and the legacy credentials also accept the older
 | `LEGACY_SYNC_MAX_COST_USD` | no | Total spend ceiling across every sync run. Defaults to `10` |
 | `SYNC_ADMIN_UIDS` | no | Comma-separated uids allowed to start a sync. **Unset means any signed-in user can start one** — set it before launch |
 
+The `board` API needs no environment variable: its tokens are stored only as
+SHA-256 hashes on each cook's own user document (`apiTokenHashes`), and are
+created with `node functions/scripts/make-api-token.mjs`. See
+[docs/BOARD_API.md](./docs/BOARD_API.md#setting-up-a-token).
+
 Credentials are read from `process.env` or Functions config only. The
 service-account JSON files in `functions/` are never read by application code;
 they are being rotated out of band and must not be used or copied.
@@ -214,7 +223,8 @@ src/
   test-utils/   render helpers, document factories, and the Firebase mocks
 functions/
   index.js      exports only; every implementation lives under src/
-  src/          csvImport, hellofresh, mealPlan, recipes, wasteAlerts, triggers, data
+  src/          board, csvImport, hellofresh, mealPlan, recipes, wasteAlerts, triggers, data
+  scripts/      seed runner, and make-api-token.mjs for the board API
 firestore/
   firestore.rules            the security rules that are actually deployed
   SCHEMA_DOCUMENTATION.md    every document shape, field by field

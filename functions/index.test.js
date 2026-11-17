@@ -61,6 +61,7 @@ const REQUIRED_EXPORTS = [
   'createStorageLocation',
   'updateStorageLocation',
   'deleteStorageLocation',
+  'board',
 ];
 
 describe('deployed function surface', () => {

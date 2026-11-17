@@ -218,11 +218,12 @@ cd functions && npm ci
 firebase deploy --only functions
 ```
 
-Check afterwards, in Firebase console → **Functions**, that the ten the app
+Check afterwards, in Firebase console → **Functions**, that the eleven the app
 depends on are listed: `onUserCreated`, `syncLegacyRecipes`,
 `importInventoryFromCSV`, `importHelloFreshFromPhoto`, `importHelloFreshFromUrl`,
 `sendDailyWasteAlerts`, `generateMealPlan`, `createStorageLocation`,
-`updateStorageLocation`, `deleteStorageLocation`. That list is
+`updateStorageLocation`, `deleteStorageLocation`, and `board` (the Fridge Board
+API — token setup in [BOARD_API.md](./BOARD_API.md)). That list is
 `REQUIRED_EXPORTS` in `functions/index.test.js`, which fails the build if one
 goes missing.
 
