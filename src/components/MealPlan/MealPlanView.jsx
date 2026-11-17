@@ -39,6 +39,7 @@ const MealPlanView = () => {
     weekEntries,
     plan,
     shoppingList,
+    setDerivedBought,
     batchTips,
     loading,
     error,
@@ -59,7 +60,7 @@ const MealPlanView = () => {
   // Read here, written through the shared actions hook — the same wiring the
   // standalone Shopping List page uses, so the two cannot drift.
   const { items: manualItems } = useShoppingList();
-  const shoppingActions = useShoppingListActions();
+  const shoppingActions = useShoppingListActions({ setDerivedBought });
 
   const { showSuccess, showError, showInfo } = useToast();
 

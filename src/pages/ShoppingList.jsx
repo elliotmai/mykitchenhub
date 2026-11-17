@@ -20,9 +20,9 @@ const ShoppingListPage = () => {
   // The derived half. useMealPlan is the only thing that computes it, and
   // asking it again here rather than recomputing keeps one definition of what
   // the week still needs.
-  const { shoppingList } = useMealPlan();
+  const { shoppingList, setDerivedBought } = useMealPlan();
   const { items: manualItems } = useShoppingList();
-  const actions = useShoppingListActions();
+  const actions = useShoppingListActions({ setDerivedBought });
 
   const duplicateNames = findDuplicateNames(manualItems, shoppingList);
 

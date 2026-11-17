@@ -15,6 +15,7 @@ const {
   normalizeName,
 } = require('./shoppingList');
 const { groupByStoreSection } = require('./storeSections');
+const { ingredientAlternatives, ingredientKey, measureKey } = require('./ingredientMeasure');
 const { toRecipeCard } = require('./recipeCards');
 const { localDay, daysUntil, shiftDayKey, startOfWeekKey, toDate } = require('./dates');
 
@@ -122,14 +123,16 @@ const manualId = (item) => `item:${item.id}`;
 
 /** Which of the week's meals a derived line is for, by recipe name. */
 const mealsNeeding = (row, weekEntries) => {
-  const unit = normalizeName(row.unit);
+  const measure = row.measure ?? measureKey(row.unit);
   const names = [];
   weekEntries.filter(isUpcoming).forEach((entry) => {
-    const uses = (entry.usesIngredients || []).some(
-      (ingredient) =>
-        normalizeName(ingredient.normalized || ingredient.name) === row.normalized &&
-        normalizeName(ingredient.unit) === unit
-    );
+    // Matched the way buildShoppingList merged them: by ingredient key and kind
+    // of measure, including an "or" ingredient that was folded into this line.
+    const uses = (entry.usesIngredients || []).some((ingredient) => {
+      if (measureKey(ingredient.unit) !== measure) return false;
+      const key = ingredientKey(ingredient.normalized || ingredient.name);
+      return key === row.normalized || ingredientAlternatives(key).includes(row.normalized);
+    });
     const name = String(entry.recipeName ?? '').trim();
     if (uses && name && !names.includes(name)) names.push(name);
   });
@@ -162,8 +165,15 @@ const wasBoughtOn = (item, today, timeZone) => {
  *
  * @returns {Array<{id, name, qty, section, why, bought}>}
  */
-const shoppingRows = ({ manualItems = [], weekEntries = [], inventory = [], today, timeZone }) => {
-  const derived = buildShoppingList(weekEntries, inventory);
+const shoppingRows = ({
+  manualItems = [],
+  weekEntries = [],
+  inventory = [],
+  boughtKeys = [],
+  today,
+  timeZone,
+}) => {
+  const derived = buildShoppingList(weekEntries, inventory, boughtKeys);
   const combined = combineShoppingList(manualItems, derived);
 
   const outstanding = combined.map((row) =>
@@ -197,7 +207,20 @@ const shoppingRows = ({ manualItems = [], weekEntries = [], inventory = [], toda
       normalized: item.normalized || item.name,
     }));
 
-  return [...inAisleOrder(outstanding), ...inAisleOrder(boughtToday)];
+  // Meal lines ticked off this week, so the board can show them in the cart
+  // and put one back. They have no timestamp, so "today" is "this week".
+  const boughtFromMeals = derived
+    .filter((item) => item.bought && item.haveInInventory !== true)
+    .map((item) => ({
+      id: derivedId(item),
+      name: item.name,
+      qty: amountLabel(item) ?? '',
+      why: mealsNeeding(item, weekEntries),
+      bought: true,
+      normalized: item.normalized,
+    }));
+
+  return [...inAisleOrder(outstanding), ...inAisleOrder([...boughtToday, ...boughtFromMeals])];
 };
 
 /** One typed item in the API's shape, e.g. straight after it is added. */
@@ -212,7 +235,7 @@ const manualRow = (item) => shoppingRows({ manualItems: [{ ...item, status: 'pen
  * @param {object} clock    { now: Date, timeZone: string }
  */
 const buildBoard = (
-  { entries = [], inventory = [], manualItems = [], recipesById = {} },
+  { entries = [], inventory = [], manualItems = [], boughtKeys = [], recipesById = {} },
   { now, timeZone }
 ) => {
   const window = boardWindow(localDay(now, timeZone));
@@ -227,7 +250,14 @@ const buildBoard = (
     meals,
     recipes: recipeCards(meals, recipesById),
     expiring: expiringItems(inventory, now, timeZone),
-    shopping: shoppingRows({ manualItems, weekEntries, inventory, today: window.today, timeZone }),
+    shopping: shoppingRows({
+      manualItems,
+      weekEntries,
+      inventory,
+      boughtKeys,
+      today: window.today,
+      timeZone,
+    }),
   };
 };
 
@@ -254,7 +284,7 @@ const loadBoardSources = async (db, uid, today, { recipes = true } = {}) => {
   const window = boardWindow(today);
   const user = db.collection('users').doc(uid);
 
-  const [entrySnap, inventorySnap, shoppingSnap] = await Promise.all([
+  const [entrySnap, inventorySnap, shoppingSnap, planSnap] = await Promise.all([
     user
       .collection('mealPlanEntries')
       .where('date', '>=', window.weekStart)
@@ -263,6 +293,8 @@ const loadBoardSources = async (db, uid, today, { recipes = true } = {}) => {
       .get(),
     user.collection('inventory').orderBy('name', 'asc').get(),
     user.collection('shoppingItems').orderBy('createdAt', 'desc').get(),
+    // The week's document holds which derived lines were ticked off.
+    user.collection('mealPlans').doc(window.weekStart).get(),
   ]);
 
   const entries = docsOf(entrySnap);
@@ -288,6 +320,7 @@ const loadBoardSources = async (db, uid, today, { recipes = true } = {}) => {
     entries,
     inventory: docsOf(inventorySnap),
     manualItems: docsOf(shoppingSnap),
+    boughtKeys: (planSnap?.exists && planSnap.data()?.boughtKeys) || [],
     recipesById,
   };
 };

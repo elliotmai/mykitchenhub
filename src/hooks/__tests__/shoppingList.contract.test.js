@@ -20,38 +20,47 @@ import {
   groupByStoreSection,
   sectionFor,
 } from '../../config/storeSections';
-import { ADD_INPUTS, CASES, SECTION_NAMES } from '../../test-utils/shoppingContractCorpus';
+import {
+  ADD_INPUTS,
+  CASES,
+  MEASURE_NAMES,
+  MEASURE_QUANTITIES,
+  MEASURE_UNITS,
+  SECTION_NAMES,
+} from '../../test-utils/shoppingContractCorpus';
+import * as measure from '../../utils/ingredientMeasure';
 
 const server = require('../../../functions/src/board/shoppingList');
 const serverSections = require('../../../functions/src/board/storeSections');
+const serverMeasure = require('../../../functions/src/board/ingredientMeasure');
 
 /** The server's derived row also carries its source line; everything else must match. */
 const withoutSource = (rows) => rows.map(({ source, ...row }) => row);
 
 describe('shopping list contract: the app and the board API agree', () => {
   describe.each(CASES.map((testCase) => [testCase.name, testCase]))('%s', (_name, testCase) => {
-    const { entries, inventory, manualItems } = testCase;
+    const { entries, inventory, manualItems, boughtKeys = [] } = testCase;
 
     it('derives the same week', () => {
-      expect(server.buildShoppingList(entries, inventory)).toEqual(
-        buildShoppingList(entries, inventory)
+      expect(server.buildShoppingList(entries, inventory, boughtKeys)).toEqual(
+        buildShoppingList(entries, inventory, boughtKeys)
       );
     });
 
     it('combines it with the typed list the same way', () => {
-      const derived = buildShoppingList(entries, inventory);
+      const derived = buildShoppingList(entries, inventory, boughtKeys);
       expect(withoutSource(server.combineShoppingList(manualItems, derived))).toEqual(
         combineShoppingList(manualItems, derived)
       );
     });
 
     it('files every line in the same aisle, in the same order', () => {
-      const rows = [...manualItems, ...buildShoppingList(entries, inventory)];
+      const rows = [...manualItems, ...buildShoppingList(entries, inventory, boughtKeys)];
       expect(serverSections.groupByStoreSection(rows)).toEqual(groupByStoreSection(rows));
     });
 
     it('labels every amount the same way', () => {
-      [...manualItems, ...buildShoppingList(entries, inventory)].forEach((item) => {
+      [...manualItems, ...buildShoppingList(entries, inventory, boughtKeys)].forEach((item) => {
         expect(server.amountLabel(item)).toEqual(amountLabel(item));
       });
     });
@@ -68,6 +77,38 @@ describe('shopping list contract: the app and the board API agree', () => {
     'files %s in the same aisle',
     (_label, name) => {
       expect(serverSections.sectionFor(name)).toBe(sectionFor(name));
+    }
+  );
+
+  it('exports the same measure helpers', () => {
+    expect(Object.keys(serverMeasure).sort()).toEqual(Object.keys(measure).sort());
+  });
+
+  it.each(MEASURE_NAMES.map((name) => [JSON.stringify(name), name]))(
+    'cleans and keys %s the same way',
+    (_label, name) => {
+      expect(serverMeasure.cleanIngredientName(name)).toBe(measure.cleanIngredientName(name));
+      expect(serverMeasure.ingredientKey(name)).toBe(measure.ingredientKey(name));
+      const key = measure.ingredientKey(name);
+      expect(serverMeasure.ingredientAlternatives(key)).toEqual(
+        measure.ingredientAlternatives(key)
+      );
+    }
+  );
+
+  it.each(MEASURE_UNITS.map((unit) => [JSON.stringify(unit), unit]))(
+    'reads and formats the unit %s the same way',
+    (_label, unit) => {
+      expect(serverMeasure.canonicalUnit(unit)).toBe(measure.canonicalUnit(unit));
+      expect(serverMeasure.measureKey(unit)).toBe(measure.measureKey(unit));
+      MEASURE_QUANTITIES.forEach((quantity) => {
+        expect(serverMeasure.formatAmount(quantity, unit)).toBe(
+          measure.formatAmount(quantity, unit)
+        );
+        expect(serverMeasure.convertQuantity(quantity, unit, 'tsp')).toBe(
+          measure.convertQuantity(quantity, unit, 'tsp')
+        );
+      });
     }
   );
 

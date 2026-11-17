@@ -23,9 +23,13 @@ import { useToast } from '../Common';
  *   onRemoveItem: (item: object) => Promise<void>,
  *   onEditItem: (item: object, changes: object) => Promise<object>,
  *   onClearBought: () => Promise<void>,
+ *   onToggleDerived?: (item: object, bought: boolean) => Promise<void>,
  * }}
+ *
+ * Pass `setDerivedBought` from useMealPlan to make the week's own lines
+ * tickable too; this hook does not open a second meal plan listener for it.
  */
-export const useShoppingListActions = () => {
+export const useShoppingListActions = ({ setDerivedBought } = {}) => {
   const { addItem, updateItem, setBought, removeItem, clearBought } = useShoppingList();
   const { showError, showInfo } = useToast();
   const [busyItemId, setBusyItemId] = useState(null);
@@ -39,13 +43,7 @@ export const useShoppingListActions = () => {
     [addItem, showError]
   );
 
-  /**
-   * Tick a typed item off, or put it back.
-   *
-   * Only manual rows reach here. A derived row has no document to mark, and
-   * creating one on a tick would make the same list true in two places — so
-   * derived rows have no checkbox at all.
-   */
+  /** Tick a typed item off, or put it back. Derived rows go to onToggleDerived. */
   const onToggleBought = useCallback(
     async (item, bought) => {
       setBusyItemId(item.id);
@@ -86,7 +84,23 @@ export const useShoppingListActions = () => {
     else if (result.cleared) showInfo(`Cleared ${result.cleared} item(s) off your shopping list.`);
   }, [clearBought, showError, showInfo]);
 
-  return { busyItemId, onAddItem, onToggleBought, onRemoveItem, onEditItem, onClearBought };
+  const onToggleDerived = useCallback(
+    async (item, bought) => {
+      const result = await setDerivedBought(item.key, bought);
+      if (!result?.success) showError(result?.error || 'Could not update your shopping list.');
+    },
+    [setDerivedBought, showError]
+  );
+
+  return {
+    busyItemId,
+    onAddItem,
+    onToggleBought,
+    onRemoveItem,
+    onEditItem,
+    onClearBought,
+    ...(setDerivedBought ? { onToggleDerived } : {}),
+  };
 };
 
 export default useShoppingListActions;

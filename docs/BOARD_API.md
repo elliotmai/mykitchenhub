@@ -186,8 +186,12 @@ for every path.
   - `qty` is the app's amount label: `"1 lb"`, `"4 pack"`, or `""` for one of
     something unmeasured.
   - After the outstanding lines come typed items **ticked off today** (by
-    `boughtAt`, in the cook's timezone) with `bought: true`, so the kiosk can
-    show the cart.
+    `boughtAt`, in the cook's timezone) and meal lines ticked off this week,
+    with `bought: true`, so the kiosk can show the cart.
+  - Names and amounts are standardised as in the app: prep notes stripped
+    ("Carrots, peeled and chopped" → "Carrots"), volumes and weights summed
+    across units in the largest unit any recipe used, fractions not decimals
+    (`"⅓ cup"`, `"2¼ lb"`).
 
   Ids: `item:<shoppingItems doc id>` for a typed item;
   `meal:<normalized name>` or `meal:<normalized name>|<unit>` for a derived
@@ -222,12 +226,13 @@ response says where the item actually went:
   sets `status: "bought"` and stamps `boughtAt`; `false` sets it back to
   `pending` and clears `boughtAt`. Returns `{ "ok": true }`. 404 if there is
   no such item for this cook.
-- **`meal:…`** — **refused with 400.** A line derived from the meal plan has no
-  checkbox in KitchenHub and no document behind it (see
-  `firestore/SCHEMA_DOCUMENTATION.md` §8, "Derived rows are not tickable at
-  all"); it leaves the list when the kitchen's inventory covers it or the meal
-  plan changes. The API mirrors that rather than inventing a write the app
-  never makes. An id that is not on the current list is a 404.
+- **`meal:…`** — does what the row's checkbox does in the app: `bought: true`
+  adds the line's key to `boughtKeys` on the week's `mealPlans` document
+  (creating a minimal one if the week has none), `false` removes it. Returns
+  `{ "ok": true }`. A ticked meal line then appears after the outstanding lines
+  with `bought: true`, alongside typed items ticked off today. An id that is
+  not on the board's current list — including a line the kitchen already
+  covers, or one a typed item of the same name stands in for — is a 404.
 
 `bought` must be a boolean, or the request is a 400.
 

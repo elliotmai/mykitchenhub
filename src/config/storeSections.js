@@ -189,11 +189,22 @@ const KEYWORD_RULES = [
   [/\bfrozen\b|\bice cream\b/, 'frozen'],
   [/\bjuice\b|\bsoda\b|\bcoffee\b|\btea\b|\bbeer\b|\bwine\b|\bwater\b/, 'drinks'],
   [/\bbread\b|\bbagel|\bbun\b|\bbuns\b|\bloaf\b|\bcroissant|\bmuffin|\btortilla/, 'bakery'],
+  // Shelf-stable things whose names contain a fresh food's word: chicken
+  // broth is not in the meat fridge, dried thyme is not with the herbs, and
+  // coconut milk is not dairy.
+  [
+    /\bbroth\b|\bstock\b|\bbouillon\b|\bcoconut milk\b|\bdried\b|\bglaze\b|\bvinegar\b|\bchickpea|\blentil|\bblack pepper\b|\bpeppercorn|\bsalt\b|\bcanned\b|\btinned\b|\bpaste\b|\bsauce\b|\boil\b|\bpowder\b|\bpaprika\b|\bcumin\b|\bcinnamon\b|\bnutmeg\b|\bhoney\b|\bmustard\b|\bbeans\b|\bquinoa\b|\bnoodle|\bcornstarch\b|\bbaking\b|\bvanilla\b|\byeast\b|\bnuts?\b|\balmond|\bwalnut|\bpecan|\bseeds?\b/,
+    'pantry',
+  ],
   [
     /\bchicken\b|\bbeef\b|\bpork\b|\blamb\b|\bturkey\b|\bbacon\b|\bsausage|\bmince\b|\bsteak\b/,
     'meat',
   ],
   [/\bfish\b|\bsalmon\b|\btuna\b|\bprawn|\bshrimp\b|\bcod\b|\bcrab\b|\bscallop/, 'meat'],
+  [
+    /\bsquash\b|\bsprout|\bbeet|\bcarrot|\bzucchini|\bpumpkin|\bspinach|\barugula|\btomato|\bpepper\b|\bpeppers\b|\bscallion|\bshallot|\bleek|\bthyme\b|\boregano\b|\bsage\b|\bdill\b|\bchive|\bpotato|\bcorn\b|\bpeas?\b|\bradish|\bturnip|\bfennel|\beggplant|\bapple|\bberr|\bcranberr|\blemon|\blime\b|\bjalape|\bherb|\bgreens\b|\bonion|\bcabbage|\bcelery|\bavocado|\bmushroom|\bparsley|\bcilantro|\bbasil|\bginger|\bgarlic/,
+    'produce',
+  ],
   [/\bmilk\b|\bcheese\b|\byogurt|\byoghurt|\bcream\b|\bbutter\b|\begg/, 'dairy'],
   [
     /\bcanned\b|\btinned\b|\bpasta\b|\brice\b|\bflour\b|\bsugar\b|\boil\b|\bspice|\bsauce\b/,

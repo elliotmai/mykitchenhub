@@ -129,6 +129,75 @@ describe('sortEntries', () => {
 // Shopping list
 // ---------------------------------------------------------------------------
 
+describe('buildShoppingList — a list a shopper can read', () => {
+  // The list a real week of imported recipes produced before standardising:
+  // prep notes in every name, "Balsamic Glaze" twice, "cup" and "cups" as
+  // different things, 0.33 cup.
+  const entries = [
+    makeMealPlanEntry({
+      usesIngredients: [
+        {
+          name: 'Boneless Skinless Chicken Breast, Cut Into Bite-Sized Pieces',
+          quantity: 8,
+          unit: 'oz',
+        },
+        { name: 'Chicken Broth', quantity: 1.5, unit: 'cups' },
+        { name: 'Balsamic Glaze', quantity: 1, unit: 'tbsp' },
+        { name: 'Dried Thyme', quantity: 2, unit: 'tsp' },
+        { name: 'Carrots, Peeled And Chopped', quantity: 2 },
+      ],
+    }),
+    makeMealPlanEntry({
+      usesIngredients: [
+        { name: 'Vegetable Or Chicken Broth', quantity: 7, unit: 'cups' },
+        { name: 'Balsamic Glaze, For Serving', quantity: 2, unit: 'tbsp' },
+        { name: 'Dried Thyme', quantity: 1, unit: 'tbsp' },
+        { name: 'Grated Parmesan Cheese', quantity: 0.33, unit: 'cup' },
+        { name: 'Carrot', quantity: 1 },
+      ],
+    }),
+  ];
+  const byName = (list) => Object.fromEntries(list.map((row) => [row.name, row]));
+
+  it('strips prep notes and merges the same ingredient', () => {
+    const list = byName(buildShoppingList(entries, []));
+    expect(Object.keys(list).sort()).toEqual([
+      'Balsamic glaze',
+      'Carrots',
+      'Chicken breast',
+      'Chicken broth',
+      'Dried thyme',
+      'Parmesan cheese',
+    ]);
+    expect(list['Balsamic glaze']).toMatchObject({ quantity: 3, unit: 'tbsp' });
+    expect(list.Carrots).toMatchObject({ quantity: 3, unit: '' });
+  });
+
+  it('adds teaspoons to tablespoons, shown in the larger unit', () => {
+    const thyme = byName(buildShoppingList(entries, []))['Dried thyme'];
+    expect(thyme.unit).toBe('tbsp');
+    expect(thyme.quantity).toBeCloseTo(1.67);
+  });
+
+  it('folds "vegetable or chicken broth" into the chicken broth the week already needs', () => {
+    const broth = byName(buildShoppingList(entries, []))['Chicken broth'];
+    expect(broth).toMatchObject({ quantity: 8.5, unit: 'cup' });
+  });
+
+  it('counts stock in a convertible unit against the need', () => {
+    const list = byName(
+      buildShoppingList(entries, [{ name: 'chicken breasts', quantity: 0.5, unit: 'lb' }])
+    );
+    expect(list['Chicken breast'].haveInInventory).toBe(true);
+  });
+
+  it('marks ticked lines bought, keyed by ingredient and kind of measure', () => {
+    const list = byName(buildShoppingList(entries, [], ['chicken broth|volume']));
+    expect(list['Chicken broth'].bought).toBe(true);
+    expect(list.Carrots.bought).toBe(false);
+  });
+});
+
 describe('buildShoppingList', () => {
   const salmonDinner = (overrides = {}) =>
     makeMealPlanEntry({

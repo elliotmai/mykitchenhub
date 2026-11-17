@@ -146,6 +146,40 @@ const CASES = [
       typed('d', 'Bread'),
     ],
   },
+  {
+    // The list from a real week of imported recipes: prep notes in names,
+    // "cup" and "cups", tsp alongside tbsp, an "or" ingredient, and a bottle
+    // of oil that cannot be counted against tablespoons.
+    name: 'recipe lines are standardised: prep notes, plurals, units, choices',
+    entries: [
+      meal('2026-11-17', 'dinner', [
+        uses('Boneless Skinless Chicken Breast, Cut Into Bite-Sized Pieces', 8, 'oz'),
+        uses('Chicken Broth', 1.5, 'cups'),
+        uses('Balsamic Glaze', 1, 'tbsp'),
+        uses('Dried Thyme', 1, 'tsp'),
+        uses('Olive Oil', 3, 'tbsp'),
+        uses('Carrots, Peeled And Chopped', 2),
+      ]),
+      meal('2026-11-18', 'dinner', [
+        uses('Vegetable Or Chicken Broth', 7, 'cups'),
+        uses('Balsamic Glaze, For Serving', 2, 'tbsp'),
+        uses('Dried Thyme', 1, 'tbsp'),
+        uses('Olive Oil', 2, 'Tablespoons'),
+        uses('Grated Parmesan Cheese', 0.33, 'cup'),
+        uses('carrot', 1),
+        uses('chicken breast', 0.5, 'lb'),
+      ]),
+    ],
+    inventory: [stock('olive oil', 1, 'bottle'), stock('Chicken breasts', 4, 'oz')],
+    manualItems: [typed('m1', 'Carrots')],
+  },
+  {
+    name: 'ticked meal lines are bought and leave the combined list',
+    entries: [meal('2026-11-17', 'dinner', [uses('milk', 2, 'cup'), uses('rice', 1, 'cup')])],
+    inventory: [],
+    manualItems: [],
+    boughtKeys: ['milk|volume', 'not on the list|count'],
+  },
 ];
 
 /** Names for the aisle lookup: exact, plural/singular, keyword and unknown. */
@@ -170,7 +204,33 @@ const SECTION_NAMES = [
   'ice cream',
   'pizza',
   'soy sauce',
+  'chicken broth',
+  'vegetable or chicken broth',
+  'dried thyme',
+  'coconut milk',
+  'butternut squash',
+  'brussels sprout',
+  'eggplant',
+  'balsamic glaze',
+  'carrot',
+  'fresh or dried cranberry',
+  'black pepper',
+  'chickpea',
 ];
+
+/** Raw names and units for the two ingredientMeasure copies. */
+const MEASURE_NAMES = [
+  'Boneless Skinless Chicken Breast, Cut Into Bite-Sized Pieces',
+  'Steak, Such As Sirloin, Strip, Or Ribeye',
+  'Fresh Or Dried Cranberries',
+  'Boneless, skinless chicken thighs',
+  'salt to taste',
+  'Tomatoes (ripe)',
+  '',
+  null,
+];
+const MEASURE_UNITS = ['Cups', 'tablespoons', 'TSP', 'fl oz', 'lbs', 'Grams', 'cans', 'pinch', ''];
+const MEASURE_QUANTITIES = [0.33, 1.25, 0.5, 2, 0.15, 7, 2.666, 0];
 
 /** Inputs for buildShoppingItem, as the add box and the board API send them. */
 const ADD_INPUTS = [
@@ -186,4 +246,11 @@ const ADD_INPUTS = [
   { name: 'Cream', quantity: 1 / 3 },
 ];
 
-module.exports = { CASES, SECTION_NAMES, ADD_INPUTS };
+module.exports = {
+  CASES,
+  SECTION_NAMES,
+  ADD_INPUTS,
+  MEASURE_NAMES,
+  MEASURE_UNITS,
+  MEASURE_QUANTITIES,
+};

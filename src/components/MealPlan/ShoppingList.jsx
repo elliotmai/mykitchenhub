@@ -5,16 +5,15 @@
 // Two kinds of row, from two different places, deliberately not merged:
 //
 //   Derived   computed by buildShoppingList() from the week's meals minus the
-//             kitchen. No document behind it, so nothing about it can be
-//             stored — including whether it has been bought.
+//             kitchen, with names and amounts standardised (prep notes off,
+//             units converted and summed, fractions not decimals). Ticking one
+//             off records its key on the week's mealPlans document, so the
+//             tick belongs to the week that produced the line.
 //   Manual    a document in users/{uid}/shoppingItems (see useShoppingList).
 //             Survives a reload and the week rolling over, and can be ticked
 //             off.
 //
-// Rows you can tick have a checkbox; rows the week computed do not. That is the
-// whole visual grammar, and it is honest: there is nowhere to record that a
-// derived row was bought, and quietly creating a document for one would make
-// the same list true in two places.
+// Both kinds have a checkbox and both land in "In the trolley" once ticked.
 
 import React, { useMemo, useState } from 'react';
 import { Badge, Button, Card, Form, Spinner } from 'react-bootstrap';
@@ -22,6 +21,7 @@ import { Check, Pencil, Plus, ShoppingCart, X } from 'lucide-react';
 
 import { amountLabel } from '../../hooks/useShoppingList';
 import { groupByStoreSection } from '../../config/storeSections';
+import { ingredientKey } from '../../utils/ingredientMeasure';
 
 // Re-exported because the fridge board renders the same rows from the same
 // helper: one definition, two surfaces.
@@ -55,7 +55,7 @@ const SMALL = { fontSize: 'var(--mkh-font-size-small)' };
 const TINY = { fontSize: 'var(--mkh-font-size-tiny)', color: 'var(--mkh-text-muted)' };
 const NOTE_INDENT = { ...TINY, marginLeft: '1.65rem' };
 
-/** Keeps a derived row's text lined up with the manual rows' checkboxes. */
+/** Keeps a row's text lined up with the checkboxes when it cannot be ticked. */
 const TickSpacer = () => (
   <span aria-hidden="true" style={{ display: 'inline-block', width: '1.15rem', flexShrink: 0 }} />
 );
@@ -219,18 +219,37 @@ const ManualRow = ({ item, duplicate, busy, onToggleBought, onRemove, onEdit }) 
   );
 };
 
-/** One line the week's meals produced. Nothing to tick — there is no document. */
-const DerivedRow = ({ item }) => {
-  const note = stockNote(item);
+/**
+ * One line the week's meals produced. Tickable when the surface can record it
+ * (`onToggle`); the tick is stored on the week, not on a document of its own.
+ */
+const DerivedRow = ({ item, busy, onToggle }) => {
+  const bought = item.bought === true;
+  const note = bought ? null : stockNote(item);
+  const amount = amountLabel(item);
 
   return (
     <li style={SMALL}>
       <div className="d-flex align-items-baseline gap-2">
-        <TickSpacer />
-        <span className="text-capitalize flex-grow-1">{item.name}</span>
-        <span className="text-muted text-nowrap">
-          {item.quantity} {item.unit}
+        {onToggle ? (
+          <Form.Check
+            type="checkbox"
+            className="flex-shrink-0 mkh-tickbox"
+            checked={bought}
+            disabled={busy}
+            onChange={() => onToggle(item, !bought)}
+            aria-label={bought ? `Put ${item.name} back on the list` : `Tick ${item.name} off`}
+          />
+        ) : (
+          <TickSpacer />
+        )}
+        <span
+          className={`text-capitalize flex-grow-1${bought ? ' text-muted' : ''}`}
+          style={bought ? { textDecoration: 'line-through' } : undefined}
+        >
+          {item.name}
         </span>
+        {amount && <span className="text-muted text-nowrap">{amount}</span>}
       </div>
       {note && <div style={NOTE_INDENT}>{note}</div>}
     </li>
@@ -251,6 +270,8 @@ const rowKey = (item) => item.key ?? item.id ?? `${item.normalized} ${item.unit}
  * @param {function} onToggleBought  (item, bought) => Promise
  * @param {function} onRemoveItem    (item) => Promise
  * @param {function} onClearBought   () => Promise
+ * @param {function} onToggleDerived (item, bought) => Promise — ticks a derived
+ *                                   row; without it derived rows have no box
  *
  * The manual half renders only when `onAddItem` is supplied, so a caller that
  * wants the derived list alone still gets exactly what it always did.
@@ -265,7 +286,20 @@ const ShoppingList = ({
   onRemoveItem,
   onEditItem,
   onClearBought,
+  onToggleDerived,
 }) => {
+  const [busyDerivedKey, setBusyDerivedKey] = useState(null);
+  const toggleDerived = onToggleDerived
+    ? async (item, bought) => {
+        setBusyDerivedKey(item.key);
+        try {
+          await onToggleDerived(item, bought);
+        } finally {
+          setBusyDerivedKey(null);
+        }
+      }
+    : null;
+
   const [name, setName] = useState('');
   const [quantity, setQuantity] = useState('');
   const [unit, setUnit] = useState('');
@@ -276,8 +310,11 @@ const ShoppingList = ({
   // a row that never carried the field cannot drift into "already in your
   // kitchen" — the one bucket where something silently stops being a thing the
   // cook still has to buy.
-  const toBuy = items.filter((item) => item.haveInInventory !== true);
+  const toBuy = items.filter((item) => item.haveInInventory !== true && item.bought !== true);
   const covered = items.filter((item) => item.haveInInventory === true);
+  const boughtDerived = items.filter(
+    (item) => item.haveInInventory !== true && item.bought === true
+  );
 
   const canAdd = Boolean(onAddItem);
   const pendingManual = manualItems.filter((item) => item.status !== 'bought');
@@ -380,7 +417,7 @@ const ShoppingList = ({
           <>
             {outstanding === 0 ? (
               <p className="text-muted mb-2" style={SMALL}>
-                {items.length > 0
+                {items.length > 0 && covered.length === items.length
                   ? 'Your kitchen already has everything this week needs.'
                   : 'Nothing left to buy.'}
               </p>
@@ -405,14 +442,21 @@ const ShoppingList = ({
                           <ManualRow
                             key={rowKey(item)}
                             item={item}
-                            duplicate={duplicateNames.has(item.normalized)}
+                            duplicate={duplicateNames.has(
+                              ingredientKey(item.normalized || item.name)
+                            )}
                             busy={busyItemId === item.id}
                             onToggleBought={onToggleBought}
                             onRemove={onRemoveItem}
                             onEdit={onEditItem}
                           />
                         ) : (
-                          <DerivedRow key={rowKey(item)} item={item} />
+                          <DerivedRow
+                            key={rowKey(item)}
+                            item={item}
+                            busy={busyDerivedKey === item.key}
+                            onToggle={toggleDerived}
+                          />
                         )
                       )}
                     </ul>
@@ -421,7 +465,7 @@ const ShoppingList = ({
               </div>
             )}
 
-            {boughtManual.length > 0 && (
+            {(boughtManual.length > 0 || boughtDerived.length > 0) && (
               <div className="mt-3">
                 <div className="d-flex align-items-center gap-2 mb-1">
                   <span
@@ -430,15 +474,20 @@ const ShoppingList = ({
                   >
                     In the trolley
                   </span>
-                  <Button
-                    variant="link"
-                    size="sm"
-                    className="p-0 ms-auto"
-                    style={{ fontSize: 'var(--mkh-font-size-tiny)' }}
-                    onClick={onClearBought}
-                  >
-                    Clear
-                  </Button>
+                  {boughtManual.length > 0 && (
+                    // Clears typed items only. A ticked meal line stays here
+                    // until the meal is cooked or the week ends — clearing it
+                    // would put it straight back on the list.
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="p-0 ms-auto"
+                      style={{ fontSize: 'var(--mkh-font-size-tiny)' }}
+                      onClick={onClearBought}
+                    >
+                      Clear
+                    </Button>
+                  )}
                 </div>
                 <ul className="list-unstyled mb-0 d-flex flex-column gap-1">
                   {boughtManual.map((item) => (
@@ -449,6 +498,14 @@ const ShoppingList = ({
                       busy={busyItemId === item.id}
                       onToggleBought={onToggleBought}
                       onRemove={onRemoveItem}
+                    />
+                  ))}
+                  {boughtDerived.map((item) => (
+                    <DerivedRow
+                      key={rowKey(item)}
+                      item={item}
+                      busy={busyDerivedKey === item.key}
+                      onToggle={toggleDerived}
                     />
                   ))}
                 </ul>

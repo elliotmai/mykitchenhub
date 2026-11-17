@@ -24,13 +24,14 @@ const functions = require('firebase-functions');
 
 const { HttpError, resolveUser } = require('./auth');
 const { resolveTimeZone, todayIn } = require('./dates');
-const { buildShoppingItem } = require('./shoppingList');
+const { buildShoppingItem, buildShoppingList } = require('./shoppingList');
 const {
   buildBoard,
   loadBoardSources,
   manualRow,
-  shoppingRows,
   boardWindow,
+  derivedId,
+  shoppingRows,
 } = require('./boardData');
 
 /** Longer than any real shopping line; refuses a body someone pasted by mistake. */
@@ -121,11 +122,11 @@ const addItem = async ({ db, uid, body }) => {
  * src/hooks/useShoppingList.js): status `bought` with `boughtAt` stamped, or
  * back to `pending` with `boughtAt` cleared.
  *
- * A line derived from the week's meals has no checkbox in KitchenHub and no
- * document to mark — see firestore/SCHEMA_DOCUMENTATION.md §8, "Derived rows
- * are not tickable at all". Mirroring the app means not inventing a write the
- * app never makes, so a known derived id is refused with 400 and an unknown
- * one is a 404 like any other.
+ * A line derived from the week's meals does what its checkbox does in the app
+ * (`setDerivedBought` in src/hooks/useMealPlan.js): its key is added to, or
+ * removed from, `boughtKeys` on the week's mealPlans document, which is
+ * created minimally if the week has none. An id not on this week's list is a
+ * 404 like any other.
  */
 const tickItem = async ({ db, uid, id, body, now, timeZone }) => {
   if (typeof body.bought !== 'boolean') throw new HttpError(400, 'bought must be true or false.');
@@ -147,21 +148,45 @@ const tickItem = async ({ db, uid, id, body, now, timeZone }) => {
 
   if (id.startsWith('meal:')) {
     const today = todayIn(timeZone, now);
-    const { entries, inventory, manualItems } = await loadBoardSources(db, uid, today, {
+    const { entries, inventory, manualItems, boughtKeys } = await loadBoardSources(db, uid, today, {
       recipes: false,
     });
     const { weekStart, weekEnd } = boardWindow(today);
     const weekEntries = entries.filter((entry) => entry.date >= weekStart && entry.date <= weekEnd);
-    const known = shoppingRows({ manualItems, weekEntries, inventory, today, timeZone }).some(
-      (row) => row.id === id
-    );
-    if (!known) throw new HttpError(404, 'No such shopping item.');
+    // Only a line the board actually shows can be ticked: one the kitchen
+    // covers, or that a typed item stands in for, is a 404 like any unknown id.
+    const shown = shoppingRows({
+      manualItems,
+      weekEntries,
+      inventory,
+      boughtKeys,
+      today,
+      timeZone,
+    }).some((row) => row.id === id);
+    const line =
+      shown &&
+      buildShoppingList(weekEntries, inventory, boughtKeys).find((item) => derivedId(item) === id);
+    if (!line) throw new HttpError(404, 'No such shopping item.');
 
-    throw new HttpError(
-      400,
-      "This line comes from this week's meals, and KitchenHub does not tick those off. " +
-        'Add what you bought to the kitchen inventory, or change the meal plan, and it drops off the list.'
-    );
+    const FieldValue = admin.firestore.FieldValue;
+    const planRef = db.collection('users').doc(uid).collection('mealPlans').doc(weekStart);
+    const planSnap = await planRef.get();
+    if (planSnap.exists) {
+      await planRef.update({
+        boughtKeys: body.bought
+          ? FieldValue.arrayUnion(line.key)
+          : FieldValue.arrayRemove(line.key),
+      });
+    } else {
+      await planRef.set({
+        weekStart,
+        source: 'manual',
+        status: 'active',
+        createdAt: FieldValue.serverTimestamp(),
+        boughtKeys: body.bought ? [line.key] : [],
+      });
+    }
+    return { status: 200, body: { ok: true } };
   }
 
   throw new HttpError(404, 'No such shopping item.');

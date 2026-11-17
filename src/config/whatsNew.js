@@ -14,6 +14,14 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.11.17.1',
+    date: 'November 2026',
+    items: [
+      '\u{1F6D2} The shopping list reads like a shopping list. Recipe prep notes are gone (\u201CChicken breast\u201D, not \u201CBoneless Skinless Chicken Breast, Cut Into Bite-Sized Pieces\u201D), the same ingredient from different recipes is one line, teaspoons and tablespoons add up, amounts show as fractions (\u201C\u2153 cup\u201D, not \u201C0.33 cup\u201D), and more things land in the right aisle.',
+      '\u2705 Tick anything off. Lines that come from your meal plan now have a checkbox too, and move to \u201CIn the trolley\u201D once you\u2019ve got them \u2014 on your phone, on the meal plan page, or on Fridge Board.',
+    ],
+  },
+  {
     version: '2026.11.17',
     date: 'November 2026',
     items: [

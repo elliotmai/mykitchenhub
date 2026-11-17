@@ -9,7 +9,11 @@
 
 jest.mock('firebase-admin', () => ({
   firestore: Object.assign(jest.fn(), {
-    FieldValue: { serverTimestamp: () => ({ __serverTimestamp: true }) },
+    FieldValue: {
+      serverTimestamp: () => ({ __serverTimestamp: true }),
+      arrayUnion: (...values) => ({ __arrayUnion: values }),
+      arrayRemove: (...values) => ({ __arrayRemove: values }),
+    },
   }),
 }));
 
@@ -76,7 +80,7 @@ describe('routing', () => {
     ['POST', '/shopping', { name: 'add' }],
     ['POST', '/shopping/', { name: 'add' }],
     ['POST', '/shopping/item%3Aabc', { name: 'tick', id: 'item:abc' }],
-    ['POST', '/shopping/meal:ground%20beef%7Coz', { name: 'tick', id: 'meal:ground beef|oz' }],
+    ['POST', '/shopping/meal:ground%20beef%7Clb', { name: 'tick', id: 'meal:ground beef|lb' }],
     ['GET', '/shopping', null],
     ['POST', '/', null],
     ['DELETE', '/shopping/item:abc', null],
@@ -130,7 +134,6 @@ describe('GET /', () => {
       'meal:lettuce|head',
       'item:s-tortillas',
       'meal:ground beef|lb',
-      'meal:ground beef|oz',
       'item:s-batteries',
       'item:s-milk',
     ]);
@@ -264,15 +267,45 @@ describe('POST /shopping/{id}', () => {
     }
   );
 
-  it('refuses to tick a line derived from the meal plan, as KitchenHub does, and writes nothing', async () => {
+  it("ticks a line derived from the meal plan off on the week's document, as KitchenHub does", async () => {
     const result = await call(db, {
       method: 'POST',
-      path: `/shopping/${encodeURIComponent('meal:ground beef|oz')}`,
+      path: `/shopping/${encodeURIComponent('meal:ground beef|lb')}`,
       body: { bought: true },
     });
-    expect(result.status).toBe(400);
-    expect(result.body.error).toMatch(/does not tick those off/);
-    expect(db.__writes).toHaveLength(0);
+    expect(result).toEqual({ status: 200, body: { ok: true } });
+    expect(db.__writes).toHaveLength(1);
+    const [write] = db.__writes;
+    expect(write.path).toMatch(new RegExp(`^users/${UID}/mealPlans/\\d{4}-\\d{2}-\\d{2}$`));
+    // No week document in the fixture, so a minimal manual one is created.
+    expect(write.op).toBe('set');
+    expect(write.data).toMatchObject({
+      source: 'manual',
+      status: 'active',
+      boughtKeys: ['ground beef|weight'],
+    });
+
+    // The board now shows it in the cart rather than on the list.
+    const { body } = await call(db);
+    const row = body.shopping.find((r) => r.id === 'meal:ground beef|lb');
+    expect(row.bought).toBe(true);
+  });
+
+  it('puts a ticked meal line back with arrayRemove on an existing week', async () => {
+    await call(db, {
+      method: 'POST',
+      path: `/shopping/${encodeURIComponent('meal:ground beef|lb')}`,
+      body: { bought: true },
+    });
+    const result = await call(db, {
+      method: 'POST',
+      path: `/shopping/${encodeURIComponent('meal:ground beef|lb')}`,
+      body: { bought: false },
+    });
+    expect(result.status).toBe(200);
+    const last = db.__writes[db.__writes.length - 1];
+    expect(last.op).toBe('update');
+    expect(last.data).toEqual({ boughtKeys: { __arrayRemove: ['ground beef|weight'] } });
   });
 
   it.each([[{}], [{ bought: 'yes' }], [{ bought: 1 }]])(

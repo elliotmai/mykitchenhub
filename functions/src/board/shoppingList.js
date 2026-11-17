@@ -4,6 +4,7 @@
 // PORTED FROM the React app, which is where the list is defined:
 //
 //   buildShoppingList, isUpcoming      src/hooks/useMealPlan.js
+//   ingredientMeasure.js               src/utils/ingredientMeasure.js
 //   normalizeName, buildShoppingItem,
 //   amountLabel, combineShoppingList   src/hooks/useShoppingList.js
 //
@@ -23,69 +24,97 @@
 /** See `isUpcoming` in src/hooks/useMealPlan.js. */
 const isUpcoming = (entry) => entry?.status !== 'cooked' && entry?.status !== 'skipped';
 
-const normalize = (value) =>
-  String(value ?? '')
-    .trim()
-    .toLowerCase();
+const {
+  canonicalUnit,
+  cleanIngredientName,
+  convertQuantity,
+  formatAmount,
+  ingredientAlternatives,
+  ingredientKey,
+  largerUnit,
+  measureKey,
+} = require('./ingredientMeasure');
 
-const shoppingKey = (name, unit) => `${normalize(name)}|${normalize(unit)}`;
+const capitalizeFirst = (text) => (text ? text[0].toUpperCase() + text.slice(1) : text);
 
 const indexStock = (inventoryItems) => {
-  const byNameAndUnit = new Map();
-  const unitlessByName = new Map();
   const byName = new Map();
 
   inventoryItems.forEach((item) => {
-    const name = normalize(item.normalized || item.name);
-    const unit = normalize(item.unit);
-    const quantity = Number(item.quantity || 0);
-    const add = (map, key) => map.set(key, (map.get(key) ?? 0) + quantity);
-
-    add(byNameAndUnit, shoppingKey(name, unit));
+    const name = ingredientKey(item.normalized || item.name);
+    if (!name) return;
     if (!byName.has(name)) byName.set(name, []);
-    byName.get(name).push({ quantity, unit: item.unit || '' });
-    if (!unit) add(unitlessByName, name);
+    byName.get(name).push({ quantity: Number(item.quantity || 0), unit: item.unit || '' });
   });
 
   return (name, unit) => {
-    const key = normalize(name);
-    const held = byName.get(key) || [];
-    const wanted = normalize(unit);
+    const held = byName.get(name) || [];
+    const wanted = canonicalUnit(unit);
 
     if (!wanted) {
       return { onHand: held.reduce((sum, entry) => sum + entry.quantity, 0), otherUnits: [] };
     }
 
-    const onHand =
-      (byNameAndUnit.get(shoppingKey(key, wanted)) ?? 0) + (unitlessByName.get(key) ?? 0);
-    const otherUnits = held.filter(
-      (entry) => normalize(entry.unit) && normalize(entry.unit) !== wanted
-    );
+    let onHand = 0;
+    const otherUnits = [];
+    held.forEach((entry) => {
+      if (!canonicalUnit(entry.unit)) {
+        onHand += entry.quantity;
+        return;
+      }
+      const converted = convertQuantity(entry.quantity, entry.unit, wanted);
+      if (converted === null) otherUnits.push(entry);
+      else onHand += converted;
+    });
 
-    return { onHand, otherUnits };
+    return { onHand: Math.round(onHand * 100) / 100, otherUnits };
   };
 };
 
+const foldAlternatives = (needed) => {
+  [...needed.values()].forEach((item) => {
+    const target = ingredientAlternatives(item.normalized)
+      .map((alternative) => needed.get(`${alternative}|${item.measure}`))
+      .find((candidate) => candidate && candidate !== item);
+    if (!target) return;
+    const unit = largerUnit(target.unit, item.unit);
+    target.quantity =
+      convertQuantity(target.quantity, target.unit, unit) +
+      convertQuantity(item.quantity, item.unit, unit);
+    target.unit = unit;
+    needed.delete(item.key);
+  });
+};
+
 /** See `buildShoppingList` in src/hooks/useMealPlan.js. */
-const buildShoppingList = (entries = [], inventoryItems = []) => {
+const buildShoppingList = (entries = [], inventoryItems = [], boughtKeys = []) => {
   const onHandFor = indexStock(inventoryItems);
+  const bought = new Set(boughtKeys);
 
   const needed = new Map();
   entries.filter(isUpcoming).forEach((entry) => {
     (entry.usesIngredients || []).forEach((ingredient) => {
-      const normalized = normalize(ingredient.normalized || ingredient.name);
+      const normalized = ingredientKey(ingredient.normalized || ingredient.name);
       if (!normalized) return;
-      const unit = ingredient.unit || '';
-      const key = shoppingKey(normalized, unit);
-      const existing = needed.get(key);
+      const unit = canonicalUnit(ingredient.unit);
+      const measure = measureKey(unit);
+      const key = `${normalized}|${measure}`;
       const quantity = Number(ingredient.quantity || 0);
+      const existing = needed.get(key);
       if (existing) {
-        existing.quantity += quantity;
+        const shownIn = largerUnit(existing.unit, unit);
+        existing.quantity =
+          convertQuantity(existing.quantity, existing.unit, shownIn) +
+          convertQuantity(quantity, unit, shownIn);
+        existing.unit = shownIn;
       } else {
         needed.set(key, {
           key,
-          name: ingredient.name || normalized,
+          // Cleaned of prep notes, first letter up: "Chicken breast", not
+          // "Boneless Skinless Chicken Breast, Cut Into Bite-Sized Pieces".
+          name: capitalizeFirst(cleanIngredientName(ingredient.name || normalized) || normalized),
           normalized,
+          measure,
           quantity,
           unit,
         });
@@ -93,15 +122,19 @@ const buildShoppingList = (entries = [], inventoryItems = []) => {
     });
   });
 
+  foldAlternatives(needed);
+
   return [...needed.values()]
     .map((item) => {
+      const quantity = Math.round(item.quantity * 100) / 100;
       const { onHand, otherUnits } = onHandFor(item.normalized, item.unit);
       return {
         ...item,
-        quantity: Math.round(item.quantity * 100) / 100,
+        quantity,
         onHand,
         otherUnits,
-        haveInInventory: onHand >= item.quantity && item.quantity > 0,
+        haveInInventory: onHand >= quantity && quantity > 0,
+        bought: bought.has(item.key),
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name) || a.unit.localeCompare(b.unit));
@@ -139,7 +172,7 @@ const amountLabel = (item) => {
   const unit = String(item?.unit ?? '').trim();
   if (!quantity) return unit || null;
   if (quantity === 1 && !unit) return null;
-  return unit ? `${quantity} ${unit}` : String(quantity);
+  return formatAmount(quantity, unit) || null;
 };
 
 /**
@@ -153,7 +186,7 @@ const amountLabel = (item) => {
 const combineShoppingList = (manualItems = [], derivedItems = []) => {
   const outstandingManual = manualItems.filter((item) => item.status !== 'bought');
   const claimed = new Set(
-    outstandingManual.map((item) => normalizeName(item.normalized || item.name)).filter(Boolean)
+    outstandingManual.map((item) => ingredientKey(item.normalized || item.name)).filter(Boolean)
   );
 
   const rows = outstandingManual.map((item) => ({
@@ -165,8 +198,8 @@ const combineShoppingList = (manualItems = [], derivedItems = []) => {
   }));
 
   derivedItems
-    .filter((item) => item.haveInInventory !== true)
-    .filter((item) => !claimed.has(normalizeName(item.normalized || item.name)))
+    .filter((item) => item.haveInInventory !== true && item.bought !== true)
+    .filter((item) => !claimed.has(ingredientKey(item.normalized || item.name)))
     .forEach((item) => {
       rows.push({
         key: `derived-${item.key ?? `${item.normalized} ${item.unit}`}`,

@@ -81,7 +81,7 @@ describe('MealPlanView', () => {
 
     expect(screen.getByText('Shopping list')).toBeInTheDocument();
     expect(screen.getByText('Salmon')).toBeInTheDocument();
-    expect(screen.getByText('2 fillet')).toBeInTheDocument();
+    expect(screen.getByText('2 fillets')).toBeInTheDocument();
   });
 
   it('separates out what the kitchen already has', async () => {

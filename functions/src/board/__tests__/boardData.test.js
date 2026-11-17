@@ -157,7 +157,7 @@ describe('buildBoard', () => {
     expect(board.shopping).toEqual([
       {
         id: 'meal:lettuce|head',
-        name: 'lettuce',
+        name: 'Lettuce',
         qty: '1 head',
         section: 'Produce',
         why: 'Salad',
@@ -172,28 +172,20 @@ describe('buildBoard', () => {
         why: null,
         bought: false,
       },
-      // Same food, different units: two lines, never summed.
+      // Same food, two weights: 1 lb + 20 oz is one line of 2¼ lb. Monday's
+      // tacos are past but not cooked, so they still count, as in the app.
       {
         id: 'meal:ground beef|lb',
-        name: 'ground beef',
-        qty: '1 lb',
+        name: 'Ground beef',
+        qty: '2¼ lb',
         section: 'Meat & Seafood',
-        why: 'Chili',
-        bought: false,
-      },
-      // Monday's tacos are past but not cooked, so they still count, as in the app.
-      {
-        id: 'meal:ground beef|oz',
-        name: 'ground beef',
-        qty: '20 oz',
-        section: 'Meat & Seafood',
-        why: 'Beef Tacos',
+        why: 'Beef Tacos, Chili',
         bought: false,
       },
       {
         id: 'item:s-batteries',
         name: 'Batteries',
-        qty: '4 pack',
+        qty: '4 packs',
         section: 'Other',
         why: null,
         bought: false,
@@ -265,8 +257,8 @@ describe('shopping rows', () => {
     expect(shoppingRows({ weekEntries: entries, today: TODAY, timeZone: TZ })).toEqual([
       {
         id: 'meal:garlic|clove',
-        name: 'garlic',
-        qty: '4 clove',
+        name: 'Garlic',
+        qty: '4 cloves',
         section: 'Produce',
         why: 'Pasta, Soup',
         bought: false,

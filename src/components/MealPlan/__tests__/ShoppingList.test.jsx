@@ -29,7 +29,7 @@ describe('ShoppingList', () => {
     render(<ShoppingList items={[item()]} />);
 
     expect(screen.getByText('Salmon')).toBeInTheDocument();
-    expect(screen.getByText('2 fillet')).toBeInTheDocument();
+    expect(screen.getByText('2 fillets')).toBeInTheDocument();
   });
 
   it('counts only the things still to buy', () => {
@@ -47,6 +47,59 @@ describe('ShoppingList', () => {
 
     expect(screen.getByText('Already in your kitchen')).toBeInTheDocument();
     expect(screen.getByText(/kitchen already has everything/)).toBeInTheDocument();
+  });
+});
+
+describe('ShoppingList — ticking off what the week needs', () => {
+  it('has no box on a derived row when the surface cannot record a tick', () => {
+    render(<ShoppingList items={[item({ key: 'salmon|fillet' })]} />);
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+
+  it('ticks a derived row off through onToggleDerived', async () => {
+    const onToggleDerived = jest.fn().mockResolvedValue(undefined);
+    const salmon = item({ key: 'salmon|fillet' });
+    render(<ShoppingList items={[salmon]} onToggleDerived={onToggleDerived} />);
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Tick Salmon off' }));
+    expect(onToggleDerived).toHaveBeenCalledWith(salmon, true);
+  });
+
+  it('moves a bought derived row into the trolley, where it can be put back', async () => {
+    const onToggleDerived = jest.fn().mockResolvedValue(undefined);
+    const salmon = item({ key: 'salmon|fillet', bought: true });
+    render(
+      <ShoppingList
+        items={[salmon, item({ key: 'rice|volume', name: 'Rice', normalized: 'rice' })]}
+        onToggleDerived={onToggleDerived}
+      />
+    );
+
+    expect(screen.getByText('In the trolley')).toBeInTheDocument();
+    // Only rice is still outstanding.
+    expect(screen.getByText('1')).toBeInTheDocument();
+    // No Clear button: there are no typed items to clear.
+    expect(screen.queryByRole('button', { name: 'Clear' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Put Salmon back on the list' }));
+    expect(onToggleDerived).toHaveBeenCalledWith(salmon, false);
+  });
+
+  it('says nothing is left to buy, not that the kitchen has it, once all is ticked', () => {
+    render(
+      <ShoppingList
+        items={[item({ key: 'salmon|fillet', bought: true })]}
+        onToggleDerived={jest.fn()}
+      />
+    );
+    expect(screen.getByText('Nothing left to buy.')).toBeInTheDocument();
+  });
+
+  it('shows amounts as fractions', () => {
+    render(
+      <ShoppingList items={[item({ name: 'Parmesan cheese', quantity: 0.33, unit: 'cup' })]} />
+    );
+    expect(screen.getByText('⅓ cup')).toBeInTheDocument();
   });
 });
 
@@ -125,7 +178,7 @@ describe('what the kitchen already has', () => {
       />
     );
 
-    expect(screen.getByText('2 cup')).toBeInTheDocument();
+    expect(screen.getByText('2 cups')).toBeInTheDocument();
     expect(screen.getByText('200 g')).toBeInTheDocument();
   });
 });
@@ -200,9 +253,9 @@ describe('manual items', () => {
     expect(screen.getByText('2')).toBeInTheDocument();
   });
 
-  it('gives only the manual rows something to tick', () => {
-    // A derived row has no document, so there is nowhere to record that it was
-    // bought. No checkbox is the honest answer.
+  it('gives only the manual rows something to tick when no derived handler is passed', () => {
+    // Derived ticks are recorded on the week (onToggleDerived). A surface that
+    // does not pass it gets no box on derived rows rather than a dead one.
     render(
       <ShoppingList
         items={[item({ name: 'Salmon' })]}

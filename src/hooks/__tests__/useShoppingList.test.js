@@ -316,7 +316,7 @@ describe('combineShoppingList', () => {
     );
 
     expect(rows).toHaveLength(2);
-    expect(rows.map((r) => r.amount)).toEqual(['2 cup', '200 g']);
+    expect(rows.map((r) => r.amount)).toEqual(['2 cups', '200 g']);
     expect(new Set(rows.map((r) => r.key)).size).toBe(2);
   });
 

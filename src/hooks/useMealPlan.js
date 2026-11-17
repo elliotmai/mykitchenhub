@@ -21,6 +21,8 @@ import {
   where,
   orderBy,
   serverTimestamp,
+  arrayUnion,
+  arrayRemove,
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../services/firebase';
@@ -28,6 +30,15 @@ import { useAuth } from './useAuth';
 import useInventory from './useInventory';
 import { friendlyError } from '../utils/firebaseErrors';
 import { withRetry } from '../utils/retry';
+import {
+  canonicalUnit,
+  cleanIngredientName,
+  convertQuantity,
+  ingredientAlternatives,
+  ingredientKey,
+  largerUnit,
+  measureKey,
+} from '../utils/ingredientMeasure';
 
 // ---------------------------------------------------------------------------
 // Day keys
@@ -104,60 +115,84 @@ const normalize = (value) =>
 /**
  * Two quantities only add up when they are counted the same way.
  *
- * "2 cups flour" plus "200 g flour" is not "202 cups flour", so the list is
- * keyed on ingredient *and* unit — and a jar stocked in one unit never counts
- * as covering a recipe measured in another. Mirrors deriveShoppingList in
- * functions/src/mealPlan/parsePlan.js, which builds the same list server-side.
+ * Every line is keyed on what the ingredient *is* (`ingredientKey`: prep notes
+ * and plurals stripped, so "Carrots, peeled and chopped" and "carrot" are one
+ * errand) and on what kind of measure it is in (`measureKey`: volume, weight,
+ * or the unit itself). Volumes add to volumes and weights to weights, shown in
+ * the largest unit any recipe used — "1 tbsp" plus "2 tsp" is "1⅔ tbsp" — but
+ * "2 cups flour" and "200 g flour" stay two lines, because converting between
+ * them needs a density nobody recorded.
+ *
+ * Mirrors functions/src/board/shoppingList.js, which builds the same list for
+ * the board API.
+ *
+ * The indexer below lets a lookup tell "a different measure" from "no
+ * measure recorded".
  */
-const shoppingKey = (name, unit) => `${normalize(name)}|${normalize(unit)}`;
+const capitalizeFirst = (text) => (text ? text[0].toUpperCase() + text.slice(1) : text);
 
-/**
- * Index the kitchen so a lookup can tell "a different measure" from
- * "no measure recorded".
- */
 const indexStock = (inventoryItems) => {
-  const byNameAndUnit = new Map();
-  const unitlessByName = new Map();
   const byName = new Map();
 
   inventoryItems.forEach((item) => {
-    const name = normalize(item.normalized || item.name);
-    const unit = normalize(item.unit);
-    const quantity = Number(item.quantity || 0);
-    const add = (map, key) => map.set(key, (map.get(key) ?? 0) + quantity);
-
-    add(byNameAndUnit, shoppingKey(name, unit));
+    const name = ingredientKey(item.normalized || item.name);
+    if (!name) return;
     if (!byName.has(name)) byName.set(name, []);
-    byName.get(name).push({ quantity, unit: item.unit || '' });
-    if (!unit) add(unitlessByName, name);
+    byName.get(name).push({ quantity: Number(item.quantity || 0), unit: item.unit || '' });
   });
 
   /**
    * What the kitchen has of this ingredient, split by whether it can be counted
    * against the recipe.
    *
-   * `onHand` is stock measured the same way the recipe asks for — four gallons
-   * of salmon do not cover one fillet, so that goes in `otherUnits` instead.
-   * An item stored with no unit at all is a third case: that is a gap in the
-   * record rather than a different substance, so it counts toward `onHand`.
+   * `onHand` is stock measured in a way that converts to the unit the list
+   * asks for — four gallons of salmon do not cover one fillet, so that goes in
+   * `otherUnits` instead. An item stored with no unit at all is a third case:
+   * that is a gap in the record rather than a different substance, so it
+   * counts toward `onHand`.
    */
   return (name, unit) => {
-    const key = normalize(name);
-    const held = byName.get(key) || [];
-    const wanted = normalize(unit);
+    const held = byName.get(name) || [];
+    const wanted = canonicalUnit(unit);
 
     if (!wanted) {
       return { onHand: held.reduce((sum, entry) => sum + entry.quantity, 0), otherUnits: [] };
     }
 
-    const onHand =
-      (byNameAndUnit.get(shoppingKey(key, wanted)) ?? 0) + (unitlessByName.get(key) ?? 0);
-    const otherUnits = held.filter(
-      (entry) => normalize(entry.unit) && normalize(entry.unit) !== wanted
-    );
+    let onHand = 0;
+    const otherUnits = [];
+    held.forEach((entry) => {
+      if (!canonicalUnit(entry.unit)) {
+        onHand += entry.quantity;
+        return;
+      }
+      const converted = convertQuantity(entry.quantity, entry.unit, wanted);
+      if (converted === null) otherUnits.push(entry);
+      else onHand += converted;
+    });
 
-    return { onHand, otherUnits };
+    return { onHand: Math.round(onHand * 100) / 100, otherUnits };
   };
+};
+
+/**
+ * Fold "vegetable or chicken broth" into "chicken broth" when the week already
+ * needs chicken broth in a measure it can be added to. A choice that matches
+ * nothing else stays its own line, worded as the recipe worded it.
+ */
+const foldAlternatives = (needed) => {
+  [...needed.values()].forEach((item) => {
+    const target = ingredientAlternatives(item.normalized)
+      .map((alternative) => needed.get(`${alternative}|${item.measure}`))
+      .find((candidate) => candidate && candidate !== item);
+    if (!target) return;
+    const unit = largerUnit(target.unit, item.unit);
+    target.quantity =
+      convertQuantity(target.quantity, target.unit, unit) +
+      convertQuantity(item.quantity, item.unit, unit);
+    target.unit = unit;
+    needed.delete(item.key);
+  });
 };
 
 /**
@@ -167,26 +202,38 @@ const indexStock = (inventoryItems) => {
  * what is already in the kitchen. Items fully covered by inventory stay on the
  * list marked `haveInInventory` so nothing silently disappears; `onHand` says
  * how much of a partly-covered item the kitchen already has.
+ *
+ * `boughtKeys` are the lines a cook has ticked off this week (stored on the
+ * week's mealPlans document); those rows come back with `bought: true`.
  */
-export const buildShoppingList = (entries = [], inventoryItems = []) => {
+export const buildShoppingList = (entries = [], inventoryItems = [], boughtKeys = []) => {
   const onHandFor = indexStock(inventoryItems);
+  const bought = new Set(boughtKeys);
 
   const needed = new Map();
   entries.filter(isUpcoming).forEach((entry) => {
     (entry.usesIngredients || []).forEach((ingredient) => {
-      const normalized = normalize(ingredient.normalized || ingredient.name);
+      const normalized = ingredientKey(ingredient.normalized || ingredient.name);
       if (!normalized) return;
-      const unit = ingredient.unit || '';
-      const key = shoppingKey(normalized, unit);
-      const existing = needed.get(key);
+      const unit = canonicalUnit(ingredient.unit);
+      const measure = measureKey(unit);
+      const key = `${normalized}|${measure}`;
       const quantity = Number(ingredient.quantity || 0);
+      const existing = needed.get(key);
       if (existing) {
-        existing.quantity += quantity;
+        const shownIn = largerUnit(existing.unit, unit);
+        existing.quantity =
+          convertQuantity(existing.quantity, existing.unit, shownIn) +
+          convertQuantity(quantity, unit, shownIn);
+        existing.unit = shownIn;
       } else {
         needed.set(key, {
           key,
-          name: ingredient.name || normalized,
+          // Cleaned of prep notes, first letter up: "Chicken breast", not
+          // "Boneless Skinless Chicken Breast, Cut Into Bite-Sized Pieces".
+          name: capitalizeFirst(cleanIngredientName(ingredient.name || normalized) || normalized),
           normalized,
+          measure,
           quantity,
           unit,
         });
@@ -194,15 +241,19 @@ export const buildShoppingList = (entries = [], inventoryItems = []) => {
     });
   });
 
+  foldAlternatives(needed);
+
   return [...needed.values()]
     .map((item) => {
+      const quantity = Math.round(item.quantity * 100) / 100;
       const { onHand, otherUnits } = onHandFor(item.normalized, item.unit);
       return {
         ...item,
-        quantity: Math.round(item.quantity * 100) / 100,
+        quantity,
         onHand,
         otherUnits,
-        haveInInventory: onHand >= item.quantity && item.quantity > 0,
+        haveInInventory: onHand >= quantity && quantity > 0,
+        bought: bought.has(item.key),
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name) || a.unit.localeCompare(b.unit));
@@ -449,9 +500,10 @@ const useMealPlan = () => {
     return map;
   }, [weekDays, weekEntries]);
 
+  const boughtKeys = plan?.boughtKeys;
   const shoppingList = useMemo(
-    () => buildShoppingList(weekEntries, inventoryItems),
-    [weekEntries, inventoryItems]
+    () => buildShoppingList(weekEntries, inventoryItems, boughtKeys || []),
+    [weekEntries, inventoryItems, boughtKeys]
   );
 
   const batchTips = useMemo(() => {
@@ -756,6 +808,49 @@ const useMealPlan = () => {
     }
   }, [user?.uid, weekStart, entries, plan]);
 
+  /**
+   * Tick a line the week's meals produced off the list, or put it back.
+   *
+   * The tick lives on the week's own document (`boughtKeys`), keyed by the
+   * line's `key` — ingredient and kind of measure, not the unit, so adding a
+   * meal that changes "3 tbsp" into "¼ cup" does not untick it. A new week
+   * starts with nothing ticked, which is what a new shop is.
+   *
+   * A week with no document yet (nothing was ever generated for it) gets a
+   * minimal manual one; `generatePlan` merges into it later without touching
+   * the ticks.
+   */
+  const setDerivedBought = useCallback(
+    async (key, isBought) => {
+      if (!user?.uid) return { success: false, error: 'Not authenticated' };
+      if (!key) return { success: false, error: 'Nothing to tick.' };
+      const planRef = doc(db, 'users', user.uid, 'mealPlans', weekStart);
+      try {
+        if (plan) {
+          await updateDoc(planRef, {
+            boughtKeys: isBought ? arrayUnion(key) : arrayRemove(key),
+          });
+        } else {
+          await setDoc(planRef, {
+            weekStart,
+            source: 'manual',
+            status: 'active',
+            createdAt: serverTimestamp(),
+            boughtKeys: isBought ? [key] : [],
+          });
+        }
+        return { success: true };
+      } catch (err) {
+        console.error('Error ticking shopping line:', err);
+        return {
+          success: false,
+          error: friendlyError(err, { action: 'update your shopping list' }),
+        };
+      }
+    },
+    [user?.uid, weekStart, plan]
+  );
+
   const goToWeek = useCallback((offsetWeeks) => {
     setWeekStart((current) => shiftDayKey(current, offsetWeeks * 7));
   }, []);
@@ -770,6 +865,7 @@ const useMealPlan = () => {
     entriesByDay,
     plan,
     shoppingList,
+    setDerivedBought,
     batchTips,
     inventoryItems,
     loading,

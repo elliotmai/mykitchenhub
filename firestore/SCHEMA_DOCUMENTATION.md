@@ -661,9 +661,22 @@ holds only what belongs to the week as a whole.
     entryDates: ["2026-08-10", "2026-08-12"]
   }],
 
-  notes: ""
+  notes: "",
+
+  // Shopping list ticks for lines the week's meals produced (derived rows).
+  // Each is a derived row's `key`: "<ingredientKey>|<measureKey>", e.g.
+  // "chicken broth|volume" or "carrot|count" — ingredient and *kind* of
+  // measure, so a line that grows from "3 tbsp" to "¼ cup" stays ticked.
+  // Absent on weeks where nothing was ticked. Written by the app
+  // (useMealPlan.setDerivedBought) and the board API (POST /shopping/meal:…).
+  boughtKeys: ["chicken broth|volume"]
 }
 ```
+
+A week that has never been generated has no document. Ticking a derived row in
+such a week creates a minimal one: `weekStart`, `createdAt`, `source: "manual"`,
+`status: "active"`, `boughtKeys`. Generating a plan later merges into it and
+leaves `boughtKeys` alone.
 
 **Security Rules:**
 - Users can CRUD their own plans
@@ -730,10 +743,12 @@ there is a test pinning that.)
 *Ticking off marks bought; it does not delete.* `status` goes to `"bought"` and
 `boughtAt` is stamped, so a mis-tap on a phone in a shop is one tap to undo.
 Bought items collect in their own section with a "Clear bought" action that
-deletes them. **Derived rows are not tickable at all** — they have no document to
-mark, and inventing one as a side effect of a tick would be a second, silently
-different, source of truth for the same list. That stays a deliberate gap until
-there is a decision about what "bought" should mean for a row the week computes.
+deletes them. **Derived rows tick off on the week, not here.** A tick on a row
+the week's meals produced adds its key to `mealPlans/{weekId}.boughtKeys` (§7);
+no `shoppingItems` document is created for it, so there is still one source of
+truth per row. A ticked derived row sits in the same "In the trolley" section,
+but "Clear" does not remove it — clearing would put it straight back on the
+list. It leaves when the meal is cooked or the week ends.
 
 *Duplicates are shown, not merged.* If a cook types "milk" and the week's meals
 also need milk, both rows appear. The quantities come from different places and

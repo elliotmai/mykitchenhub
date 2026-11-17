@@ -240,7 +240,7 @@ describe('Kiosk board', () => {
 
       expect(within(panel()).getByText('Batteries')).toBeInTheDocument();
       expect(within(panel()).getByText('Salmon')).toBeInTheDocument();
-      expect(within(panel()).getByText('2 fillet')).toBeInTheDocument();
+      expect(within(panel()).getByText('2 fillets')).toBeInTheDocument();
     });
 
     it('takes a ticked-off item off the fridge', async () => {

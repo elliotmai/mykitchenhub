@@ -20,9 +20,9 @@
 //     needs 2, the kitchen has 1", a question a manual item does not pose.
 //     Absent, not `false` — a `false` would claim the comparison was made.
 //   * Ticking off marks bought rather than deleting, so a mis-tap in a shop is
-//     one tap to undo. Derived rows are not tickable at all: they have no
-//     document, and inventing one here would make the same list true in two
-//     places.
+//     one tap to undo. Derived rows tick off too, but not here: their ticks
+//     live on the week's mealPlans document (`boughtKeys`, see
+//     useMealPlan.setDerivedBought), because they belong to that week.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -40,6 +40,7 @@ import {
 import { db } from '../services/firebase';
 import { useAuth } from './useAuth';
 import { friendlyError } from '../utils/firebaseErrors';
+import { formatAmount, ingredientKey } from '../utils/ingredientMeasure';
 
 /** The two states a manual item can be in — mirrors the `status` enum. */
 export const SHOPPING_ITEM_STATUSES = ['pending', 'bought'];
@@ -99,20 +100,22 @@ export const buildShoppingItem = ({ name, quantity = 1, unit = '', notes = '' } 
 export const findDuplicateNames = (manualItems = [], derivedItems = []) => {
   const derived = new Set(
     derivedItems
-      .filter((item) => !item.haveInInventory)
-      .map((item) => normalizeName(item.normalized || item.name))
+      .filter((item) => !item.haveInInventory && !item.bought)
+      .map((item) => ingredientKey(item.normalized || item.name))
       .filter(Boolean)
   );
 
+  // Keyed by `ingredientKey`, so a typed "Carrots" meets a recipe's
+  // "carrots, peeled and chopped". Look a row up with the same function.
   return new Set(
     manualItems
-      .map((item) => normalizeName(item.normalized || item.name))
+      .map((item) => ingredientKey(item.normalized || item.name))
       .filter((name) => name && derived.has(name))
   );
 };
 
 /**
- * "2 fillet", or nothing at all.
+ * "2 fillets", or nothing at all.
  *
  * A bare "1" is noise — "Batteries 1" tells a cook nothing they had not already
  * assumed — so one of something unmeasured shows no amount. Anything else does.
@@ -125,7 +128,8 @@ export const amountLabel = (item) => {
   const unit = String(item?.unit ?? '').trim();
   if (!quantity) return unit || null;
   if (quantity === 1 && !unit) return null;
-  return unit ? `${quantity} ${unit}` : String(quantity);
+  // "⅓ cup", "1¼ tsp", "2 cans" — a shopper reads fractions, not 0.33.
+  return formatAmount(quantity, unit) || null;
 };
 
 /**
@@ -153,7 +157,7 @@ export const amountLabel = (item) => {
 export const combineShoppingList = (manualItems = [], derivedItems = []) => {
   const outstandingManual = manualItems.filter((item) => item.status !== 'bought');
   const claimed = new Set(
-    outstandingManual.map((item) => normalizeName(item.normalized || item.name)).filter(Boolean)
+    outstandingManual.map((item) => ingredientKey(item.normalized || item.name)).filter(Boolean)
   );
 
   const rows = outstandingManual.map((item) => ({
@@ -162,14 +166,14 @@ export const combineShoppingList = (manualItems = [], derivedItems = []) => {
     amount: amountLabel(item),
     kind: 'manual',
     // The document itself, for surfaces that can act on the row rather than
-    // only show it. A derived row deliberately has no equivalent: there is no
-    // document behind it to tick off or take away.
+    // only show it. A derived row has no document; its tick lives on the
+    // week's mealPlans document instead (useMealPlan.setDerivedBought).
     item,
   }));
 
   derivedItems
-    .filter((item) => item.haveInInventory !== true)
-    .filter((item) => !claimed.has(normalizeName(item.normalized || item.name)))
+    .filter((item) => item.haveInInventory !== true && item.bought !== true)
+    .filter((item) => !claimed.has(ingredientKey(item.normalized || item.name)))
     .forEach((item) => {
       rows.push({
         key: `derived-${item.key ?? `${item.normalized} ${item.unit}`}`,
