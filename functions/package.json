@@ -13,7 +13,7 @@
     "seed": "node scripts/seedRunner.js"
   },
   "engines": {
-    "node": "18"
+    "node": "22"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.117.1",
