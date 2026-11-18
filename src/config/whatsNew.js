@@ -14,6 +14,13 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.11.18',
+    date: 'November 2026',
+    items: [
+      '\u{1F9C2} Mark things you always have. When you add or edit an item, switch on \u201CI always have this\u201D for salt, spices, bouillon and the like. It stops showing up on your shopping list, cooking a meal no longer uses it up, and you won\u2019t get expiry alerts for it. Use \u201CAlso counts as\u201D for stand-ins: bouillon can count as chicken broth.',
+    ],
+  },
+  {
     version: '2026.11.17.1',
     date: 'November 2026',
     items: [

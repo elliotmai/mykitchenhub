@@ -333,6 +333,44 @@ describe('groupBatchTasks', () => {
 // Inventory decrements
 // ---------------------------------------------------------------------------
 
+describe('staples on the shopping list and in the kitchen', () => {
+  const week = [
+    makeMealPlanEntry({
+      usesIngredients: [
+        { name: 'Salt', quantity: 1, unit: 'tsp' },
+        { name: 'Chicken Broth', quantity: 2, unit: 'cups' },
+        { name: 'Rice', quantity: 1, unit: 'cup' },
+      ],
+    }),
+  ];
+  const kitchen = [
+    { id: 's', name: 'Salt', quantity: 1, unit: '', alwaysHave: true },
+    {
+      id: 'b',
+      name: 'Chicken bouillon',
+      quantity: 1,
+      unit: 'jars',
+      alwaysHave: true,
+      alsoCovers: ['chicken broth'],
+    },
+  ];
+
+  it('treats a staple, and anything it also counts as, as already in the kitchen', () => {
+    const rows = Object.fromEntries(buildShoppingList(week, kitchen).map((r) => [r.name, r]));
+    expect(rows.Salt).toMatchObject({ haveInInventory: true, alwaysHave: true });
+    expect(rows['Chicken broth']).toMatchObject({ haveInInventory: true, alwaysHave: true });
+    expect(rows['Chicken broth'].otherUnits).toEqual([]);
+    expect(rows.Rice).toMatchObject({ haveInInventory: false, alwaysHave: false });
+  });
+
+  it('never uses a staple up when a meal is cooked', () => {
+    const patches = planInventoryDecrements({ usesIngredients: [{ name: 'salt', quantity: 1 }] }, [
+      { id: 's', name: 'salt', normalized: 'salt', quantity: 1, alwaysHave: true },
+    ]);
+    expect(patches).toEqual([]);
+  });
+});
+
 describe('planInventoryDecrements', () => {
   it('subtracts what the meal used from the matching item', () => {
     const patches = planInventoryDecrements(

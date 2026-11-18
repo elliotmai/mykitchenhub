@@ -212,3 +212,33 @@ describe('AddItemModal editing', () => {
     expect(onSave.mock.calls[0][0].locationType).toBe('freezer');
   });
 });
+
+describe('AddItemModal staples', () => {
+  it('saves a staple with no quantity, no shelf life, and what it also counts as', async () => {
+    const onSave = jest.fn().mockResolvedValue({ success: true });
+    renderModal({ onSave });
+
+    await userEvent.type(nameField(), 'Chicken bouillon');
+    await userEvent.click(screen.getByLabelText('I always have this'));
+    expect(screen.queryByLabelText('Shelf Life (days)')).not.toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('Also counts as'), 'chicken broth, Chicken Stock');
+    await userEvent.selectOptions(locationSelect(), 'loc-fridge');
+    await userEvent.click(screen.getByRole('button', { name: 'Add Item' }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
+    expect(onSave.mock.calls[0][0]).toMatchObject({
+      name: 'Chicken bouillon',
+      quantity: 1,
+      alwaysHave: true,
+      alsoCovers: ['chicken broth', 'chicken stock'],
+    });
+  });
+
+  it('opens an existing staple with the switch on and its names filled in', () => {
+    renderModal({
+      editItem: makeItem({ name: 'Salt', alwaysHave: true, alsoCovers: ['sea salt'] }),
+    });
+    expect(screen.getByLabelText('I always have this')).toBeChecked();
+    expect(screen.getByLabelText('Also counts as')).toHaveValue('sea salt');
+  });
+});

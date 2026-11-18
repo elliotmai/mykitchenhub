@@ -123,3 +123,22 @@ describe('ItemCard actions', () => {
     expect(screen.getByRole('button', { name: /edit/i })).toBeInTheDocument();
   });
 });
+
+describe('ItemCard staples', () => {
+  it('says "Always have" instead of an expiry, and what else it counts as', () => {
+    render(
+      <ItemCard
+        item={makeItem({
+          name: 'Chicken bouillon',
+          alwaysHave: true,
+          expiresAt: null,
+          alsoCovers: ['chicken broth', 'chicken stock'],
+        })}
+      />
+    );
+
+    expect(screen.getByText('Always have')).toBeInTheDocument();
+    expect(screen.getByText('Also counts as chicken broth, chicken stock')).toBeInTheDocument();
+    expect(screen.queryByText('No expiry')).not.toBeInTheDocument();
+  });
+});

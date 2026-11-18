@@ -99,6 +99,35 @@ export const calcExpiresAt = (locationType, shelfLifeDays) => {
 };
 
 // ---------------------------------------------------------------------------
+// Staples ("always have")
+// ---------------------------------------------------------------------------
+
+/**
+ * Something the kitchen always has — salt, spices, bouillon. It covers any
+ * recipe's need regardless of quantity, is never deducted when a meal is
+ * cooked, and carries no expiry date.
+ */
+export const isStaple = (item) => item?.alwaysHave === true;
+
+/**
+ * "chicken broth, Chicken stock ," → ["chicken broth", "chicken stock"]: the
+ * other names a staple stands in for (bouillon covers broth). Accepts a
+ * comma-separated string or an array.
+ */
+export const cleanAlsoCovers = (value) => {
+  const list = Array.isArray(value) ? value : String(value ?? '').split(',');
+  const seen = new Set();
+  return list
+    .map((name) =>
+      String(name ?? '')
+        .trim()
+        .toLowerCase()
+    )
+    .filter((name) => name && !seen.has(name) && seen.add(name))
+    .slice(0, 20);
+};
+
+// ---------------------------------------------------------------------------
 // Helper: days between now and an expiry (Firestore Timestamp, Date or string)
 // ---------------------------------------------------------------------------
 export const toDate = (value) => {
@@ -326,6 +355,8 @@ const useInventory = () => {
       shelfLifeDays,
       price,
       store,
+      alwaysHave = false,
+      alsoCovers = [],
     }) => {
       if (!user?.uid) return { success: false, error: 'Not authenticated' };
 
@@ -341,7 +372,9 @@ const useInventory = () => {
         const resolvedShelfLife = chosenShelfLife
           ? Number(shelfLifeDays)
           : resolveShelfLifeDays(name, locationType);
-        const expiresAt = calcExpiresAt(locationType, resolvedShelfLife);
+        // A staple is topped up before it runs out, so it has no expiry date
+        // to warn about — null keeps it off every expiry alert at once.
+        const expiresAt = alwaysHave ? null : calcExpiresAt(locationType, resolvedShelfLife);
         const now = new Date();
 
         await addDoc(collection(db, 'users', user.uid, 'inventory'), {
@@ -356,6 +389,8 @@ const useInventory = () => {
           shelfLifeDays: resolvedShelfLife,
           shelfLifeSource: chosenShelfLife ? SHELF_LIFE_SOURCES.CUSTOM : SHELF_LIFE_SOURCES.DEFAULT,
           notes: notes || '',
+          alwaysHave: Boolean(alwaysHave),
+          alsoCovers: cleanAlsoCovers(alsoCovers),
           source: 'manual',
           purchaseHistory: [
             {
@@ -390,6 +425,11 @@ const useInventory = () => {
         const existing = items.find((i) => i.id === itemId);
 
         const patch = { ...updates, updatedAt: serverTimestamp() };
+        if ('alsoCovers' in updates) patch.alsoCovers = cleanAlsoCovers(updates.alsoCovers);
+        if ('alwaysHave' in updates) patch.alwaysHave = Boolean(updates.alwaysHave);
+        const staple = 'alwaysHave' in updates ? Boolean(updates.alwaysHave) : isStaple(existing);
+        const stoppedBeingStaple =
+          'alwaysHave' in updates && !updates.alwaysHave && isStaple(existing);
 
         // Anything that can change how long the item keeps: an explicit shelf
         // life, a move to another kind of storage, or a rename that lands on a
@@ -408,7 +448,10 @@ const useInventory = () => {
         const renamed =
           Boolean(existing) && Boolean(updates.name) && updates.name !== existing.name;
 
-        if (chosenShelfLife || movedLocation || renamed) {
+        if (staple) {
+          // Staples carry no expiry date; see addItem.
+          patch.expiresAt = null;
+        } else if (chosenShelfLife || movedLocation || renamed || stoppedBeingStaple) {
           const nextLocationType = updates.locationType ?? existing?.locationType;
           const nextName = updates.name ?? existing?.name;
           let days;
@@ -432,6 +475,10 @@ const useInventory = () => {
 
           patch.expiresAt = calcExpiresAt(nextLocationType, days);
         }
+
+        // The edit form sends `shelfLifeDays: undefined` when the cook left it
+        // alone; Firestore refuses undefined values outright.
+        Object.keys(patch).forEach((key) => patch[key] === undefined && delete patch[key]);
 
         await updateDoc(itemRef, patch);
         return { success: true };

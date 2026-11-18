@@ -26,6 +26,7 @@ const LOCATION_TYPE_ICONS = {
  * @param {function} onDelete     - (item) => void — open delete confirm
  */
 const ItemCard = ({ item, location, onEdit, onDelete }) => {
+  const staple = item.alwaysHave === true;
   const level = getExpirationLevel(item.expiresAt);
   const badgeStyle = getExpirationBadgeStyle(item.expiresAt);
   const locationIcon = location?.icon ?? LOCATION_TYPE_ICONS[item.locationType] ?? '📦';
@@ -69,7 +70,7 @@ const ItemCard = ({ item, location, onEdit, onDelete }) => {
               flexShrink: 0,
             }}
           >
-            {level.label}
+            {staple ? 'Always have' : level.label}
           </Badge>
         </div>
 
@@ -98,14 +99,24 @@ const ItemCard = ({ item, location, onEdit, onDelete }) => {
           <span className="text-truncate">{locationLabel}</span>
         </div>
 
-        {/* Expiration row */}
-        <div
-          className="d-flex align-items-center gap-1"
-          style={{ fontSize: 'var(--mkh-font-size-tiny)', color: 'var(--mkh-text-secondary)' }}
-        >
-          <Calendar size={12} />
-          <span>{getExpirationLabel(item.expiresAt)}</span>
-        </div>
+        {/* Expiration row — or, for a staple, what else it stands in for */}
+        {staple ? (
+          item.alsoCovers?.length ? (
+            <div
+              style={{ fontSize: 'var(--mkh-font-size-tiny)', color: 'var(--mkh-text-secondary)' }}
+            >
+              Also counts as {item.alsoCovers.join(', ')}
+            </div>
+          ) : null
+        ) : (
+          <div
+            className="d-flex align-items-center gap-1"
+            style={{ fontSize: 'var(--mkh-font-size-tiny)', color: 'var(--mkh-text-secondary)' }}
+          >
+            <Calendar size={12} />
+            <span>{getExpirationLabel(item.expiresAt)}</span>
+          </div>
+        )}
 
         {/* Expiration warning — what to do about it, not just that it's red */}
         {showWarning && level.warning ? (

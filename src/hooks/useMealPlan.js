@@ -133,10 +133,18 @@ const capitalizeFirst = (text) => (text ? text[0].toUpperCase() + text.slice(1) 
 
 const indexStock = (inventoryItems) => {
   const byName = new Map();
+  const staples = new Set();
 
   inventoryItems.forEach((item) => {
     const name = ingredientKey(item.normalized || item.name);
     if (!name) return;
+    if (item.alwaysHave === true) {
+      staples.add(name);
+      (Array.isArray(item.alsoCovers) ? item.alsoCovers : []).forEach((alias) => {
+        const key = ingredientKey(alias);
+        if (key) staples.add(key);
+      });
+    }
     if (!byName.has(name)) byName.set(name, []);
     byName.get(name).push({ quantity: Number(item.quantity || 0), unit: item.unit || '' });
   });
@@ -150,8 +158,13 @@ const indexStock = (inventoryItems) => {
    * `otherUnits` instead. An item stored with no unit at all is a third case:
    * that is a gap in the record rather than a different substance, so it
    * counts toward `onHand`.
+   *
+   * A staple (`alwaysHave`, or named in a staple's `alsoCovers` — bouillon
+   * standing in for broth) covers any amount, so it answers `alwaysHave: true`
+   * and the row lands in "already in your kitchen".
    */
   return (name, unit) => {
+    if (staples.has(name)) return { onHand: 0, otherUnits: [], alwaysHave: true };
     const held = byName.get(name) || [];
     const wanted = canonicalUnit(unit);
 
@@ -246,13 +259,14 @@ export const buildShoppingList = (entries = [], inventoryItems = [], boughtKeys 
   return [...needed.values()]
     .map((item) => {
       const quantity = Math.round(item.quantity * 100) / 100;
-      const { onHand, otherUnits } = onHandFor(item.normalized, item.unit);
+      const { onHand, otherUnits, alwaysHave = false } = onHandFor(item.normalized, item.unit);
       return {
         ...item,
         quantity,
-        onHand,
+        onHand: alwaysHave ? quantity : onHand,
         otherUnits,
-        haveInInventory: onHand >= quantity && quantity > 0,
+        alwaysHave,
+        haveInInventory: alwaysHave || (onHand >= quantity && quantity > 0),
         bought: bought.has(item.key),
       };
     })
@@ -348,7 +362,8 @@ export const planInventoryDecrements = (entry, inventoryItems = []) => {
     const used = Number(ingredient.quantity || 0);
     if (!used) return;
     const match = inventoryItems.find((item) => normalize(item.normalized || item.name) === key);
-    if (!match) return;
+    // A staple is never used up by a recipe: "always have" means topped up.
+    if (!match || match.alwaysHave === true) return;
     const running = usedByItem.get(match.id);
     if (running) running.used += used;
     else usedByItem.set(match.id, { match, used });

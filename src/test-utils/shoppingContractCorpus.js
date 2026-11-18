@@ -180,6 +180,23 @@ const CASES = [
     manualItems: [],
     boughtKeys: ['milk|volume', 'not on the list|count'],
   },
+  {
+    name: 'staples cover any amount, including the names they also count as',
+    entries: [
+      meal('2026-11-17', 'dinner', [
+        uses('Salt', 1, 'tsp'),
+        uses('Chicken Broth', 2, 'cups'),
+        uses('Vegetable Or Chicken Broth', 1, 'cup'),
+        uses('Rice', 1, 'cup'),
+      ]),
+    ],
+    inventory: [
+      { ...stock('salt', 1), alwaysHave: true },
+      { ...stock('Chicken bouillon', 1, 'jar'), alwaysHave: true, alsoCovers: ['chicken broth'] },
+      { ...stock('rice', 1, 'cup'), alwaysHave: false },
+    ],
+    manualItems: [],
+  },
 ];
 
 /** Names for the aisle lookup: exact, plural/singular, keyword and unknown. */

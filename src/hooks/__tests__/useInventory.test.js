@@ -9,6 +9,7 @@ import useInventory, {
   SHELF_LIFE_DEFAULTS,
   byExpirySoonestFirst,
   calcExpiresAt,
+  cleanAlsoCovers,
   getDaysUntilExpiration,
   getExpirationBadgeStyle,
   getExpirationLabel,
@@ -791,6 +792,71 @@ describe('useInventory.updateItem', () => {
 
     expect(response).toEqual({ success: false, error: 'Not authenticated' });
     expect(fs.updateDoc).not.toHaveBeenCalled();
+  });
+});
+
+describe('staples ("always have")', () => {
+  const salt = {
+    name: 'Chicken Bouillon',
+    quantity: 1,
+    unit: 'jars',
+    locationId: 'loc-pantry',
+    locationType: 'pantry',
+    alwaysHave: true,
+    alsoCovers: 'Chicken broth,  chicken stock , chicken broth',
+  };
+
+  it('cleans an "also counts as" list from a string or an array', () => {
+    expect(cleanAlsoCovers(' Chicken broth, chicken STOCK ,, chicken broth')).toEqual([
+      'chicken broth',
+      'chicken stock',
+    ]);
+    expect(cleanAlsoCovers(['Stock'])).toEqual(['stock']);
+    expect(cleanAlsoCovers(undefined)).toEqual([]);
+  });
+
+  it('adds a staple with no expiry date and its other names', async () => {
+    const { result } = await renderInventory([]);
+    await act(async () => {
+      await result.current.addItem(salt);
+    });
+    const [, payload] = fs.addDoc.mock.calls[0];
+    expect(payload.alwaysHave).toBe(true);
+    expect(payload.alsoCovers).toEqual(['chicken broth', 'chicken stock']);
+    expect(payload.expiresAt).toBeNull();
+  });
+
+  it('marks an ordinary item as a staple by clearing its expiry', async () => {
+    const { result } = await renderInventory([makeItem({ id: 'item-1' })]);
+    await act(async () => {
+      await result.current.updateItem('item-1', { alwaysHave: true, shelfLifeDays: undefined });
+    });
+    const [, patch] = fs.updateDoc.mock.calls[0];
+    expect(patch.alwaysHave).toBe(true);
+    expect(patch.expiresAt).toBeNull();
+    expect(patch).not.toHaveProperty('shelfLifeDays');
+  });
+
+  it('gives a former staple an expiry date again', async () => {
+    const { result } = await renderInventory([
+      makeItem({ id: 'item-1', alwaysHave: true, expiresAt: null }),
+    ]);
+    await act(async () => {
+      await result.current.updateItem('item-1', { alwaysHave: false });
+    });
+    const [, patch] = fs.updateDoc.mock.calls[0];
+    expect(patch.alwaysHave).toBe(false);
+    expect(patch.expiresAt).toBeTruthy();
+  });
+
+  it('keeps a staple undated when it is moved or renamed', async () => {
+    const { result } = await renderInventory([
+      makeItem({ id: 'item-1', alwaysHave: true, expiresAt: null, locationType: 'pantry' }),
+    ]);
+    await act(async () => {
+      await result.current.updateItem('item-1', { locationType: 'fridge', name: 'Salt' });
+    });
+    expect(fs.updateDoc.mock.calls[0][1].expiresAt).toBeNull();
   });
 });
 

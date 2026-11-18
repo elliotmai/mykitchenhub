@@ -157,13 +157,18 @@ rather than guessing a day.
   
   // Tracking information
   addedAt: Timestamp,                     // When item was added
-  expiresAt: Timestamp,                   // Calculated expiration date
+  expiresAt: Timestamp,                   // Calculated expiration date; null for a staple
   shelfLifeDays: 270,                     // Always a number, never null — the
                                           // edit form recalculates expiresAt
                                           // from it, so a missing one moves the
                                           // expiry date every time it is edited
   shelfLifeSource: "default",             // "default" (we calculated it) | "custom" (the user chose it)
   notes: "organic, from Costco",          // User notes
+  alwaysHave: false,                      // a staple (salt, spices, bouillon): covers any
+                                          // shopping-list need, never decremented by
+                                          // Mark as Cooked, and expiresAt is null
+  alsoCovers: ["chicken broth"],          // staples only: other names it stands in for,
+                                          // lower-cased (bouillon covers broth)
   source: "manual",                       // "manual" | "hellofresh" | "csv-import" | "seed"
   
   // Purchase history

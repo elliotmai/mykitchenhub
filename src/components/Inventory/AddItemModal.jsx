@@ -5,7 +5,7 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, Form, Button, Row, Col, Alert } from 'react-bootstrap';
 import { Package } from 'lucide-react';
-import { resolveShelfLifeDays, isCustomShelfLife } from '../../hooks/useInventory';
+import { resolveShelfLifeDays, isCustomShelfLife, cleanAlsoCovers } from '../../hooks/useInventory';
 
 const UNIT_OPTIONS = [
   '',
@@ -35,6 +35,8 @@ const EMPTY_FORM = {
   notes: '',
   price: '',
   store: '',
+  alwaysHave: false,
+  alsoCovers: '',
 };
 
 /**
@@ -73,6 +75,8 @@ const AddItemModal = ({ show, onHide, onSave, locations = [], editItem = null })
         notes: editItem.notes ?? '',
         price: '',
         store: '',
+        alwaysHave: editItem.alwaysHave === true,
+        alsoCovers: (editItem.alsoCovers || []).join(', '),
       });
       setShelfLifeTouched(isCustomShelfLife(editItem));
     } else {
@@ -130,8 +134,10 @@ const AddItemModal = ({ show, onHide, onSave, locations = [], editItem = null })
       setError('Item name is required.');
       return;
     }
-    const qty = parseFloat(form.quantity);
-    if (!form.quantity || isNaN(qty) || qty <= 0) {
+    // A staple's amount is not tracked, so a blank quantity is fine: it is
+    // stored as 1 (the rules want something positive) and never decremented.
+    const qty = form.alwaysHave && !form.quantity ? 1 : parseFloat(form.quantity);
+    if (isNaN(qty) || qty <= 0) {
       setError('Quantity must be a number greater than 0.');
       return;
     }
@@ -155,6 +161,8 @@ const AddItemModal = ({ show, onHide, onSave, locations = [], editItem = null })
       notes: form.notes.trim(),
       price: form.price ? parseFloat(form.price) : null,
       store: form.store.trim(),
+      alwaysHave: form.alwaysHave,
+      alsoCovers: form.alwaysHave ? cleanAlsoCovers(form.alsoCovers) : [],
     };
 
     const result = await onSave(payload);
@@ -214,16 +222,41 @@ const AddItemModal = ({ show, onHide, onSave, locations = [], editItem = null })
             />
           </Form.Group>
 
+          {/* Staple */}
+          <Form.Group className="mb-3" controlId="item-always-have">
+            <Form.Check
+              type="switch"
+              label="I always have this"
+              checked={form.alwaysHave}
+              onChange={(e) => setForm((prev) => ({ ...prev, alwaysHave: e.target.checked }))}
+            />
+            <Form.Text className="text-muted">
+              For salt, spices, bouillon and the like. It never goes on the shopping list, cooking
+              doesn&rsquo;t use it up, and it has no expiry date.
+            </Form.Text>
+            {form.alwaysHave && (
+              <Form.Control
+                className="mt-2"
+                type="text"
+                placeholder='Also counts as, e.g. "chicken broth, chicken stock"'
+                aria-label="Also counts as"
+                value={form.alsoCovers}
+                onChange={handleChange('alsoCovers')}
+                maxLength={300}
+              />
+            )}
+          </Form.Group>
+
           {/* Quantity + Unit */}
           <Row className="mb-3">
             <Col xs={5}>
               <Form.Group>
                 <Form.Label className="fw-semibold">
-                  Quantity <span className="text-danger">*</span>
+                  Quantity {!form.alwaysHave && <span className="text-danger">*</span>}
                 </Form.Label>
                 <Form.Control
                   type="number"
-                  placeholder="e.g. 2"
+                  placeholder={form.alwaysHave ? 'optional' : 'e.g. 2'}
                   value={form.quantity}
                   onChange={handleChange('quantity')}
                   min="0.01"
@@ -270,27 +303,29 @@ const AddItemModal = ({ show, onHide, onSave, locations = [], editItem = null })
             )}
           </Form.Group>
 
-          {/* Shelf Life Override */}
-          <Form.Group className="mb-1" controlId="item-shelf-life">
-            <Form.Label className="fw-semibold">Shelf Life (days)</Form.Label>
-            <Form.Control
-              type="number"
-              placeholder={
-                form.locationType
-                  ? `Default: ${resolveShelfLifeDays(form.name, form.locationType)}`
-                  : 'Select a location first'
-              }
-              value={form.shelfLifeDays}
-              onChange={handleShelfLifeChange}
-              min="1"
-              disabled={!form.locationType}
-            />
-            {previewDate && (
-              <Form.Text className="text-muted">
-                📅 Estimated expiry: <strong>{previewDate}</strong>
-              </Form.Text>
-            )}
-          </Form.Group>
+          {/* Shelf Life Override — a staple has no expiry date */}
+          {!form.alwaysHave && (
+            <Form.Group className="mb-1" controlId="item-shelf-life">
+              <Form.Label className="fw-semibold">Shelf Life (days)</Form.Label>
+              <Form.Control
+                type="number"
+                placeholder={
+                  form.locationType
+                    ? `Default: ${resolveShelfLifeDays(form.name, form.locationType)}`
+                    : 'Select a location first'
+                }
+                value={form.shelfLifeDays}
+                onChange={handleShelfLifeChange}
+                min="1"
+                disabled={!form.locationType}
+              />
+              {previewDate && (
+                <Form.Text className="text-muted">
+                  📅 Estimated expiry: <strong>{previewDate}</strong>
+                </Form.Text>
+              )}
+            </Form.Group>
+          )}
 
           <hr style={{ borderColor: 'var(--mkh-border-light)' }} />
 
