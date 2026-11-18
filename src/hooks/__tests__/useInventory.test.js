@@ -10,6 +10,7 @@ import useInventory, {
   byExpirySoonestFirst,
   calcExpiresAt,
   cleanAlsoCovers,
+  missingRequiredFields,
   getDaysUntilExpiration,
   getExpirationBadgeStyle,
   getExpirationLabel,
@@ -792,6 +793,47 @@ describe('useInventory.updateItem', () => {
 
     expect(response).toEqual({ success: false, error: 'Not authenticated' });
     expect(fs.updateDoc).not.toHaveBeenCalled();
+  });
+});
+
+describe('repairing older documents on edit', () => {
+  const seeded = {
+    id: 'seeded',
+    name: 'Milk',
+    quantity: '2',
+    unit: 'gallon',
+    locationId: 'loc-1',
+    locationType: 'fridge',
+    source: 'seed',
+    createdAt: '2026-08-01T00:00:00.000Z',
+  };
+
+  it('fills only the fields the update rule needs and the document lacks', () => {
+    expect(missingRequiredFields(seeded)).toEqual({
+      normalized: 'milk',
+      addedAt: '2026-08-01T00:00:00.000Z',
+      quantity: 2,
+    });
+    expect(missingRequiredFields(makeItem())).toEqual({});
+    expect(missingRequiredFields(null)).toEqual({});
+  });
+
+  it('gives an item tagged only with addedBy a valid source', () => {
+    const { source, ...old } = makeItem({ addedBy: 'csv' });
+    expect(missingRequiredFields(old)).toEqual({ source: 'manual' });
+  });
+
+  it('sends the repair along with the edit', async () => {
+    const { result } = await renderInventory([seeded]);
+    await act(async () => {
+      await result.current.updateItem('seeded', { notes: 'opened' });
+    });
+    expect(fs.updateDoc.mock.calls[0][1]).toMatchObject({
+      notes: 'opened',
+      normalized: 'milk',
+      addedAt: '2026-08-01T00:00:00.000Z',
+      quantity: 2,
+    });
   });
 });
 

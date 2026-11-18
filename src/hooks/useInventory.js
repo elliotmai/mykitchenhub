@@ -99,6 +99,59 @@ export const calcExpiresAt = (locationType, shelfLifeDays) => {
 };
 
 // ---------------------------------------------------------------------------
+// Older documents
+// ---------------------------------------------------------------------------
+
+const VALID_SOURCES = ['manual', 'hellofresh', 'csv-import', 'seed'];
+const VALID_LOCATION_TYPES = ['fridge', 'freezer', 'pantry'];
+
+/**
+ * The fields an update must carry for the security rules to accept it, filled
+ * in for a document written before those fields were required.
+ *
+ * The inventory update rule re-checks the whole resulting document — `name`,
+ * `normalized`, `quantity`, `unit`, `locationId`, `locationType`, `addedAt`,
+ * `source` — so an item seeded by the old test-data function (no `normalized`,
+ * no `addedAt`), or imported before `source` replaced `addedBy`, could be read
+ * but never edited: every save came back "permission denied". Filling the gaps
+ * on the next edit repairs it for good. Only missing or invalid fields are
+ * touched; anything already valid is left exactly as it is.
+ *
+ * @returns {object} fields to merge into the update patch (often empty)
+ */
+export const missingRequiredFields = (existing, updates = {}) => {
+  if (!existing) return {};
+  const next = { ...existing, ...updates };
+  const fill = {};
+
+  if (!String(next.normalized ?? '').trim() && String(next.name ?? '').trim()) {
+    fill.normalized = String(next.name).trim().toLowerCase();
+  }
+  if (typeof next.unit !== 'string') fill.unit = '';
+  if (!VALID_SOURCES.includes(next.source)) fill.source = 'manual';
+  if (!next.addedAt) {
+    // The old seed function wrote `createdAt` / `purchaseDate` as ISO strings.
+    const earlier = existing.createdAt ?? existing.purchaseDate;
+    fill.addedAt = earlier || serverTimestamp();
+  }
+  if (!VALID_LOCATION_TYPES.includes(next.locationType)) {
+    // Nothing sensible to infer from; the edit form always sends one, so this
+    // only matters for a write that does not (a quick quantity change).
+    fill.locationType = 'pantry';
+  }
+  if (!String(next.locationId ?? '').trim() && existing.locationId === undefined) {
+    fill.locationId = 'unassigned';
+  }
+  if (typeof next.quantity !== 'number' || !(next.quantity >= 0)) {
+    // Old documents sometimes stored "2" as a string: keep the amount.
+    const parsed = Number(next.quantity);
+    fill.quantity = Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+  }
+
+  return fill;
+};
+
+// ---------------------------------------------------------------------------
 // Staples ("always have")
 // ---------------------------------------------------------------------------
 
@@ -424,7 +477,11 @@ const useInventory = () => {
         const itemRef = doc(db, 'users', user.uid, 'inventory', itemId);
         const existing = items.find((i) => i.id === itemId);
 
-        const patch = { ...updates, updatedAt: serverTimestamp() };
+        const patch = {
+          ...missingRequiredFields(existing, updates),
+          ...updates,
+          updatedAt: serverTimestamp(),
+        };
         if ('alsoCovers' in updates) patch.alsoCovers = cleanAlsoCovers(updates.alsoCovers);
         if ('alwaysHave' in updates) patch.alwaysHave = Boolean(updates.alwaysHave);
         const staple = 'alwaysHave' in updates ? Boolean(updates.alwaysHave) : isStaple(existing);

@@ -304,9 +304,7 @@ describe('users collection', () => {
     await seed((db) => db.doc(`users/${OWNER}`).set(profile));
 
     await assertFails(
-      as(OWNER)
-        .doc(`users/${OWNER}`)
-        .set({ email: profile.email, createdAt: profile.createdAt })
+      as(OWNER).doc(`users/${OWNER}`).set({ email: profile.email, createdAt: profile.createdAt })
     );
   });
 
@@ -319,12 +317,8 @@ describe('users collection', () => {
     const { helloFresh, ...asOnUserCreateWritesIt } = validUser();
     await seed((db) => db.doc(`users/${OWNER}`).set(asOnUserCreateWritesIt));
 
-    await assertSucceeds(
-      as(OWNER).doc(`users/${OWNER}`).update({ displayName: 'Chef Eli' })
-    );
-    await assertSucceeds(
-      as(OWNER).doc(`users/${OWNER}`).update({ 'helloFresh.enabled': true })
-    );
+    await assertSucceeds(as(OWNER).doc(`users/${OWNER}`).update({ displayName: 'Chef Eli' }));
+    await assertSucceeds(as(OWNER).doc(`users/${OWNER}`).update({ 'helloFresh.enabled': true }));
   });
 
   it('lets a partial merge through, because the merged result is still whole', async () => {
@@ -345,9 +339,15 @@ describe('users collection', () => {
   const TOKEN_HASH = 'a'.repeat(64);
 
   it('refuses a profile created with an API token hash on it', async () => {
-    await assertFails(as(OWNER).doc(`users/${OWNER}`).set(validUser({ apiTokenHash: TOKEN_HASH })));
     await assertFails(
-      as(OWNER).doc(`users/${OWNER}`).set(validUser({ apiTokenHashes: [TOKEN_HASH] }))
+      as(OWNER)
+        .doc(`users/${OWNER}`)
+        .set(validUser({ apiTokenHash: TOKEN_HASH }))
+    );
+    await assertFails(
+      as(OWNER)
+        .doc(`users/${OWNER}`)
+        .set(validUser({ apiTokenHashes: [TOKEN_HASH] }))
     );
   });
 
@@ -636,6 +636,80 @@ describe('storage locations', () => {
 
 describe('inventory items', () => {
   const itemPath = (uid, id = 'item-1') => `users/${uid}/inventory/${id}`;
+
+  it("accepts the edit form's update, including a staple", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc(itemPath(OWNER, 'edit-1')).set(validItem());
+    });
+    await assertSucceeds(
+      as(OWNER)
+        .doc(itemPath(OWNER, 'edit-1'))
+        .update({
+          name: 'Chicken bouillon',
+          quantity: 1,
+          unit: 'jars',
+          locationId: validItem().locationId,
+          locationType: 'pantry',
+          notes: '',
+          price: null,
+          store: '',
+          alwaysHave: true,
+          alsoCovers: ['chicken broth'],
+          expiresAt: null,
+          updatedAt: new Date(),
+        })
+    );
+  });
+
+  it('lets an edit repair an old seeded item that has no normalized or addedAt', async () => {
+    // The shape functions/src/utils/seedData.js used to write.
+    const seeded = {
+      name: 'milk',
+      quantity: 1,
+      unit: 'gallon',
+      locationId: 'loc-1',
+      locationName: 'Fridge',
+      locationType: 'fridge',
+      purchaseDate: '2026-08-01T00:00:00.000Z',
+      source: 'seed',
+      createdAt: '2026-08-01T00:00:00.000Z',
+    };
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc(itemPath(OWNER, 'seeded')).set(seeded);
+    });
+
+    // As before: an edit without the missing fields is refused…
+    await assertFails(as(OWNER).doc(itemPath(OWNER, 'seeded')).update({ quantity: 2 }));
+    // …and with them (useInventory.missingRequiredFields) it goes through.
+    await assertSucceeds(
+      as(OWNER)
+        .doc(itemPath(OWNER, 'seeded'))
+        .update({ quantity: 2, normalized: 'milk', addedAt: seeded.createdAt })
+    );
+    // Once it has an addedAt, that is fixed again.
+    await assertFails(
+      as(OWNER).doc(itemPath(OWNER, 'seeded')).update({ addedAt: '2020-01-01T00:00:00.000Z' })
+    );
+  });
+
+  it('lets an edit give an item imported with addedBy a source', async () => {
+    const { source, ...old } = validItem({ addedBy: 'csv' });
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc(itemPath(OWNER, 'old-import')).set(old);
+    });
+    await assertFails(as(OWNER).doc(itemPath(OWNER, 'old-import')).update({ quantity: 3 }));
+    await assertSucceeds(
+      as(OWNER).doc(itemPath(OWNER, 'old-import')).update({ quantity: 3, source: 'manual' })
+    );
+  });
+
+  it('accepts a new staple', async () => {
+    await assertSucceeds(
+      as(OWNER)
+        .doc(itemPath(OWNER, 'staple-1'))
+        .set(validItem({ alwaysHave: true, alsoCovers: ['chicken broth'], expiresAt: null }))
+    );
+  });
 
   it('accepts the document shape useInventory.addItem writes', async () => {
     await assertSucceeds(as(OWNER).doc(itemPath(OWNER)).set(validItem()));
@@ -1811,13 +1885,17 @@ describe('recipes', () => {
     // `createdBy` is what the delete rule trusts, so a create must not be able
     // to attribute a document to a cook who never wrote it.
     await assertFails(
-      as(INTRUDER).doc('recipes/forged').set(validRecipe({ createdBy: OWNER }))
+      as(INTRUDER)
+        .doc('recipes/forged')
+        .set(validRecipe({ createdBy: OWNER }))
     );
   });
 
   it('accepts a create that claims the caller as author', async () => {
     await assertSucceeds(
-      as(OWNER).doc('recipes/honest').set(validRecipe({ createdBy: OWNER }))
+      as(OWNER)
+        .doc('recipes/honest')
+        .set(validRecipe({ createdBy: OWNER }))
     );
   });
 
@@ -1984,7 +2062,9 @@ describe('manual shopping items', () => {
     // the *resulting* document, so the required-field check still passes —
     // which is the whole reason a partial update is safe here.
     await assertSucceeds(
-      as(OWNER).doc(itemPath(OWNER)).update({ status: 'bought', boughtAt: new Date().toISOString() })
+      as(OWNER)
+        .doc(itemPath(OWNER))
+        .update({ status: 'bought', boughtAt: new Date().toISOString() })
     );
   });
 

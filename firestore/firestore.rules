@@ -134,7 +134,11 @@ service cloud.firestore {
           && hasRequiredFields(['name', 'normalized', 'quantity', 'unit',
                                 'locationId', 'locationType',
                                 'addedAt', 'source'])
-          && request.resource.data.addedAt == resource.data.addedAt
+          // addedAt is immutable once it exists. An item written before it was
+          // required (the old seed function, early imports) may gain one on
+          // its next edit — otherwise that item could never be edited at all.
+          && (!('addedAt' in resource.data)
+              || request.resource.data.addedAt == resource.data.addedAt)
           && request.resource.data.locationType in ['fridge', 'freezer', 'pantry']
           && request.resource.data.source in ['manual', 'hellofresh', 'csv-import', 'seed']
           && request.resource.data.quantity >= 0;

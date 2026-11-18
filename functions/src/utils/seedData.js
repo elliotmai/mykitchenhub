@@ -103,6 +103,12 @@ async function seedInventory(userId, itemCount = 20) {
     
     const inventoryItem = {
       name: item.name,
+      // `normalized`, `addedAt` and `expiresAt` are what the app reads and the
+      // inventory update rule requires; without them a seeded item could be
+      // seen but never edited.
+      normalized: item.name.toLowerCase(),
+      addedAt: purchaseDate.toISOString(),
+      expiresAt: expirationDate ? expirationDate.toISOString() : null,
       quantity: item.quantity,
       unit: item.unit,
       locationId: location.id,
