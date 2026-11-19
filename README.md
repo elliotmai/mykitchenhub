@@ -181,9 +181,10 @@ The `board` API needs no environment variable: its tokens are minted under
 **Settings → Connected apps** and stored only as SHA-256 hashes. See
 [Connected apps](#connected-apps).
 
-Credentials are read from `process.env` or Functions config only. The
-service-account JSON files in `functions/` are never read by application code;
-they are being rotated out of band and must not be used or copied.
+Credentials are read from `process.env` or Functions config only. Never put a
+service-account JSON file in the repo: `functions/.gitignore` keeps them out,
+and CI's secret check fails if one is committed. (Two such files were committed
+earlier and have been deleted; their keys must be revoked in Google Cloud.)
 
 ### Daily waste alerts by SMS — optional, and currently off
 

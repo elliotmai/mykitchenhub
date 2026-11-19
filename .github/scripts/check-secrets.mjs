@@ -9,15 +9,13 @@
  * KNOWN_EXPOSED lists files that already contain live credentials and are being
  * rotated out of band. They are skipped so this check reports *new* leaks
  * rather than re-reporting a known one on every run. Remove entries from that
- * list once the files are gone.
+ * list once the files are gone. (Empty: the two service-account files were
+ * deleted; their keys must still be revoked in Google Cloud.)
  */
 import { execSync } from 'node:child_process';
 import { readFileSync, statSync } from 'node:fs';
 
-const KNOWN_EXPOSED = new Set([
-  'functions/service-account.json',
-  'functions/legacy-firebase-service-account.json',
-]);
+const KNOWN_EXPOSED = new Set([]);
 
 const SKIP_DIRS = /(^|\/)(node_modules|build|coverage|\.git|playwright-report|test-results)\//;
 const SKIP_FILES = /(package-lock\.json|\.png|\.jpg|\.jpeg|\.gif|\.svg|\.ico|\.woff2?|\.map)$/i;
