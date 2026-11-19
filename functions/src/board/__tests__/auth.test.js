@@ -211,3 +211,42 @@ describe('resolveUser — tokens minted under Connected apps', () => {
     });
   });
 });
+
+describe('resolveUser with a Hive pass', () => {
+  const { generateKeyPairSync, sign } = require('node:crypto');
+  const keys = generateKeyPairSync('ed25519');
+  const other = generateKeyPairSync('ed25519');
+  const NOW = 1_800_000_000_000;
+  const secs = NOW / 1000;
+  const enc = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const pass = (claims = {}, key = keys.privateKey) => {
+    const head = `${enc({ alg: 'EdDSA', typ: 'JWT' })}.${enc({ iss: 'hive', aud: 'kitchenhub', sub: 'h1', email: 'cook@example.com', email_verified: true, iat: secs - 5, exp: secs + 115, ...claims })}`;
+    return `${head}.${sign(null, Buffer.from(head), key).toString('base64url')}`;
+  };
+  const findUid = async (email) => (email === 'cook@example.com' ? 'u1' : null);
+  const opts = { findUid, now: NOW };
+
+  beforeAll(() => { process.env.HIVE_PUBLIC_KEY = keys.publicKey.export({ format: 'der', type: 'spki' }).toString('base64'); });
+  afterAll(() => { delete process.env.HIVE_PUBLIC_KEY; });
+
+  it('finds the cook by the confirmed email on the pass', async () => {
+    const db = makeFakeFirestore({ 'users/u1': user({ timezone: 'America/Chicago' }) });
+    await expect(resolveUser(db, `Hive ${pass()}`, opts)).resolves.toMatchObject({ uid: 'u1', profile: { timezone: 'America/Chicago' } });
+  });
+
+  it.each([
+    ['another app', () => pass({ aud: 'learnleaf' })],
+    ['another key', () => pass({}, other.privateKey)],
+    ['an unconfirmed email', () => pass({ email_verified: false })],
+    ['an email with no account', () => pass({ email: 'stranger@example.com' })],
+    ['an expired pass', () => pass({ iat: secs - 400, exp: secs - 280 })],
+    ['junk', () => 'not.a.pass'],
+  ])('refuses %s', async (_label, make) => {
+    const db = makeFakeFirestore({ 'users/u1': user() });
+    await expectUnauthorized(resolveUser(db, `Hive ${make()}`, opts));
+  });
+
+  it('refuses a pass whose account has no profile', async () => {
+    await expectUnauthorized(resolveUser(makeFakeFirestore({}), `Hive ${pass()}`, opts));
+  });
+});

@@ -23,6 +23,16 @@ token that never sits in a web page cannot leak from one.
 
 ---
 
+## From Hive, as a person
+
+Hive (the household's home-screen app, in the Fridge-Board repo) doesn't need a
+token. It sends `Authorization: Hive <pass>`: a JWT signed with Ed25519 by
+Hive's server, made for KitchenHub only (`aud: "kitchenhub"`), good for two
+minutes, carrying an email Hive has confirmed. The function checks it with
+Hive's public key (`functions/src/board/hivePass.js`, not secret) and acts as
+the KitchenHub account with that email. No account, or anything wrong with the
+pass, is the same `401` as a bad token; the board never creates an account.
+
 ## Setting up a token
 
 1. In KitchenHub, **Settings → Connected apps → Connect an app**. Name it
@@ -86,7 +96,7 @@ and indexes** workflow button or `firebase deploy --only firestore:rules`.
 
 ## Requests
 
-Every request carries `Authorization: Bearer <token>`. Bodies are JSON
+Every request carries `Authorization: Bearer <token>` (or, from Hive, `Authorization: Hive <pass>`; see above). Bodies are JSON
 (`Content-Type: application/json`). Every error is JSON `{ "error": "…" }`:
 
 | Status | Meaning |

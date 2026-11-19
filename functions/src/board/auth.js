@@ -1,7 +1,11 @@
 // functions/src/board/auth.js
 // Who is calling the `board` API.
 //
-// The caller sends `Authorization: Bearer <token>`. Only a SHA-256 hash of a
+// Hive sends `Authorization: Hive <pass>`: a two-minute pass for whoever is
+// signed in to Hive, made for KitchenHub only (./hivePass.js). Their confirmed
+// email finds their KitchenHub account. Nothing is stored for this.
+//
+// Other callers send `Authorization: Bearer <token>`. Only a SHA-256 hash of a
 // token is ever stored. A token resolves, in this order:
 //
 // 1. `apiTokens/{sha256(token)}` — minted by the cook under Settings →
@@ -19,6 +23,8 @@
 
 const { createHash } = require('node:crypto');
 const admin = require('firebase-admin');
+
+const { verifyHivePass } = require('./hivePass');
 
 /** Shorter than this cannot be a real token (make-api-token.mjs: 43 chars; khapp_: 49). */
 const MIN_TOKEN_LENGTH = 32;
@@ -81,7 +87,34 @@ const resolveConnectedApp = async (db, hash) => {
  * @param {string} authorization            the raw header value
  * @returns {Promise<{uid: string, profile: object}>}
  */
-const resolveUser = async (db, authorization) => {
+/** The KitchenHub account with this email, or null. */
+const uidForEmail = async (email) => {
+  try {
+    return (await admin.auth().getUserByEmail(email)).uid;
+  } catch (err) {
+    if (err?.code === 'auth/user-not-found') return null;
+    throw err;
+  }
+};
+
+/**
+ * A Hive pass → the account with its confirmed email. No account (the board
+ * never makes one), no profile, or anything wrong with the pass → 401.
+ */
+const resolveHiveUser = async (db, pass, { findUid = uidForEmail, now } = {}) => {
+  const claims = verifyHivePass(pass, now ? { now } : {});
+  if (!claims || !claims.email || !claims.email_verified) throw new HttpError(401, UNAUTHORIZED);
+  const uid = await findUid(claims.email);
+  if (!uid) throw new HttpError(401, UNAUTHORIZED);
+  const profile = await db.collection('users').doc(uid).get();
+  if (!profile.exists) throw new HttpError(401, UNAUTHORIZED);
+  return { uid, profile: profile.data() || {} };
+};
+
+const resolveUser = async (db, authorization, options = {}) => {
+  const hive = String(authorization ?? '').trim().match(/^Hive\s+(\S+)$/i);
+  if (hive) return resolveHiveUser(db, hive[1], options);
+
   const token = bearerToken(authorization);
   if (token.length < MIN_TOKEN_LENGTH) throw new HttpError(401, UNAUTHORIZED);
 
