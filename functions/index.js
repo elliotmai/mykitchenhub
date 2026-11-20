@@ -281,6 +281,9 @@ exports.deleteStorageLocation = deleteStorageLocation;
 // live in src/board/; setup is in docs/BOARD_API.md.
 exports.board = require('./src/board/board').board;
 
+// Sign in with Hive: trade a Hive pass for a KitchenHub sign-in (src/hive/hiveExchange.js).
+exports.hiveExchange = require('./src/hive/hiveExchange').hiveExchange;
+
 // ==========================================================================
 // FUNCTION 8: Connected apps (mint, list, revoke tokens for the board API)
 // ==========================================================================

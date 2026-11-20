@@ -58,7 +58,16 @@ export const AuthProvider = ({ children }) => {
 
   // Listen for auth state changes
   useEffect(() => {
+    let triedHive = false;
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      // Signed out here but signed in to Hive? One login: sign in as that
+      // person (src/services/hive.js). Tried once per page load, so signing
+      // out of KitchenHub sticks until the next visit.
+      if (!firebaseUser && !triedHive) {
+        triedHive = true;
+        const { signInWithHive } = await import('../services/hive');
+        if (await signInWithHive(auth)) return; // the listener fires again, signed in
+      }
       if (firebaseUser) {
         setUser(firebaseUser);
         // Fetch additional user profile from Firestore
