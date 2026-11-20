@@ -227,8 +227,7 @@ API — token setup in [BOARD_API.md](./BOARD_API.md)). That list is
 `REQUIRED_EXPORTS` in `functions/index.test.js`, which fails the build if one
 goes missing.
 
-Four more deploy alongside them — `seedTestData`, `clearTestData`,
-`seedInventoryHttp`, `seedRecipesHttp` — and should not stay. See below.
+The four development seed functions that used to deploy alongside them were removed (see below).
 
 Two things to verify while you are there:
 
@@ -259,7 +258,9 @@ request rather than from a verified session:
 They exist to make development pleasant and they are the sharpest edge in the
 deployed surface.
 
-**Do not leave these in production.** They are not in `REQUIRED_EXPORTS`, so
+**Removed (November 2026).** They no longer exist in `functions/index.js`, and the `--force` deploy deleted them from Firebase. What follows is kept for the record.
+
+**Do not bring these back to production.** They are not in `REQUIRED_EXPORTS`, so
 removing them does not break the contract test. Delete the four `exports` lines
 from `functions/index.js` before deploying, or remove the functions afterwards:
 
