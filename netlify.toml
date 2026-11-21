@@ -1,0 +1,10 @@
+
+
+# The old address sends people to the new one, so the one Hive sign-in
+# (a cookie for *.flyingdoublemranch.com) covers this app too.
+[[redirects]]
+  from = "https://mykitchenhub.netlify.app/*"
+  to = "https://kitchen.flyingdoublemranch.com/:splat"
+  status = 301
+  force = true
+
