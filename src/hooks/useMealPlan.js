@@ -23,8 +23,8 @@ import {
   serverTimestamp,
   arrayUnion,
   arrayRemove,
-} from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
+} from '../backend/firestore';
+import { httpsCallable } from '../backend/functions';
 import { db, functions } from '../services/firebase';
 import { useAuth } from './useAuth';
 import useInventory from './useInventory';

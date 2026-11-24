@@ -8,7 +8,7 @@
 // the browser only ever holds a new token long enough to show it once.
 
 import { useState, useEffect, useCallback } from 'react';
-import { httpsCallable } from 'firebase/functions';
+import { httpsCallable } from '../backend/functions';
 import { functions } from '../services/firebase';
 import { useAuth } from './useAuth';
 import { errorCode, friendlyError } from '../utils/firebaseErrors';

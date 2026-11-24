@@ -12,7 +12,7 @@
 // without standing up Firestore.
 
 import { useMemo, useCallback } from 'react';
-import { doc, updateDoc, arrayUnion, increment } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion, increment } from '../backend/firestore';
 import { db } from '../services/firebase';
 import { useAuth } from './useAuth';
 import useInventory from './useInventory';

@@ -30,14 +30,26 @@ process.env.REACT_APP_FIREBASE_APP_ID = '1:1234567890:web:abcdef';
 process.env.REACT_APP_FIREBASE_FUNCTIONS_URL = 'https://functions.test/mykitchenhub';
 
 // ---------------------------------------------------------------------------
-// Firebase SDK mocks
+// Backend mocks
 // ---------------------------------------------------------------------------
-jest.mock('firebase/app', () => require('./test-utils/mocks/app'));
-jest.mock('firebase/auth', () => require('./test-utils/mocks/auth'));
-jest.mock('firebase/firestore', () => require('./test-utils/mocks/firestore'));
-jest.mock('firebase/storage', () => require('./test-utils/mocks/storage'));
-jest.mock('firebase/functions', () => require('./test-utils/mocks/functions'));
-jest.mock('firebase/analytics', () => require('./test-utils/mocks/analytics'));
+// The app reaches Supabase through src/backend/, which answers the Firebase
+// SDK's calls; those modules are replaced with the same manual mocks. Their
+// own tests (src/backend/__tests__) import the real modules with
+// jest.requireActual and a fake Supabase client.
+jest.mock('./backend/auth', () => require('./test-utils/mocks/auth'));
+jest.mock('./backend/firestore', () => require('./test-utils/mocks/firestore'));
+jest.mock('./backend/storage', () => require('./test-utils/mocks/storage'));
+jest.mock('./backend/functions', () => require('./test-utils/mocks/functions'));
+jest.mock('./backend/analytics', () => require('./test-utils/mocks/analytics'));
+jest.mock('./backend/supabase', () => ({
+  supabase: {},
+  kitchen: {},
+  core: {},
+  myHousehold: jest.fn(async () => 'household-1'),
+  forgetHousehold: jest.fn(),
+  accessToken: jest.fn(async () => 'test-access-token'),
+  HIVE_ORIGIN: 'https://hive.test',
+}));
 
 // ---------------------------------------------------------------------------
 // jsdom polyfills

@@ -4,10 +4,8 @@
 
 const { createHash } = require('node:crypto');
 
-jest.mock('firebase-admin', () => ({
-  firestore: Object.assign(jest.fn(), {
-    FieldValue: { serverTimestamp: () => ({ __serverTimestamp: true }) },
-  }),
+jest.mock('../../utils/fieldValue', () => ({
+  FieldValue: { serverTimestamp: () => ({ __serverTimestamp: true }) },
 }));
 
 const { makeFakeFirestore, SERVER_TIMESTAMP } = require('../__fixtures__/fakeFirestore');

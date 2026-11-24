@@ -15,7 +15,7 @@ import {
   query,
   limit as limitTo,
   updateDoc,
-} from 'firebase/firestore';
+} from '../backend/firestore';
 
 import { db } from '../services/firebase';
 import { useAuth } from './useAuth';

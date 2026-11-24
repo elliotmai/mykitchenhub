@@ -11,8 +11,8 @@
 // own cost ceiling on top.
 
 import { useState, useEffect, useCallback } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
+import { doc, onSnapshot } from '../backend/firestore';
+import { httpsCallable } from '../backend/functions';
 import { db, functions } from '../services/firebase';
 import { useAuth } from './useAuth';
 import { friendlyError } from '../utils/firebaseErrors';

@@ -7,14 +7,12 @@
  * user" is enforced by this code and proven by these tests.
  */
 
-jest.mock('firebase-admin', () => ({
-  firestore: Object.assign(jest.fn(), {
-    FieldValue: {
-      serverTimestamp: () => ({ __serverTimestamp: true }),
-      arrayUnion: (...values) => ({ __arrayUnion: values }),
-      arrayRemove: (...values) => ({ __arrayRemove: values }),
-    },
-  }),
+jest.mock('../../utils/fieldValue', () => ({
+  FieldValue: {
+    serverTimestamp: () => ({ __serverTimestamp: true }),
+    arrayUnion: (...values) => ({ __arrayUnion: values }),
+    arrayRemove: (...values) => ({ __arrayRemove: values }),
+  },
 }));
 
 const { makeFakeFirestore, SERVER_TIMESTAMP } = require('../__fixtures__/fakeFirestore');
@@ -27,7 +25,7 @@ const {
   OTHER_UID,
   kitchenDocs,
 } = require('../__fixtures__/kitchen');
-const { handleBoardRequest, routeOf, parseBody, board } = require('../board');
+const { handleBoardRequest, routeOf, parseBody } = require('../board');
 
 const auth = (token = TOKEN) => ({ authorization: `Bearer ${token}` });
 
@@ -105,8 +103,19 @@ describe('routing', () => {
     expect(() => parseBody('[1]')).toThrow('Body must be a JSON object.');
   });
 
-  it('is exported as an HTTPS function', () => {
-    expect(typeof board).toBe('function');
+  it('uses the kitchen the authenticator hands back, for the one cook it names', async () => {
+    const authenticate = jest.fn(async () => ({ uid: UID, profile: {}, db }));
+    const result = await handleBoardRequest({
+      db: null,
+      method: 'GET',
+      path: '/',
+      headers: auth(),
+      now: NOW,
+      authenticate,
+    });
+    expect(result.status).toBe(200);
+    expect(authenticate).toHaveBeenCalledWith(`Bearer ${TOKEN}`);
+    expect(touchedOtherUser()).toBe(false);
   });
 });
 

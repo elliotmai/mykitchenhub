@@ -176,7 +176,10 @@ describe('Dashboard', () => {
 
   it('greets a cook whose profile has no name yet', async () => {
     fs.getCountFromServer.mockResolvedValue({ data: () => ({ count: 0 }) });
-    renderWithProviders(<Dashboard />, { route: '/dashboard', userProfile: null });
+    renderWithProviders(<Dashboard />, {
+      route: '/dashboard',
+      userProfile: makeUserProfile({ displayName: '' }),
+    });
 
     await waitFor(() => expect(fs.__listenerCount(INVENTORY_PATH)).toBeGreaterThan(0));
     await act(async () => {

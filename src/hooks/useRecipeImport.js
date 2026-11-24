@@ -12,7 +12,7 @@
 // the cook delete one later. `importedFrom` says where they came from.
 
 import { useCallback, useState } from 'react';
-import { collection, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { collection, doc, serverTimestamp, writeBatch } from '../backend/firestore';
 
 import { db } from '../services/firebase';
 import { useAuth } from './useAuth';

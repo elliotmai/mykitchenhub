@@ -1,6 +1,6 @@
 // Authentication is the gate on every piece of user data. These tests cover
-// session state, the sign-up path that provisions a user's kitchen via Cloud
-// Functions, and the translation of Firebase error codes into human text.
+// session state, the sign-up path that sets up a cook's kitchen, and the
+// translation of auth error codes into human text.
 
 import React from 'react';
 import { renderHook, act, waitFor } from '@testing-library/react';
@@ -9,7 +9,6 @@ import { useAuth, AuthProvider } from '../useAuth';
 import * as authMock from '../../test-utils/mocks/auth';
 import * as fs from '../../test-utils/mocks/firestore';
 import { makeUserProfile } from '../../test-utils/factories';
-import { DEFAULT_ATTEMPTS } from '../../utils/retry';
 
 const wrapper = ({ children }) => <AuthProvider>{children}</AuthProvider>;
 
@@ -57,14 +56,18 @@ describe('session state', () => {
     await waitFor(() => expect(result.current.userProfile?.displayName).toBe('Chef Eli'));
   });
 
-  it('still signs the user in when the profile document is missing', async () => {
+  it('gives someone from Hive a profile the first time they open KitchenHub', async () => {
     authMock.__setUser(authMock.__user());
     fs.getDoc.mockResolvedValue(fs.__doc('test-uid', null));
     const { result } = renderAuth();
 
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.isAuthenticated).toBe(true);
-    expect(result.current.userProfile).toBeNull();
+    expect(result.current.userProfile).toMatchObject({
+      email: 'cook@example.com',
+      displayName: 'Test Cook',
+    });
+    expect(fs.setDoc.mock.calls.map(([ref]) => fs.pathOf(ref))).toContain('users/test-uid');
   });
 
   it('does not leave the app stuck loading when the profile read fails', async () => {
@@ -154,217 +157,99 @@ describe('login', () => {
 });
 
 describe('signup', () => {
-  it('creates the account and provisions the kitchen via the Cloud Function', async () => {
+  const signUpAndCollectWrites = async () => {
     authMock.__setUser(null);
     const { result } = renderAuth();
     await waitFor(() => expect(result.current.loading).toBe(false));
 
+    let response;
     await act(async () => {
-      await result.current.signup('new@example.com', 'hunter2', 'New Cook');
+      response = await result.current.signup('new@example.com', 'hunter2', 'New Cook');
     });
+
+    const writes = fs.setDoc.mock.calls.map(([ref, data]) => ({ path: fs.pathOf(ref), data }));
+    return { writes, response };
+  };
+
+  it('creates the account and sets up the kitchen', async () => {
+    const { writes, response } = await signUpAndCollectWrites();
 
     expect(authMock.createUserWithEmailAndPassword).toHaveBeenCalledWith(
       expect.anything(),
       'new@example.com',
       'hunter2'
     );
+    expect(response.success).toBe(true);
+    expect(writes.filter((w) => /^users\/[^/]+$/.test(w.path))).toHaveLength(1);
+    expect(writes.filter((w) => w.path.includes('/storageLocations/'))).toHaveLength(4);
+  });
 
-    const [url, options] = global.fetch.mock.calls[0];
-    expect(url).toContain('/onUserCreated');
-    expect(options.method).toBe('POST');
-    expect(JSON.parse(options.body)).toMatchObject({
-      email: 'new@example.com',
-      displayName: 'New Cook',
+  it('sets the kitchen up once, though the auth listener and signup both ask', async () => {
+    const { writes } = await signUpAndCollectWrites();
+
+    expect(writes).toHaveLength(5);
+  });
+
+  it('writes storage locations under `label`, the field the screens render', async () => {
+    const { writes } = await signUpAndCollectWrites();
+    const locations = writes.filter((w) => w.path.includes('/storageLocations/'));
+
+    expect(locations.length).toBeGreaterThan(0);
+    locations.forEach(({ data }) => {
+      expect(data.label).toBeTruthy();
+      expect(data).not.toHaveProperty('name');
+      ['label', 'type', 'icon', 'color', 'order', 'isDefault', 'createdAt'].forEach((field) => {
+        expect(data).toHaveProperty(field);
+      });
+      expect(['fridge', 'freezer', 'pantry']).toContain(data.type);
     });
   });
 
-  // ---------------------------------------------------------------------------
-  // The fallback path — roadmap 9.4
-  //
-  // When the Cloud Function is unreachable, signup provisions the kitchen from
-  // the browser instead. That copy of the shape had drifted from
-  // firestore.rules in two ways that only bite later: the kitchen it built
-  // rendered with blank location names, and every document it wrote would be
-  // rejected the moment step 10.2 turns production rules on.
-  // ---------------------------------------------------------------------------
-  describe('when the Cloud Function is unreachable', () => {
-    /** Fails the provisioning call however many times withRetry attempts it. */
-    const withFailingSetup = () => {
-      global.fetch = jest.fn(async () => ({
-        ok: false,
-        json: async () => ({ error: 'boom' }),
-      }));
-    };
+  it('puts helloFresh at the top level of the user document', async () => {
+    const { writes } = await signUpAndCollectWrites();
+    const profile = writes.find((w) => /^users\/[^/]+$/.test(w.path));
 
-    const signUpAndCollectWrites = async () => {
-      withFailingSetup();
-      authMock.__setUser(null);
-      const { result } = renderAuth();
-      await waitFor(() => expect(result.current.loading).toBe(false));
-
-      await act(async () => {
-        await result.current.signup('new@example.com', 'hunter2', 'New Cook');
-      });
-
-      return fs.setDoc.mock.calls.map(([ref, data]) => ({ path: fs.pathOf(ref), data }));
-    };
-
-    it('writes storage locations under `label`, the field the rules require', async () => {
-      const writes = await signUpAndCollectWrites();
-      const locations = writes.filter((w) => w.path.includes('/storageLocations/'));
-
-      expect(locations.length).toBeGreaterThan(0);
-      locations.forEach(({ data }) => {
-        expect(data).toHaveProperty('label');
-        expect(data.label).toBeTruthy();
-        // `name` is what the drift wrote; the list and dropdown both read
-        // `label`, so a fallback kitchen showed nameless shelves.
-        expect(data).not.toHaveProperty('name');
-      });
+    expect(profile).toBeDefined();
+    ['email', 'createdAt', 'preferences', 'helloFresh'].forEach((field) => {
+      expect(profile.data).toHaveProperty(field);
     });
-
-    it('writes every field firestore.rules requires of a storage location', async () => {
-      const writes = await signUpAndCollectWrites();
-      const locations = writes.filter((w) => w.path.includes('/storageLocations/'));
-
-      locations.forEach(({ data }) => {
-        ['label', 'type', 'icon', 'color', 'order', 'isDefault', 'createdAt'].forEach((field) => {
-          expect(data).toHaveProperty(field);
-        });
-        expect(['fridge', 'freezer', 'pantry']).toContain(data.type);
-      });
-    });
-
-    it('puts helloFresh at the top level of the user document, where the rules look', async () => {
-      const writes = await signUpAndCollectWrites();
-      const profile = writes.find((w) => /^users\/[^/]+$/.test(w.path));
-
-      expect(profile).toBeDefined();
-      ['email', 'createdAt', 'preferences', 'helloFresh'].forEach((field) => {
-        expect(profile.data).toHaveProperty(field);
-      });
-      expect(profile.data.preferences).not.toHaveProperty('helloFresh');
-    });
-
-    it('answers an error response rather than retrying it', async () => {
-      // Only the `fetch` is inside withRetry. A response that arrives and says
-      // the setup failed is an answer, not a dropped connection — asking the
-      // same question twice would get the same reply and just delay the
-      // fallback that is going to run anyway.
-      await signUpAndCollectWrites();
-
-      expect(global.fetch).toHaveBeenCalledTimes(1);
-    });
-
-    it('provisions the kitchen exactly once — five writes, not fifteen', async () => {
-      const writes = await signUpAndCollectWrites();
-
-      expect(writes).toHaveLength(5);
-      expect(writes.filter((w) => /^users\/[^/]+$/.test(w.path))).toHaveLength(1);
-      expect(writes.filter((w) => w.path.includes('/storageLocations/'))).toHaveLength(4);
-    });
-
-    it('falls back once, not once per attempt, after a dropped connection', async () => {
-      // A network-level rejection is what withRetry does retry. Three attempts
-      // all fail, and the fallback that follows must still run a single time.
-      global.fetch = jest.fn(async () => {
-        throw Object.assign(new Error('network'), { code: 'unavailable' });
-      });
-      jest.spyOn(console, 'error').mockImplementation(() => {});
-      jest.spyOn(console, 'warn').mockImplementation(() => {});
-
-      authMock.__setUser(null);
-      const { result } = renderAuth();
-      await waitFor(() => expect(result.current.loading).toBe(false));
-      await act(async () => {
-        await result.current.signup('new@example.com', 'hunter2', 'New Cook');
-      });
-
-      expect(global.fetch).toHaveBeenCalledTimes(DEFAULT_ATTEMPTS);
-      expect(fs.setDoc).toHaveBeenCalledTimes(5);
-    });
-
-    it('writes nothing locally when a retried attempt gets through', async () => {
-      // The first attempt drops, the second lands. The kitchen was provisioned
-      // by the function, so the browser must not write a second copy over it.
-      let attempt = 0;
-      global.fetch = jest.fn(async () => {
-        attempt += 1;
-        if (attempt === 1) throw Object.assign(new Error('network'), { code: 'unavailable' });
-        return { ok: true, json: async () => ({ success: true }) };
-      });
-      fs.getDoc.mockResolvedValue(fs.__doc('uid', makeUserProfile()));
-
-      authMock.__setUser(null);
-      const { result } = renderAuth();
-      await waitFor(() => expect(result.current.loading).toBe(false));
-      await act(async () => {
-        await result.current.signup('new@example.com', 'hunter2', 'New Cook');
-      });
-
-      expect(global.fetch).toHaveBeenCalledTimes(2);
-      expect(fs.setDoc).not.toHaveBeenCalled();
-    });
-
-    it('gives each of the four shelves its own document id', async () => {
-      const writes = await signUpAndCollectWrites();
-      const paths = writes.map((w) => w.path).filter((p) => p.includes('/storageLocations/'));
-
-      // Two shelves are `type: 'pantry'`, so the id carries the order too.
-      // A collision would silently leave a new cook with three shelves.
-      expect(paths).toHaveLength(4);
-      expect(new Set(paths).size).toBe(4);
-    });
+    expect(profile.data.preferences).not.toHaveProperty('helloFresh');
   });
 
-  // ---------------------------------------------------------------------------
-  // When the Cloud Function worked and something *after* it did not
-  //
-  // The read-back used to sit inside the same try as the provisioning call, so
-  // a dropped connection while reading a profile that had just been created
-  // successfully sent signup into the fallback — which then rewrote the
-  // existing document with a fresh serverTimestamp(). firestore.rules pins
-  // `createdAt` on update, so that write is refused, and a cook whose account
-  // was provisioned perfectly is told signup failed. Trying again then says the
-  // email is taken, which is a dead end.
-  // ---------------------------------------------------------------------------
-  describe('when the function succeeds but the read-back does not', () => {
-    const signUp = async () => {
-      authMock.__setUser(null);
-      const { result } = renderAuth();
-      await waitFor(() => expect(result.current.loading).toBe(false));
+  it('gives each of the four shelves its own document id', async () => {
+    const { writes } = await signUpAndCollectWrites();
+    const paths = writes.map((w) => w.path).filter((p) => p.includes('/storageLocations/'));
 
-      let response;
-      await act(async () => {
-        response = await result.current.signup('new@example.com', 'hunter2', 'New Cook');
-      });
-      return response;
-    };
+    // Two shelves are `type: 'pantry'`, so the id carries the order too.
+    expect(paths).toHaveLength(4);
+    expect(new Set(paths).size).toBe(4);
+  });
 
-    it('does not overwrite a profile the Cloud Function already created', async () => {
-      jest.spyOn(console, 'error').mockImplementation(() => {});
-      // Provisioning succeeds (the default fetch mock); reading it back does not.
-      fs.getDoc.mockRejectedValue(Object.assign(new Error('offline'), { code: 'unavailable' }));
+  it('leaves a household that already has shelves with the ones it has', async () => {
+    fs.getDocs.mockResolvedValue(fs.__querySnapshot([fs.__doc('fridge_1', { label: 'Fridge' })]));
 
-      const response = await signUp();
+    const { writes } = await signUpAndCollectWrites();
 
-      // Not a single write — there was nothing that needed writing.
-      expect(fs.setDoc).not.toHaveBeenCalled();
-      // And the cook is signed up, because they are.
-      expect(response.success).toBe(true);
-    });
+    expect(writes.map((w) => w.path)).toEqual(['users/new-uid']);
+  });
 
-    it('still provisions locally when the function reports success but wrote nothing', async () => {
-      jest.spyOn(console, 'warn').mockImplementation(() => {});
-      fs.getDoc.mockResolvedValue(fs.__doc('missing', undefined));
+  it('does not overwrite a profile that is already there', async () => {
+    fs.getDoc.mockResolvedValue(fs.__doc('new-uid', makeUserProfile()));
 
-      const response = await signUp();
+    const { writes, response } = await signUpAndCollectWrites();
 
-      const paths = fs.setDoc.mock.calls.map(([ref]) => fs.pathOf(ref));
-      expect(paths.some((p) => /^users\/[^/]+$/.test(p))).toBe(true);
-      expect(paths.filter((p) => p.includes('/storageLocations/'))).toHaveLength(4);
-      expect(response.success).toBe(true);
-    });
+    expect(writes).toHaveLength(0);
+    expect(response.success).toBe(true);
+  });
+
+  it('writes nothing when it cannot tell whether a profile exists', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    fs.getDoc.mockRejectedValue(Object.assign(new Error('offline'), { code: 'unavailable' }));
+
+    const { writes, response } = await signUpAndCollectWrites();
+
+    expect(writes).toHaveLength(0);
+    expect(response.success).toBe(true);
   });
 
   it('surfaces an already-registered email as a clear message', async () => {

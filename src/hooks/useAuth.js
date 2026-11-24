@@ -1,8 +1,9 @@
 // src/hooks/useAuth.js
-// Custom hook for Firebase Authentication
+// Sign-in for KitchenHub: the one Hive account (Supabase Auth, shared by every
+// app on flyingdoublemranch.com; see src/backend/auth.js).
 // Provides auth state, user info, and auth methods throughout the app
 
-import { useState, useEffect, createContext, useContext, useCallback } from 'react';
+import { useState, useEffect, useRef, createContext, useContext, useCallback } from 'react';
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -14,18 +15,25 @@ import {
   updatePassword,
   reauthenticateWithCredential,
   EmailAuthProvider,
-} from 'firebase/auth';
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+} from '../backend/auth';
+import {
+  collection,
+  doc,
+  setDoc,
+  getDoc,
+  getDocs,
+  query,
+  limit,
+  serverTimestamp,
+} from '../backend/firestore';
 import { auth, db } from '../services/firebase';
 import { authErrorMessage, friendlyError } from '../utils/firebaseErrors';
-import { withRetry } from '../utils/retry';
 
 /**
  * Auth Context
  * Provides authentication state and methods to the entire app
  */
 const AuthContext = createContext(null);
-const functionsUrl = process.env.REACT_APP_FIREBASE_FUNCTIONS_URL;
 
 /**
  * useAuth Hook
@@ -56,25 +64,20 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Listen for auth state changes
+  // Listen for auth state changes. Signed in to Hive anywhere on the shared
+  // domain means signed in here too: the session is the same cookie.
   useEffect(() => {
-    let triedHive = false;
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      // Signed out here but signed in to Hive? One login: sign in as that
-      // person (src/services/hive.js). Tried once per page load, so signing
-      // out of KitchenHub sticks until the next visit.
-      if (!firebaseUser && !triedHive) {
-        triedHive = true;
-        const { signInWithHive } = await import('../services/hive');
-        if (await signInWithHive(auth)) return; // the listener fires again, signed in
-      }
-      if (firebaseUser) {
-        setUser(firebaseUser);
-        // Fetch additional user profile from Firestore
+    const unsubscribe = onAuthStateChanged(auth, async (signedIn) => {
+      if (signedIn) {
+        setUser(signedIn);
         try {
-          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+          const userDoc = await getDoc(doc(db, 'users', signedIn.uid));
           if (userDoc.exists()) {
             setUserProfile(userDoc.data());
+          } else if (signedIn.email) {
+            // Someone from Hive opening KitchenHub for the first time: give
+            // them a profile (and the household its shelves, if it has none).
+            await provisionProfileLocally(signedIn.uid, signedIn.email, signedIn.displayName);
           }
         } catch (err) {
           console.error('Error fetching user profile:', err);
@@ -87,23 +90,36 @@ export const AuthProvider = ({ children }) => {
     });
 
     return () => unsubscribe();
+    // provisionProfileLocally is stable (useCallback with no dependencies).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /**
-   * Build the kitchen from the browser, because the Cloud Function could not.
+   * Build a new cook's profile (and, for a household that has none, its
+   * shelves) from the browser.
    *
-   * Only ever called for a cook who has no profile yet. Rewriting one that
-   * already exists is refused outright by firestore.rules — `createdAt` and
-   * `email` are pinned on update, and this payload carries a fresh
-   * serverTimestamp() — so calling it on an existing profile turns a working
-   * account into a failed signup. See the "signup fallback" cases in
-   * firestore/tests/firestore.rules.test.js.
+   * Only ever called for a cook who has no profile yet: it would reset an
+   * existing profile's createdAt and preferences.
    */
   // useCallback so this stays referentially stable. createUserProfile calls it
   // and `signup` calls that, and signup is itself a useCallback with no
   // dependencies — an unstable helper in that chain is what react-hooks flags.
-  const provisionProfileLocally = useCallback(async (userId, email, displayName) => {
-    console.log('Falling back to local user creation...');
+  // One setup per cook, however many callers ask at once: signing up both
+  // fires the auth listener and calls createUserProfile.
+  const provisioning = useRef(new Map());
+  const provisionProfileLocally = useCallback((userId, email, displayName) => {
+    if (!provisioning.current.has(userId)) {
+      provisioning.current.set(
+        userId,
+        buildKitchen(userId, email, displayName).finally(() => provisioning.current.delete(userId))
+      );
+    }
+    return provisioning.current.get(userId);
+    // buildKitchen only uses state setters, which React keeps stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const buildKitchen = async (userId, email, displayName) => {
     const userRef = doc(db, 'users', userId);
     const fallbackData = {
       email,
@@ -143,118 +159,59 @@ export const AuthProvider = ({ children }) => {
     await setDoc(userRef, fallbackData);
     setUserProfile(fallbackData);
 
-    // Create basic storage locations as fallback
-    // `label`, not `name`. firestore.rules requires `label`, and the list and
-    // the location dropdown both render it — the `name` spelling gave a
-    // fallback-provisioned kitchen four shelves with no titles on them.
-    // Kept in step with functions/src/data/defaultLocations.js.
-    const defaultLocations = [
-      { label: 'Main Fridge', type: 'fridge', icon: '🧊', color: '#3498db', order: 1 },
-      { label: 'Freezer', type: 'freezer', icon: '❄️', color: '#9b59b6', order: 2 },
-      { label: 'Pantry', type: 'pantry', icon: '🏺', color: '#e67e22', order: 3 },
-      { label: 'Counter', type: 'pantry', icon: '🍞', color: '#f39c12', order: 4 },
-    ];
+    // The shelves belong to the household: only a household with none yet
+    // gets the defaults. `label`, not `name` — the list and the location
+    // dropdown both render it. Kept in step with
+    // functions/src/data/defaultLocations.js.
+    const existing = await getDocs(
+      query(collection(db, 'users', userId, 'storageLocations'), limit(1))
+    );
+    if (existing.empty) {
+      const defaultLocations = [
+        { label: 'Main Fridge', type: 'fridge', icon: '🧊', color: '#3498db', order: 1 },
+        { label: 'Freezer', type: 'freezer', icon: '❄️', color: '#9b59b6', order: 2 },
+        { label: 'Pantry', type: 'pantry', icon: '🏺', color: '#e67e22', order: 3 },
+        { label: 'Counter', type: 'pantry', icon: '🍞', color: '#f39c12', order: 4 },
+      ];
 
-    for (const location of defaultLocations) {
-      const locationRef = doc(
-        db,
-        'users',
-        userId,
-        'storageLocations',
-        `${location.type}_${location.order}`
-      );
-      await setDoc(locationRef, {
-        ...location,
-        isDefault: true,
-        itemCount: 0,
-        createdAt: serverTimestamp(),
-      });
+      for (const location of defaultLocations) {
+        const locationRef = doc(
+          db,
+          'users',
+          userId,
+          'storageLocations',
+          `${location.type}_${location.order}`
+        );
+        await setDoc(locationRef, {
+          ...location,
+          isDefault: true,
+          itemCount: 0,
+          createdAt: serverTimestamp(),
+        });
+      }
     }
 
-    console.log('Created fallback storage locations');
-
     return fallbackData;
-  }, []);
+  };
 
   /**
-   * Create user profile in Firestore using Cloud Function
-   * This calls the onUserCreated function which sets up:
-   * - User document with preferences
-   * - Default storage locations (Fridge, Freezer, Pantry, Counter)
-   * - Sync metadata for recipes
+   * Set up a new cook: their profile, and the household's default shelves if
+   * it has none. Reads first, so an account that already has a profile (a
+   * person from Hive, or an old KitchenHub account brought over) keeps it.
    */
   const createUserProfile = useCallback(
     async (userId, email, displayName = null) => {
       try {
-        // Call the Cloud Function to set up the user
-
-        if (!functionsUrl) {
-          throw new Error('REACT_APP_FIREBASE_FUNCTIONS_URL not configured');
-        }
-
-        // Signing up is the one moment a cook cannot retry for themselves — a
-        // failure here leaves an auth account with no kitchen behind it. The
-        // function is idempotent (it setDocs a known user id), so retrying a
-        // dropped connection is safe and worth doing before falling back.
-        const response = await withRetry(
-          () =>
-            fetch(`${functionsUrl}/onUserCreated`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                userId,
-                email,
-                displayName: displayName || email.split('@')[0],
-              }),
-            }),
-          { onRetry: ({ attempt }) => console.warn(`Retrying user setup (attempt ${attempt})`) }
-        );
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || 'Failed to create user profile');
-        }
-
-        const result = await response.json();
-        console.log('User setup complete:', result);
-      } catch (error) {
-        console.error('Error creating user profile via Cloud Function:', error);
-        // Nothing provisioned the kitchen, so this is the only thing that will.
-        return provisionProfileLocally(userId, email, displayName);
-      }
-
-      // -----------------------------------------------------------------------
-      // Past this point the function has reported success, so the kitchen exists.
-      //
-      // Reading it back used to sit inside the try above, which meant a dropped
-      // connection on *this* read — a read of a profile that definitely exists —
-      // sent us into the fallback, and the fallback then rewrote a document that
-      // was already there with a fresh serverTimestamp(). firestore.rules pins
-      // `createdAt` on update, so that write is refused, signup reports a failure
-      // for an account that was in fact provisioned perfectly, and trying again
-      // just says the email is taken. A read failure is not a reason to write.
-      // -----------------------------------------------------------------------
-      try {
         const userDoc = await getDoc(doc(db, 'users', userId));
-
         if (userDoc.exists()) {
           const userData = userDoc.data();
           setUserProfile(userData);
           return userData;
         }
       } catch (err) {
-        // The profile is there; we just could not read it this second. The
-        // onAuthStateChanged listener above fetches it again anyway.
-        console.error('Created the profile but could not read it back:', err);
+        console.error('Could not read the profile before setting it up:', err);
         return null;
       }
-
-      // The function said it succeeded and yet there is nothing there. Rare, but
-      // it leaves a cook with no kitchen unless we build one — and since nothing
-      // exists to overwrite, the fallback is safe here.
-      console.warn('User setup reported success but no profile was found; provisioning locally.');
       return provisionProfileLocally(userId, email, displayName);
     },
     [provisionProfileLocally]
@@ -274,8 +231,7 @@ export const AuthProvider = ({ children }) => {
           await updateProfile(newUser, { displayName });
         }
 
-        // Create user profile in Firestore (via Cloud Function)
-        // This will automatically create storage locations and set up the user
+        // The profile, and the household's shelves if it has none yet
         await createUserProfile(newUser.uid, email, displayName);
 
         return { success: true, user: newUser };

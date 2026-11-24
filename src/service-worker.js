@@ -68,24 +68,8 @@ registerRoute(
   })
 );
 
-// Firebase/Firestore - Network First
-registerRoute(
-  ({ url }) =>
-    url.origin.includes('firebaseio.com') ||
-    url.origin.includes('googleapis.com') ||
-    url.origin.includes('firestore.googleapis.com'),
-  new NetworkFirst({
-    cacheName: 'firebase-cache-v1',
-    networkTimeoutSeconds: 10,
-    plugins: [
-      new CacheableResponsePlugin({ statuses: [0, 200] }),
-      new ExpirationPlugin({
-        maxEntries: 100,
-        maxAgeSeconds: 60, // 1 minute
-      }),
-    ],
-  })
-);
+// Supabase (the database, sign-in and Realtime) is never cached here: every
+// read carries the person's own sign-in and must come fresh.
 
 // Recipe Images - Stale While Revalidate
 registerRoute(

@@ -13,10 +13,9 @@
 //
 // RUNNING THIS COSTS MONEY. See README.md → "Legacy recipe sync" before you do.
 
-const functions = require('firebase-functions');
-const admin = require('firebase-admin');
-
-const { getLegacyFirestore } = require('./legacyCredentials');
+// Let's Eat moved to Hive's Supabase project too, into the same household:
+// its recipes are read from letseat.docs (netlify/functions/sync-legacy-recipes.mjs
+// hands them over as `legacyDb`), no second Firebase project or key needed.
 const spoonacular = require('./spoonacular');
 const claude = require('./claudeInstructions');
 const { transformLegacyRecipe } = require('./transformLegacyRecipe');
@@ -303,65 +302,47 @@ const adminUids = (env = process.env) =>
     .map((s) => s.trim())
     .filter(Boolean);
 
+/** An error the HTTP layer turns into a callable-style status. */
+class CallableError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
+}
+
 /**
- * Callable entry point. The admin dashboard calls this with a batch size and,
- * usually, dryRun: true first.
+ * The request behind the admin dashboard's sync button: a signed-in cook (in
+ * SYNC_ADMIN_UIDS, when that is set), a batch size and, usually, dryRun first.
  */
-//
-// `invoker: 'public'` is load-bearing. The Firebase CLI only grants a 1st Gen
-// callable the allUsers invoker role when it *creates* the function, and this
-// one's first deploy (Feb 2026) failed on a missing `dotenv`, so it never got
-// it; later deploys were updates, which leave IAM alone. Without the role
-// Google rejects every call before this code runs, with no CORS headers, and
-// the client SDK can only report "internal". Stating it here makes every deploy
-// set it. Access is still gated below: a signed-in user, and SYNC_ADMIN_UIDS.
-const syncLegacyRecipes = functions
-  .runWith({ timeoutSeconds: 540, memory: '512MB', invoker: 'public' })
-  .https.onCall(async (data = {}, context) => {
-    if (!context?.auth?.uid) {
-      throw new functions.https.HttpsError('unauthenticated', 'Sign in to run the legacy sync.');
-    }
+async function handleLegacySync({ uid, data = {}, db, legacyDb, env = process.env, ...deps }) {
+  if (!uid) throw new CallableError('unauthenticated', 'Sign in to run the legacy sync.');
 
-    const allowed = adminUids();
-    if (allowed.length > 0 && !allowed.includes(context.auth.uid)) {
-      throw new functions.https.HttpsError(
-        'permission-denied',
-        'This account cannot run the legacy sync.'
-      );
-    }
+  const allowed = adminUids(env);
+  if (allowed.length > 0 && !allowed.includes(uid)) {
+    throw new CallableError('permission-denied', 'This account cannot run the legacy sync.');
+  }
 
-    let config = {};
+  try {
+    return await runLegacySync(
+      { limit: data.limit, dryRun: Boolean(data.dryRun), restart: Boolean(data.restart) },
+      { db, legacyDb, env, ...deps }
+    );
+  } catch (err) {
+    console.error('Legacy sync failed:', err.message);
+
+    // Record the failure so the dashboard shows it, then surface it.
     try {
-      config = functions.config();
-    } catch (err) {
-      // Not deployed with runtime config; environment variables carry it.
-      config = {};
+      await db
+        .collection('syncMetadata')
+        .doc(SYNC_DOC_ID)
+        .set({ currentStatus: STATUS.ERROR, lastError: err.message }, { merge: true });
+    } catch (writeErr) {
+      console.error('Could not record the sync failure:', writeErr.message);
     }
 
-    try {
-      const legacyDb = getLegacyFirestore({ config });
-
-      return await runLegacySync(
-        { limit: data.limit, dryRun: Boolean(data.dryRun), restart: Boolean(data.restart) },
-        { db: admin.firestore(), legacyDb }
-      );
-    } catch (err) {
-      console.error('Legacy sync failed:', err.message);
-
-      // Record the failure so the dashboard shows it, then surface it.
-      try {
-        await admin
-          .firestore()
-          .collection('syncMetadata')
-          .doc(SYNC_DOC_ID)
-          .set({ currentStatus: STATUS.ERROR, lastError: err.message }, { merge: true });
-      } catch (writeErr) {
-        console.error('Could not record the sync failure:', writeErr.message);
-      }
-
-      throw new functions.https.HttpsError('internal', err.message);
-    }
-  });
+    throw new CallableError('internal', err.message);
+  }
+}
 
 module.exports = {
   SYNC_DOC_ID,
@@ -374,5 +355,6 @@ module.exports = {
   emptyState,
   adminUids,
   runLegacySync,
-  syncLegacyRecipes,
+  handleLegacySync,
+  CallableError,
 };

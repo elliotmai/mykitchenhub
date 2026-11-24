@@ -1,8 +1,7 @@
 /**
  * The server-side half of CSV bulk import.
  *
- * firebase-admin is mocked with a recording fake (the same approach as
- * onUserCreate.test.js) so these assert *what* was written to *which* path,
+ * The database is a recording fake, so these assert *what* was written to *which* path,
  * including the 500-write batching a big file depends on, without an emulator.
  */
 
@@ -40,25 +39,13 @@ const makeDb = () => {
   };
 };
 
-jest.mock('firebase-admin', () => {
-  const firestore = jest.fn(() => global.__db);
-  firestore.FieldValue = { serverTimestamp: jest.fn(() => 'server-timestamp') };
-  firestore.Timestamp = { fromDate: jest.fn((d) => ({ toDate: () => d })) };
+jest.mock('../../utils/fieldValue', () => ({
+  FieldValue: { serverTimestamp: jest.fn(() => 'server-timestamp') },
+}));
 
-  return {
-    initializeApp: jest.fn(),
-    apps: [],
-    firestore,
-    auth: jest.fn(() => global.__auth),
-    credential: { cert: jest.fn(), applicationDefault: jest.fn() },
-  };
-});
-
-const admin = require('firebase-admin');
 const {
   importCSVForUser,
-  handler,
-  importInventoryFromCSV,
+  makeHandler,
   buildInventoryDoc,
   resolveRowShelfLife,
   chunk,
@@ -128,7 +115,6 @@ beforeEach(() => {
   collectionGets = {};
   autoId = 0;
   global.__db = makeDb();
-  global.__auth = { verifyIdToken: jest.fn(async () => ({ uid: 'token-user' })) };
   jest.spyOn(console, 'error').mockImplementation(() => {});
   jest.spyOn(console, 'log').mockImplementation(() => {});
 });
@@ -548,9 +534,13 @@ describe('importCSVForUser', () => {
 // ---------------------------------------------------------------------------
 
 describe('importInventoryFromCSV handler', () => {
-  it('is exported as a deployable function', () => {
-    expect(importInventoryFromCSV).toBeDefined();
+  const authenticate = jest.fn(async (header) => {
+    if (header === 'Bearer good-token') return { uid: USER };
+    throw new Error('token expired');
   });
+  const openDb = jest.fn(async () => global.__db);
+  const handler = makeHandler({ authenticate, openDb });
+  const signedIn = { authorization: 'Bearer good-token' };
 
   it('answers a CORS preflight without touching the database', async () => {
     const res = makeRes();
@@ -568,21 +558,34 @@ describe('importInventoryFromCSV handler', () => {
     expect(res.statusCode).toBe(405);
   });
 
-  it('asks for the fields it needs', async () => {
+  it('refuses a caller who is not signed in, whatever the body says', async () => {
     const res = makeRes();
-    await handler(makeReq({ body: { userId: USER } }), res);
+    await handler(
+      makeReq({ body: { userId: USER, csvData: csv(HEADER, 'Milk,1,gal,Main Fridge') } }),
+      res
+    );
 
-    expect(res.statusCode).toBe(400);
-    expect(res.body.error).toMatch(/userId, csvData/);
+    expect(res.statusCode).toBe(401);
+    expect(writes).toHaveLength(0);
+    expect(batchedItems()).toHaveLength(0);
   });
 
-  it('imports a file posted with a userId', async () => {
+  it('asks for the file', async () => {
+    const res = makeRes();
+    await handler(makeReq({ body: {}, headers: signedIn }), res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error).toMatch(/csvData/);
+  });
+
+  it("imports a file into the signed-in cook's kitchen", async () => {
     seedLocations();
     const res = makeRes();
 
     await handler(
       makeReq({
-        body: { userId: USER, csvData: csv(HEADER, 'Milk,1,gal,Main Fridge'), fileName: 'k.csv' },
+        body: { userId: 'someone-else', csvData: csv(HEADER, 'Milk,1,gal,Main Fridge'), fileName: 'k.csv' },
+        headers: signedIn,
       }),
       res
     );
@@ -590,82 +593,48 @@ describe('importInventoryFromCSV handler', () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).toMatchObject({ status: 'completed', itemsImported: 1 });
     expect(res.body.timestamp).toEqual(expect.any(String));
+    expect(openDb).toHaveBeenCalledWith({ uid: USER });
     expect(batchedItems()).toHaveLength(1);
+    expect(batchedItems()[0].path).toMatch(/^users\/user-1\/inventory\//);
   });
 
   it('answers 400 when the file itself is unusable', async () => {
     seedLocations();
     const res = makeRes();
 
-    await handler(makeReq({ body: { userId: USER, csvData: 'fruit\napples' } }), res);
+    await handler(makeReq({ body: { csvData: 'fruit\napples' }, headers: signedIn }), res);
 
     expect(res.statusCode).toBe(400);
     expect(res.body.status).toBe('error');
   });
 
-  it('imports into the account the ID token names, not the one in the body', async () => {
-    collectionGets['users/token-user/storageLocations'] = {
-      docs: LOCATIONS.map(({ id, ...data }) => ({ id, data: () => data })),
-    };
+  it('rejects a bad token, and never echoes it back', async () => {
     const res = makeRes();
 
     await handler(
       makeReq({
-        body: { userId: 'someone-else', csvData: csv(HEADER, 'Milk,1,gal,Main Fridge') },
-        headers: { authorization: 'Bearer good-token' },
-      }),
-      res
-    );
-
-    expect(admin.auth().verifyIdToken).toHaveBeenCalledWith('good-token');
-    expect(res.statusCode).toBe(200);
-    expect(batchedItems()[0].path).toMatch(/^users\/token-user\/inventory\//);
-  });
-
-  it('rejects an invalid ID token', async () => {
-    global.__auth.verifyIdToken = jest.fn(async () => {
-      throw new Error('token expired');
-    });
-    const res = makeRes();
-
-    await handler(
-      makeReq({
-        body: { userId: USER, csvData: csv(HEADER, 'Milk,1,gal,Main Fridge') },
-        headers: { authorization: 'Bearer stale-token' },
+        body: { csvData: csv(HEADER, 'Milk,1,gal,Main Fridge') },
+        headers: { authorization: 'Bearer super-secret-token' },
       }),
       res
     );
 
     expect(res.statusCode).toBe(401);
     expect(writes).toHaveLength(0);
-  });
-
-  it('never echoes the token back to the caller', async () => {
-    global.__auth.verifyIdToken = jest.fn(async () => {
-      throw new Error('token expired');
-    });
-    const res = makeRes();
-
-    await handler(
-      makeReq({
-        body: { userId: USER, csvData: 'x' },
-        headers: { authorization: 'Bearer super-secret-token' },
-      }),
-      res
-    );
-
     expect(JSON.stringify(res.body)).not.toMatch(/super-secret-token/);
   });
 
-  it('answers 500 when Firestore itself is unreachable', async () => {
-    admin.firestore.mockImplementationOnce(() => {
-      throw new Error('firestore unavailable');
-    });
+  it('answers 500 when the database itself is unreachable', async () => {
+    openDb.mockRejectedValueOnce(new Error('database unavailable'));
+    jest.spyOn(console, 'error').mockImplementation(() => {});
     const res = makeRes();
 
-    await handler(makeReq({ body: { userId: USER, csvData: csv(HEADER, 'Milk,1,gal,Fridge') } }), res);
+    await handler(
+      makeReq({ body: { csvData: csv(HEADER, 'Milk,1,gal,Fridge') }, headers: signedIn }),
+      res
+    );
 
     expect(res.statusCode).toBe(500);
-    expect(res.body.message).toBe('firestore unavailable');
+    expect(res.body.message).toBe('database unavailable');
   });
 });

@@ -6,11 +6,11 @@
 // server-side and API callers — scripts, integrations, and files too large to
 // want a browser tab open for. Both write the identical document shape.
 //
-// Writes go out in batches of 500, Firestore's per-batch limit, and every run
-// appends a record to users/{uid}/importHistory.
+// Writes go out in batches of 500, and every run appends a record to
+// importHistory. Served at /api/importInventoryFromCSV
+// (netlify/functions/import-inventory-csv.mjs) for a signed-in cook only.
 
-const admin = require('firebase-admin');
-const functions = require('firebase-functions');
+const { FieldValue } = require('../utils/fieldValue');
 
 const { validateCSV } = require('./csvValidation');
 const { ingredientShelfLife } = require('../data/ingredientShelfLife');
@@ -178,7 +178,7 @@ const importCSVForUser = async ({ db, userId, csvData, fileName = 'import.csv' }
     message: row.errors.join(' '),
   }));
 
-  const timestamp = admin.firestore.FieldValue.serverTimestamp();
+  const timestamp = FieldValue.serverTimestamp();
   const inventoryRef = db.collection('users').doc(userId).collection('inventory');
 
   let imported = 0;
@@ -238,84 +238,76 @@ const importCSVForUser = async ({ db, userId, csvData, fileName = 'import.csv' }
 };
 
 /**
- * Resolve who this import is for.
+ * The HTTP handler, given how to tell who is calling and how to reach their
+ * kitchen.
  *
- * A bearer ID token wins over the body — a caller that presents one may only
- * import into their own kitchen. Without a token we fall back to the body's
- * userId, matching the other HTTP functions in this project.
- */
-const resolveUserId = async (req) => {
-  const header = (req.get ? req.get('Authorization') : null) || (req.headers || {}).authorization;
-
-  if (header && header.startsWith('Bearer ')) {
-    const decoded = await admin.auth().verifyIdToken(header.slice('Bearer '.length));
-    return decoded.uid;
-  }
-
-  return (req.body || {}).userId;
-};
-
-/**
- * HTTP handler.
+ * Request body: { csvData, fileName }
+ * Header: Authorization: Bearer <the cook's Supabase access token>
  *
- * Request body: { userId, csvData, fileName }
- * Optional header: Authorization: Bearer <Firebase ID token>
+ * The kitchen is always the caller's own: a `userId` in the body is ignored.
+ * (In Firebase it was honoured with no sign-in at all, so anyone could fill
+ * anyone's kitchen.)
+ *
+ * @param {object}   deps
+ * @param {Function} deps.authenticate - Authorization header → { uid }; throws when it is not good
+ * @param {Function} deps.openDb       - { uid } → that cook's kitchen
  */
-const handler = async (req, res) => {
-  res.set('Access-Control-Allow-Origin', '*');
-  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+const makeHandler =
+  ({ authenticate, openDb }) =>
+  async (req, res) => {
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-  if (req.method === 'OPTIONS') {
-    res.status(204).send('');
-    return;
-  }
+    if (req.method === 'OPTIONS') {
+      res.status(204).send('');
+      return;
+    }
 
-  if (req.method !== 'POST') {
-    res.status(405).json({ error: 'Use POST to import a CSV file' });
-    return;
-  }
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Use POST to import a CSV file' });
+      return;
+    }
 
-  let userId;
-  try {
-    userId = await resolveUserId(req);
-  } catch (error) {
-    console.error('Rejected CSV import with an invalid ID token');
-    res.status(401).json({ error: 'Invalid authentication token' });
-    return;
-  }
+    const header = (req.headers || {}).authorization;
+    let user;
+    try {
+      user = header ? await authenticate(header) : null;
+    } catch (error) {
+      user = null;
+    }
+    if (!user?.uid) {
+      console.error('Rejected a CSV import without a good sign-in');
+      res.status(401).json({ error: 'Sign in to import a CSV file' });
+      return;
+    }
 
-  const { csvData, fileName } = req.body || {};
+    const { csvData, fileName } = req.body || {};
 
-  if (!userId || !csvData) {
-    res.status(400).json({ error: 'Missing required fields: userId, csvData' });
-    return;
-  }
+    if (!csvData) {
+      res.status(400).json({ error: 'Missing required field: csvData' });
+      return;
+    }
 
-  try {
-    const result = await importCSVForUser({
-      db: admin.firestore(),
-      userId,
-      csvData,
-      fileName: fileName || 'import.csv',
-    });
+    try {
+      const result = await importCSVForUser({
+        db: await openDb(user),
+        userId: user.uid,
+        csvData,
+        fileName: fileName || 'import.csv',
+      });
 
-    res
-      .status(result.status === 'error' ? 400 : 200)
-      .json(Object.assign({ timestamp: new Date().toISOString() }, result));
-  } catch (error) {
-    console.error('Error in importInventoryFromCSV:', error);
-    res.status(500).json({ error: 'Internal server error', message: error.message });
-  }
-};
-
-const importInventoryFromCSV = functions
-  .runWith({ timeoutSeconds: 300, memory: '512MB' })
-  .https.onRequest(handler);
+      res
+        .status(result.status === 'error' ? 400 : 200)
+        .json(Object.assign({ timestamp: new Date().toISOString() }, result));
+    } catch (error) {
+      console.error('Error in importInventoryFromCSV:', error);
+      res.status(500).json({ error: 'Internal server error', message: error.message });
+    }
+  };
 
 module.exports = {
-  importInventoryFromCSV,
-  handler,
+  makeHandler,
   importCSVForUser,
   buildInventoryDoc,
   resolveRowShelfLife,

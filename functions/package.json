@@ -1,16 +1,10 @@
 {
   "name": "mykitchenhub-functions",
   "version": "1.0.0",
-  "description": "Firebase Cloud Functions for MyKitchenHub",
-  "main": "index.js",
+  "description": "KitchenHub's server code: the board API, meal plans, HelloFresh import, CSV import, daily waste alerts. Run by the Netlify functions in ../netlify/functions.",
+  "main": "src/board/board.js",
   "scripts": {
-    "serve": "firebase emulators:start --only functions",
-    "shell": "firebase functions:shell",
-    "start": "npm run shell",
-    "deploy": "firebase deploy --only functions",
-    "logs": "firebase functions:log",
-    "test": "jest",
-    "seed": "node scripts/seedRunner.js"
+    "test": "jest"
   },
   "engines": {
     "node": "22"
@@ -18,13 +12,9 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.117.1",
     "axios": "^1.6.0",
-    "dotenv": "^17.3.1",
-    "firebase-admin": "^11.11.0",
-    "firebase-functions": "^4.5.0",
     "papaparse": "^5.6.0"
   },
   "devDependencies": {
-    "firebase-functions-test": "^3.1.0",
     "jest": "^29.7.0"
   },
   "private": true

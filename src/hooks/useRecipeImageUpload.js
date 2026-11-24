@@ -12,7 +12,7 @@
 // resulting URL on the document it then creates.
 
 import { useState, useCallback } from 'react';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from '../backend/storage';
 import { storage } from '../services/firebase';
 import { friendlyError } from '../utils/firebaseErrors';
 import { compressImage } from '../utils/imageCompression';

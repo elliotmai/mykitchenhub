@@ -8,7 +8,7 @@
 // security rules apply.
 
 import { useCallback, useMemo, useState } from 'react';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp } from '../backend/firestore';
 
 import { db } from '../services/firebase';
 import { useAuth } from './useAuth';

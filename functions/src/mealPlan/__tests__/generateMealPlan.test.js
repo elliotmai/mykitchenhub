@@ -2,11 +2,9 @@
  * Meal plan generation — roadmap 7.2 / 7.3.
  *
  * The Anthropic client is always a fake: these tests must never cost money or
- * need the network. firebase-admin is mocked with a recording fake so the reads
- * can be driven per test without an emulator.
+ * need the network. The database is a recording fake so the reads can be
+ * driven per test.
  */
-
-jest.mock('firebase-admin/firestore', () => ({ getFirestore: jest.fn() }));
 
 const {
   generatePlanForUser,

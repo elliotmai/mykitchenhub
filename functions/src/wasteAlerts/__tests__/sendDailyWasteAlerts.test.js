@@ -1,7 +1,7 @@
 /**
  * The nightly waste alert sweep.
  *
- * firebase-admin is mocked with a recording fake so the tests can assert on
+ * The database is a recording fake so the tests can assert on
  * *what* was written to *which* path without an emulator, the clock is
  * injected, and the SMS client is a jest.fn() — nothing here can send a real
  * text or cost money.
@@ -69,6 +69,7 @@ const {
   ALERT_TIME_ZONE,
   ALERT_WINDOW_DAYS,
   NOTIFICATION_TYPE,
+  isAlertHour,
 } = require('../sendDailyWasteAlerts');
 
 const NOW = new Date('2026-08-14T13:00:00Z');
@@ -180,15 +181,23 @@ describe('the schedule', () => {
     // text said "tomorrow" beside a card correctly reading "Expires today".
     expect(ALERT_TIME_ZONE).toBe('America/New_York');
 
-    // Reading the built trigger needs a GCLOUD_PROJECT these tests do not
-    // have, so this checks the thing that actually drifts: the schedule must
-    // take the same constant the day arithmetic counts in, never its own
-    // hardcoded copy.
+    // Netlify schedules in UTC: the job fires at 13:00 and 14:00 UTC and runs
+    // in whichever is 9 AM in New York, using the same constant the day
+    // arithmetic counts in, never its own hardcoded copy.
+    expect(isAlertHour(new Date('2026-01-15T14:00:00Z'))).toBe(true); // EST
+    expect(isAlertHour(new Date('2026-01-15T13:00:00Z'))).toBe(false);
+    expect(isAlertHour(new Date('2026-07-15T13:00:00Z'))).toBe(true); // EDT
+    expect(isAlertHour(new Date('2026-07-15T14:00:00Z'))).toBe(false);
     const source = require('fs').readFileSync(
-      require('path').join(__dirname, '../sendDailyWasteAlerts.js'),
+      require('path').join(__dirname, '../../../../netlify/functions/daily-waste-alerts.mjs'),
       'utf8'
     );
-    expect(source).toMatch(/\.timeZone\(ALERT_TIME_ZONE\)/);
+    expect(source).toMatch(/isAlertHour\(/);
+    expect(source).toMatch(/schedule: '0 13,14 \* \* \*'/);
+  });
+
+  it('needs a database', async () => {
+    await expect(runDailyWasteAlerts({})).rejects.toThrow('needs a database');
   });
 
   it('names the notification for the cook’s day, not the server’s', () => {

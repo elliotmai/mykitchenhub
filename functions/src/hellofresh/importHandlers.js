@@ -7,8 +7,6 @@
 // it, so the `recipes` security rules stay in force and an unauthenticated HTTP
 // function never writes on someone's behalf.
 
-const functions = require('firebase-functions');
-
 const {
   MissingApiKeyError,
   UnreadableImageError,
@@ -99,81 +97,73 @@ function successBody(raw, options) {
  *
  * `image` may be raw base64 or a `data:image/jpeg;base64,...` URL.
  */
-const importHelloFreshFromPhoto = functions
-  .runWith({ timeoutSeconds: 120, memory: '512MB' })
-  .https.onRequest(async (req, res) => {
-    if (handlePreflight(req, res)) return;
+const importHelloFreshFromPhoto = async (req, res) => {
+  if (handlePreflight(req, res)) return;
 
-    const { image, mediaType } = req.body ?? {};
+  const { image, mediaType } = req.body ?? {};
 
-    if (!image) {
-      res.status(400).json({
-        status: 'error',
-        code: 'invalid-request',
-        message: 'No photo was received. Take a picture of the recipe card and try again.',
-      });
-      return;
-    }
+  if (!image) {
+    res.status(400).json({
+      status: 'error',
+      code: 'invalid-request',
+      message: 'No photo was received. Take a picture of the recipe card and try again.',
+    });
+    return;
+  }
 
-    try {
-      const raw = await extractRecipeFromImage({
-        image,
-        mediaType,
-        functionsConfig: readFunctionsConfig(),
-      });
-      res.status(200).json(successBody(raw, {}));
-    } catch (err) {
-      const described = describeError(err);
-      console.error(`HelloFresh photo import failed: ${described.code}`);
-      res.status(described.status).json({
-        status: 'error',
-        code: described.code,
-        message: described.message,
-        details: described.details ?? [],
-      });
-    }
-  });
+  try {
+    const raw = await extractRecipeFromImage({
+      image,
+      mediaType,
+      functionsConfig: readFunctionsConfig(),
+    });
+    res.status(200).json(successBody(raw, {}));
+  } catch (err) {
+    const described = describeError(err);
+    console.error(`HelloFresh photo import failed: ${described.code}`);
+    res.status(described.status).json({
+      status: 'error',
+      code: described.code,
+      message: described.message,
+      details: described.details ?? [],
+    });
+  }
+};
 
 /**
  * POST { url } → a reviewable HelloFresh recipe draft scraped from the page.
  */
-const importHelloFreshFromUrl = functions
-  .runWith({ timeoutSeconds: 60, memory: '256MB' })
-  .https.onRequest(async (req, res) => {
-    if (handlePreflight(req, res)) return;
+const importHelloFreshFromUrl = async (req, res) => {
+  if (handlePreflight(req, res)) return;
 
-    const { url } = req.body ?? {};
+  const { url } = req.body ?? {};
 
-    if (!url) {
-      res.status(400).json({
-        status: 'error',
-        code: 'invalid-request',
-        message: 'No link was received. Paste a HelloFresh recipe link and try again.',
-      });
-      return;
-    }
-
-    try {
-      const raw = await scrapeHelloFreshRecipe(url);
-      res.status(200).json(successBody(raw, { sourceUrl: url, imageUrl: raw.imageUrl }));
-    } catch (err) {
-      const described = describeError(err);
-      console.error(`HelloFresh URL import failed: ${described.code}`);
-      res.status(described.status).json({
-        status: 'error',
-        code: described.code,
-        message: described.message,
-      });
-    }
-  });
-
-/** `functions.config()` throws outside a deployed runtime — treat that as unset. */
-function readFunctionsConfig() {
-  try {
-    return functions.config();
-  } catch (err) {
-    return {};
+  if (!url) {
+    res.status(400).json({
+      status: 'error',
+      code: 'invalid-request',
+      message: 'No link was received. Paste a HelloFresh recipe link and try again.',
+    });
+    return;
   }
+
+  try {
+    const raw = await scrapeHelloFreshRecipe(url);
+    res.status(200).json(successBody(raw, { sourceUrl: url, imageUrl: raw.imageUrl }));
+  } catch (err) {
+    const described = describeError(err);
+    console.error(`HelloFresh URL import failed: ${described.code}`);
+    res.status(described.status).json({
+      status: 'error',
+      code: described.code,
+      message: described.message,
+    });
+  }
+};
+
+/** Firebase Functions config is gone with Firebase; the key is ANTHROPIC_API_KEY. */
+function readFunctionsConfig() {
+  return {};
 }
 
 module.exports = {

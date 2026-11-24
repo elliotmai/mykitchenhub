@@ -21,7 +21,7 @@
 // app navigates. Sending them by hand as well would double-count every screen.
 // See docs/DEPLOYMENT.md for the console toggle that turns that on.
 
-import { getAnalytics, isSupported, logEvent, setUserProperties } from 'firebase/analytics';
+import { getAnalytics, isSupported, logEvent, setUserProperties } from '../backend/analytics';
 
 import app from './firebase';
 import { APP_VERSION } from '../config/version';

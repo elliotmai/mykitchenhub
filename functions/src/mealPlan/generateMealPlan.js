@@ -1,12 +1,10 @@
 // functions/src/mealPlan/generateMealPlan.js
-// Callable: build a week of meals for the signed-in cook — roadmap 7.2 / 7.3.
+// Build a week of meals for the signed-in cook — roadmap 7.2 / 7.3. Called by
+// netlify/functions/generate-meal-plan.mjs.
 //
 // This function only *generates*. The client writes the result through the
 // normal security rules, so an AI-built plan is validated exactly like one
 // scheduled by hand — see src/hooks/useMealPlan.js.
-
-const functions = require('firebase-functions');
-const { getFirestore } = require('firebase-admin/firestore');
 
 const { collectPlanContext, isDayKey, startOfWeek, toDayKey } = require('./planContext');
 const { buildPrompt } = require('./buildPrompt');
@@ -28,14 +26,15 @@ const FAILED_WARNING =
  * @param {string}   options.uid
  * @param {string}   [options.weekStart] - `YYYY-MM-DD`, defaults to this week
  * @param {number}   [options.days]      - defaults to 7
- * @param {object}   [options.db]        - firestore instance
+ * @param {object}   options.db          - the household's kitchen (netlify/lib/kitchenDb.mjs)
  * @param {object|null} [options.client] - Anthropic client; null degrades to the
  *                                         local planner. Tests always inject one.
  */
 async function generatePlanForUser({ uid, weekStart, days = 7, db, client } = {}) {
   if (!uid) throw new Error('A user id is required to plan meals.');
+  if (!db) throw new Error('A database is required to plan meals.');
 
-  const firestore = db || getFirestore();
+  const firestore = db;
   const start = isDayKey(weekStart) ? weekStart : toDayKey(startOfWeek());
   const dayCount = Math.min(Math.max(Number(days) || 7, 1), MAX_DAYS);
 
@@ -90,31 +89,4 @@ async function generatePlanForUser({ uid, weekStart, days = 7, db, client } = {}
   };
 }
 
-/**
- * Callable entry point. Auth comes from the caller's ID token, so a cook can
- * only ever plan their own week.
- */
-const generateMealPlan = functions
-  .runWith({ timeoutSeconds: 120, memory: '512MB' })
-  .https.onCall(async (data, context) => {
-    const uid = context?.auth?.uid;
-    if (!uid) {
-      throw new functions.https.HttpsError(
-        'unauthenticated',
-        'Sign in to generate a meal plan.'
-      );
-    }
-
-    try {
-      return await generatePlanForUser({
-        uid,
-        weekStart: data?.weekStart,
-        days: data?.days,
-      });
-    } catch (err) {
-      console.error('generateMealPlan failed:', err?.message);
-      throw new functions.https.HttpsError('internal', 'Could not generate a meal plan.');
-    }
-  });
-
-module.exports = { generateMealPlan, generatePlanForUser, MAX_DAYS, NO_KEY_WARNING, FAILED_WARNING };
+module.exports = { generatePlanForUser, MAX_DAYS, NO_KEY_WARNING, FAILED_WARNING };

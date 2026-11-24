@@ -6,7 +6,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Form, Modal, Spinner } from 'react-bootstrap';
-import { collection, getDocs, query, limit } from 'firebase/firestore';
+import { collection, getDocs, query, limit } from '../../backend/firestore';
 import { db } from '../../services/firebase';
 import { MEAL_TYPES } from '../../hooks/useMealPlan';
 

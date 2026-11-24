@@ -8,15 +8,22 @@ food about to go off; it can add a shopping item and tick one off.
 
 | | |
 | --- | --- |
-| **Function** | `board` — 1st gen HTTPS, default region `us-central1`, same as every other HTTP function here |
-| **URL** | `https://us-central1-mykitchenhub-db665.cloudfunctions.net/board` |
-| **Code** | `functions/src/board/` (`board.js` is the entry point) |
-| **Tokens** | **Settings → Connected apps** in the app (callables in `functions/src/apiTokens/`); legacy: `functions/scripts/make-api-token.mjs` |
+| **Function** | `netlify/functions/board.mjs` on the KitchenHub Netlify site |
+| **URL** | `https://kitchen.flyingdoublemranch.com/api/board` |
+| **Code** | `functions/src/board/` (`board.js` answers; `netlify/lib/kitchenAuth.mjs` says who is calling) |
+| **Tokens** | **Settings → Connected apps** in the app (`functions/src/apiTokens/`, stored in Hive's `core.api_tokens`, app `kitchenhub`) |
 
-It uses the Firebase Admin SDK, so **Firestore security rules do not apply**.
-Every read and write is scoped in code to the one user the token belongs to;
-the only data outside `users/{thatUid}` it touches is reading the shared
-`recipes` library. Nothing in a request can name another user.
+> **Moved, November 2026.** KitchenHub left Firebase for Hive's Supabase
+> project. The old `us-central1-mykitchenhub-db665.cloudfunctions.net/board`
+> address and the token sections below that mention `apiTokens/{hash}`,
+> `apiTokenHash` and `make-api-token.mjs` describe the Firebase version, kept
+> for the record. Tokens made there were carried into `core.api_tokens` and
+> keep working.
+
+It runs with Supabase's service role, so **row-level security does not
+apply**: the caller's household is worked out from their own token or pass,
+and every read and write is in that household's kitchen. Nothing in a request
+can name another household or person.
 
 There are no CORS headers on purpose: nothing calls this from a browser, and a
 token that never sits in a web page cannot leak from one.
@@ -30,8 +37,9 @@ token. It sends `Authorization: Hive <pass>`: a JWT signed with Ed25519 by
 Hive's server, made for KitchenHub only (`aud: "kitchenhub"`), good for two
 minutes, carrying an email Hive has confirmed. The function checks it with
 Hive's public key (`functions/src/board/hivePass.js`, not secret) and acts as
-the KitchenHub account with that email. No account, or anything wrong with the
-pass, is the same `401` as a bad token; the board never creates an account.
+the Hive account the pass names (its confirmed email must match), in that
+person's household. Anything wrong with the pass is the same `401` as a bad
+token.
 
 ## Setting up a token
 

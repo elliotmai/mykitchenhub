@@ -1,6 +1,6 @@
 // src/pages/Login.jsx
 // Authentication page with Login, Signup, and Password Reset functionality
-// Uses Firebase Authentication via the useAuth hook
+// Uses the shared Hive sign-in (Supabase Auth) via the useAuth hook
 
 import React, { useState } from 'react';
 import { Container, Row, Col, Card, Form, Button, Alert, Spinner } from 'react-bootstrap';

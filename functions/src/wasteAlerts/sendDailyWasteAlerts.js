@@ -1,16 +1,14 @@
 // functions/src/wasteAlerts/sendDailyWasteAlerts.js
 // The 9 AM waste alert — roadmap 6.2.
 //
-// Cloud Scheduler triggers this once a day. For each user it finds what is
+// A Netlify scheduled function (netlify/functions/daily-waste-alerts.mjs)
+// runs this at 9 AM in ALERT_TIME_ZONE. For each user it finds what is
 // about to expire, texts them if they have asked for texts *and* an SMS
 // provider is configured, and always writes an in-app notification so the
 // alert lands even with no SMS credential (which is the state today).
 //
-// The exported handler takes its Firestore handle, its clock and its SMS
-// sender as arguments so the tests can drive all three.
-
-const functions = require('firebase-functions');
-const { getFirestore } = require('firebase-admin/firestore');
+// The exported handler takes its database (one household's kitchen), its
+// clock and its SMS sender as arguments so the tests can drive all three.
 
 const { ALERT_TIME_ZONE, formatAlertMessage, localDay } = require('./alertMessage');
 const { sendSms } = require('./smsClient');
@@ -74,7 +72,7 @@ function wantsWasteAlerts(preferences = {}) {
  */
 async function runDailyWasteAlerts(options = {}) {
   const {
-    db = getFirestore(),
+    db,
     now = new Date(),
     send = sendSms,
     env = process.env,
@@ -91,6 +89,7 @@ async function runDailyWasteAlerts(options = {}) {
     errors: 0,
   };
 
+  if (!db) throw new Error('runDailyWasteAlerts needs a database.');
   const usersSnapshot = await db.collection('users').get();
   const cutoff = endOfWindow(now, windowDays);
 
@@ -178,21 +177,22 @@ async function runDailyWasteAlerts(options = {}) {
   return summary;
 }
 
+/** The hour, 0–23, on the household's clock. */
+const ALERT_HOUR = 9;
+
 /**
- * Scheduled function: 9:00 AM daily, via Cloud Scheduler.
+ * Whether `now` is the 9 o'clock hour in ALERT_TIME_ZONE.
  *
- * The timezone is the household's, not UTC — "9 AM" should mean breakfast.
- * It is the same constant the day arithmetic counts in: if the schedule moves
- * to another timezone and the wording does not follow, the alert starts saying
- * "tomorrow" about food the app calls "today".
+ * Netlify schedules in UTC, and 9 AM in New York is 13:00 or 14:00 UTC
+ * depending on daylight saving. The function is scheduled for both and runs
+ * only in the one that is 9 AM there — "9 AM" should mean breakfast, and the
+ * day arithmetic counts in the same zone, so the text never says "tomorrow"
+ * about food the app calls "today".
  */
-const sendDailyWasteAlerts = functions.pubsub
-  .schedule('0 9 * * *')
-  .timeZone(ALERT_TIME_ZONE)
-  .onRun(async () => {
-    await runDailyWasteAlerts();
-    return null;
-  });
+const isAlertHour = (now = new Date(), timeZone = ALERT_TIME_ZONE) =>
+  Number(
+    new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', hourCycle: 'h23' }).format(now)
+  ) === ALERT_HOUR;
 
 module.exports = {
   ALERT_TIME_ZONE,
@@ -203,5 +203,6 @@ module.exports = {
   isoDay,
   wantsWasteAlerts,
   runDailyWasteAlerts,
-  sendDailyWasteAlerts,
+  ALERT_HOUR,
+  isAlertHour,
 };

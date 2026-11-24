@@ -7,7 +7,7 @@
 // is a broken dashboard.
 
 import { useState, useEffect, useCallback } from 'react';
-import { collection, getCountFromServer, getDocs } from 'firebase/firestore';
+import { collection, getCountFromServer, getDocs } from '../backend/firestore';
 import { db } from '../services/firebase';
 import { useAuth } from './useAuth';
 import { friendlyError } from '../utils/firebaseErrors';

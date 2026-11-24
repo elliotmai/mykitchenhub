@@ -1,116 +1,22 @@
 // src/services/firebase.js
-// Firebase Configuration for MyKitchenHub
-// This file initializes Firebase and exports auth, database, storage, and functions
-
-import { initializeApp } from 'firebase/app';
-import { getAuth, connectAuthEmulator } from 'firebase/auth';
-import {
-  getFirestore,
-  initializeFirestore,
-  connectFirestoreEmulator,
-  persistentLocalCache,
-  persistentMultipleTabManager,
-} from 'firebase/firestore';
-import { getStorage, connectStorageEmulator } from 'firebase/storage';
-import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
-
-// Firebase configuration from environment variables
-const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.REACT_APP_FIREBASE_APP_ID,
-  // Optional, and deliberately absent from requiredConfigKeys below: without it
-  // Firebase Analytics stays off and everything else works unchanged.
-  // See src/services/analytics.js.
-  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID,
-};
-
-// Validate that all required config values are present
-const requiredConfigKeys = [
-  'apiKey',
-  'authDomain',
-  'projectId',
-  'storageBucket',
-  'messagingSenderId',
-  'appId',
-];
-
-const missingKeys = requiredConfigKeys.filter((key) => !firebaseConfig[key]);
-if (missingKeys.length > 0) {
-  console.error(
-    `Missing Firebase config values: ${missingKeys.join(', ')}. ` +
-      'Make sure your .env file is set up correctly.'
-  );
-}
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-
-// Initialize services
-export const auth = getAuth(app);
-
-/**
- * Firestore, with an on-disk cache — roadmap 9.3 ("handle offline").
- *
- * The default cache lives in memory only, so a phone that loses signal showed
- * empty lists and spinners for data it had displayed a second earlier, and a
- * tap on "Add" hung until the connection came back. A persistent cache serves
- * those reads from IndexedDB and queues the writes until the network returns.
- *
- * `persistentMultipleTabManager` is what makes that safe with the app open in
- * more than one tab; without it the second tab silently gets no persistence.
- *
- * IndexedDB is unavailable in some contexts — private windows on older Safari,
- * and jsdom under the unit suite. Falling back to the in-memory default there
- * keeps the app working rather than failing to boot over a cache.
- */
-const startFirestore = () => {
-  try {
-    return initializeFirestore(app, {
-      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-    });
-  } catch (err) {
-    console.warn('Offline cache unavailable; continuing without it.', err);
-    return getFirestore(app);
-  }
-};
-
-export const db = startFirestore();
-export const storage = getStorage(app);
-export const functions = getFunctions(app);
-
-// Connect to emulators when explicitly opted in.
+// The handles the screens import: auth, db, storage and functions.
 //
-// This is deliberately not gated on NODE_ENV: the end-to-end suite runs a
-// production build against the emulators, and a NODE_ENV check would silently
-// point that build at the real project.
-if (process.env.REACT_APP_USE_EMULATORS === 'true') {
-  console.log('🔧 Connecting to Firebase emulators...');
-  // disableWarnings suppresses the SDK's "Running in emulator mode" banner. It
-  // is fixed to the bottom of the viewport, so on a phone-sized screen it sits
-  // over the footer of a tall modal and swallows the submit click.
-  connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
-  connectFirestoreEmulator(db, 'localhost', 8080);
-  connectStorageEmulator(storage, 'localhost', 9199);
-  connectFunctionsEmulator(functions, 'localhost', 5001);
-}
+// KitchenHub moved from Firebase to Hive's Supabase project (schema
+// `kitchen`, bucket `kitchen`, one sign-in for every app on
+// flyingdoublemranch.com). The modules in ../backend answer the same calls
+// the Firebase SDK did, so the hooks read as before.
 
-// Export the app instance for advanced use cases
+import { getAuth } from '../backend/auth';
+import { getFirestore } from '../backend/firestore';
+import { getStorage } from '../backend/storage';
+import { getFunctions } from '../backend/functions';
+
+export const auth = getAuth();
+export const db = getFirestore();
+export const storage = getStorage();
+export const functions = getFunctions();
+
+const app = { name: 'kitchenhub' };
 export default app;
 
-// Helper function to check if Firebase is properly initialized
-export const isFirebaseInitialized = () => {
-  return app && auth && db && storage && functions;
-};
-
-// Log initialization status in development
-if (process.env.NODE_ENV === 'development') {
-  console.log('🔥 Firebase initialized:', {
-    projectId: firebaseConfig.projectId,
-    authDomain: firebaseConfig.authDomain,
-    initialized: isFirebaseInitialized(),
-  });
-}
+export const isFirebaseInitialized = () => Boolean(auth && db && storage && functions);

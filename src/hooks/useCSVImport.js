@@ -21,7 +21,7 @@ import {
   query,
   orderBy,
   limit as limitTo,
-} from 'firebase/firestore';
+} from '../backend/firestore';
 import { db } from '../services/firebase';
 import { useAuth } from './useAuth';
 import {

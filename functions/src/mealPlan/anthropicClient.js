@@ -1,12 +1,11 @@
 // functions/src/mealPlan/anthropicClient.js
 // The Claude call behind meal plan generation — roadmap 7.2.
 //
-// The key comes from ANTHROPIC_API_KEY, or from Firebase Functions config as a
-// fallback for deployments configured the older way. It is never logged, and a
-// missing key is not an error: the caller falls back to a local plan.
+// The key comes from ANTHROPIC_API_KEY (Netlify environment). It is never
+// logged, and a missing key is not an error: the caller falls back to a local
+// plan.
 
 const Anthropic = require('@anthropic-ai/sdk');
-const functions = require('firebase-functions');
 
 const { PLAN_SCHEMA } = require('./planSchema');
 
@@ -22,14 +21,7 @@ const MAX_RETRIES = 1;
 
 /** The configured API key, or null when the feature should degrade. */
 function resolveApiKey() {
-  if (process.env.ANTHROPIC_API_KEY) return process.env.ANTHROPIC_API_KEY;
-  try {
-    const config = functions.config();
-    return config?.anthropic?.key || null;
-  } catch (err) {
-    // functions.config() throws when nothing is configured (e.g. locally).
-    return null;
-  }
+  return process.env.ANTHROPIC_API_KEY || null;
 }
 
 /** An Anthropic client, or null when no credential is available. */

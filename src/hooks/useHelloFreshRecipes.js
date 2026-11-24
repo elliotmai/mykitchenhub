@@ -6,7 +6,7 @@
 // roadmap phase 4 and lives in its own components.
 
 import { useEffect, useState } from 'react';
-import { collection, limit, onSnapshot, orderBy, query, where } from 'firebase/firestore';
+import { collection, limit, onSnapshot, orderBy, query, where } from '../backend/firestore';
 
 import { db } from '../services/firebase';
 import { useAuth } from './useAuth';

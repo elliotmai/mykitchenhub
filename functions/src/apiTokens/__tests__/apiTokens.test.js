@@ -1,275 +1,131 @@
 /**
- * Connected apps: mint, list and revoke `apiTokens/{hash}` for the signed-in
- * cook. Firestore is the board API's in-memory fake, so these tests assert
- * where every write went as well as what came back.
+ * Connected apps: mint, list, revoke — against an in-memory core.api_tokens.
  */
 
-const { createHash } = require('node:crypto');
-
-const mockDb = { current: null };
-jest.mock('firebase-admin/firestore', () => {
-  const actual = jest.requireActual('firebase-admin/firestore');
-  return { ...actual, getFirestore: () => mockDb.current };
-});
-
-const { Timestamp } = require('firebase-admin/firestore');
-const { makeFakeFirestore } = require('../../board/__fixtures__/fakeFirestore');
-const { resolveUser } = require('../../board/auth');
 const {
   TOKEN_PREFIX,
   MAX_ACTIVE_TOKENS,
+  MAX_LABEL_LENGTH,
   generateToken,
   publicId,
-  cleanLabel,
+  handlers,
   listTokens,
   createToken,
   revokeToken,
-  listApiTokens,
-  createApiToken,
-  revokeApiToken,
 } = require('../apiTokens');
+const { hashToken } = require('../../board/auth');
 
-const UID = 'cook-1';
-const OTHER = 'cook-2';
-const NOW = new Date('2026-11-17T15:00:00Z');
-const sha = (s) => createHash('sha256').update(s).digest('hex');
-const at = (iso) => Timestamp.fromDate(new Date(iso));
-
-const tokenDoc = (extra = {}) => ({
-  uid: UID,
-  label: 'Fridge Board',
-  createdAt: at('2026-11-01T10:00:00Z'),
-  lastUsedAt: null,
-  revokedAt: null,
-  ...extra,
+const makeStore = (rows = []) => ({
+  rows,
+  owned: jest.fn(async (uid) => rows.filter((r) => r.user_id === uid).map((r) => ({ ...r }))),
+  insert: jest.fn(async (row) => rows.push({ last_used_at: null, revoked_at: null, ...row })),
+  revoke: jest.fn(async (hash, at) => {
+    rows.find((r) => r.hash === hash).revoked_at = at;
+  }),
 });
 
-let db;
-beforeEach(() => {
-  db = makeFakeFirestore({ [`users/${UID}`]: { email: 'cook@example.com' } });
-  mockDb.current = db;
-});
+const NOW = new Date('2026-11-24T12:00:00Z');
 
-describe('generateToken', () => {
-  it('is khapp_ plus 32 random bytes as unpadded base64url', () => {
-    const token = generateToken();
-    expect(token.startsWith(TOKEN_PREFIX)).toBe(true);
-    const body = token.slice(TOKEN_PREFIX.length);
-    expect(body).toMatch(/^[A-Za-z0-9_-]{43}$/);
-    expect(Buffer.from(body, 'base64url')).toHaveLength(32);
-  });
-
-  it('never repeats', () => {
-    expect(generateToken()).not.toBe(generateToken());
-  });
-});
-
-describe('cleanLabel', () => {
-  it('trims', () => expect(cleanLabel('  Fridge Board ')).toBe('Fridge Board'));
-  it.each([[''], ['   '], [undefined], [42]])('refuses %j', (label) => {
-    expect(() => cleanLabel(label)).toThrow(expect.objectContaining({ code: 'invalid-argument' }));
-  });
-  it('allows 60 characters and refuses 61', () => {
-    expect(cleanLabel('a'.repeat(60))).toHaveLength(60);
-    expect(() => cleanLabel('a'.repeat(61))).toThrow(/60 characters/);
+describe('tokens', () => {
+  it('are khapp_ plus 43 base64url characters, never the same twice', () => {
+    const a = generateToken();
+    expect(a).toMatch(new RegExp(`^${TOKEN_PREFIX}[A-Za-z0-9_-]{43}$`));
+    expect(generateToken()).not.toBe(a);
   });
 });
 
 describe('createToken', () => {
-  it('stores only the hash, as the document id, and returns the token once', async () => {
-    const result = await createToken({ db, uid: UID, label: ' Fridge Board ', now: NOW });
+  it('stores only the hash and returns the token once', async () => {
+    const store = makeStore();
+    const out = await createToken({ store, uid: 'u1', label: '  Fridge Board ', now: NOW, newToken: () => 'khapp_secret' });
 
-    const hash = sha(result.token);
-    expect(result).toEqual({
-      id: hash.slice(0, 12),
+    expect(out).toEqual({
+      id: publicId(hashToken('khapp_secret')),
       label: 'Fridge Board',
       createdAt: NOW.toISOString(),
-      token: expect.stringMatching(/^khapp_/),
+      token: 'khapp_secret',
     });
-    expect(db.__writes).toHaveLength(1);
-    expect(db.__writes[0].path).toBe(`apiTokens/${hash}`);
-    expect(db.__writes[0].data).toEqual({
-      uid: UID,
-      label: 'Fridge Board',
-      createdAt: Timestamp.fromDate(NOW),
-      lastUsedAt: null,
-      revokedAt: null,
-    });
-    expect(JSON.stringify(db.__writes)).not.toContain(result.token);
+    expect(store.rows[0]).toMatchObject({ hash: hashToken('khapp_secret'), user_id: 'u1', label: 'Fridge Board' });
+    expect(JSON.stringify(store.rows)).not.toContain('khapp_secret');
   });
 
-  it('mints a token the board API accepts', async () => {
-    const { token } = await createToken({ db, uid: UID, label: 'Fridge Board', now: NOW });
-    await expect(resolveUser(db, `Bearer ${token}`)).resolves.toMatchObject({ uid: UID });
-  });
-
-  it(`caps a cook at ${MAX_ACTIVE_TOKENS} active tokens`, async () => {
-    const docs = {};
-    for (let i = 0; i < MAX_ACTIVE_TOKENS; i += 1) docs[`apiTokens/${sha(`t${i}`)}`] = tokenDoc();
-    db = makeFakeFirestore(docs);
-
-    await expect(createToken({ db, uid: UID, label: 'One more' })).rejects.toMatchObject({
-      code: 'invalid-argument',
-      message: expect.stringMatching(/up to 20 apps/),
+  it.each([
+    ['no name', ''],
+    ['a name that is too long', 'x'.repeat(MAX_LABEL_LENGTH + 1)],
+  ])('refuses %s', async (_label, label) => {
+    await expect(createToken({ store: makeStore(), uid: 'u1', label })).rejects.toMatchObject({
+      status: 'invalid-argument',
     });
-    expect(db.__writes).toHaveLength(0);
   });
 
-  it('does not count revoked tokens, or other cooks’ tokens, toward the cap', async () => {
-    const docs = {};
-    for (let i = 0; i < MAX_ACTIVE_TOKENS; i += 1) {
-      docs[`apiTokens/${sha(`r${i}`)}`] = tokenDoc({ revokedAt: at('2026-11-02T00:00:00Z') });
-      docs[`apiTokens/${sha(`o${i}`)}`] = tokenDoc({ uid: OTHER });
-    }
-    db = makeFakeFirestore(docs);
-
-    await expect(createToken({ db, uid: UID, label: 'Fridge Board' })).resolves.toHaveProperty(
-      'token'
-    );
-  });
-
-  it('refuses a blank name without writing', async () => {
-    await expect(createToken({ db, uid: UID, label: '  ' })).rejects.toMatchObject({
-      code: 'invalid-argument',
+  it('caps active tokens, not revoked ones', async () => {
+    const rows = Array.from({ length: MAX_ACTIVE_TOKENS }, (_, i) => ({
+      hash: `${i}`.padStart(64, 'a'),
+      user_id: 'u1',
+      created_at: NOW.toISOString(),
+      revoked_at: null,
+    }));
+    await expect(createToken({ store: makeStore(rows), uid: 'u1', label: 'One more' })).rejects.toMatchObject({
+      status: 'invalid-argument',
     });
-    expect(db.__writes).toHaveLength(0);
+    rows[0].revoked_at = NOW.toISOString();
+    await expect(createToken({ store: makeStore(rows), uid: 'u1', label: 'One more' })).resolves.toHaveProperty('token');
+  });
+
+  it('needs someone signed in', async () => {
+    await expect(createToken({ store: makeStore(), uid: null, label: 'x' })).rejects.toMatchObject({
+      status: 'unauthenticated',
+    });
   });
 });
 
 describe('listTokens', () => {
-  it('lists the cook’s active tokens, newest first, without the hash', async () => {
-    const older = sha('older');
-    const newer = sha('newer');
-    db = makeFakeFirestore({
-      [`apiTokens/${older}`]: tokenDoc({
-        label: 'Old app',
-        createdAt: at('2026-10-01T00:00:00Z'),
-        lastUsedAt: at('2026-11-17T13:00:00Z'),
-      }),
-      [`apiTokens/${newer}`]: tokenDoc({ label: 'Fridge Board' }),
-      [`apiTokens/${sha('revoked')}`]: tokenDoc({
-        label: 'Gone',
-        revokedAt: at('2026-11-02T00:00:00Z'),
-      }),
-      [`apiTokens/${sha('theirs')}`]: tokenDoc({ uid: OTHER, label: 'Not mine' }),
-    });
-
-    const tokens = await listTokens({ db, uid: UID });
-
-    expect(tokens).toEqual([
-      {
-        id: newer.slice(0, 12),
-        label: 'Fridge Board',
-        createdAt: '2026-11-01T10:00:00.000Z',
-        lastUsedAt: null,
-      },
-      {
-        id: older.slice(0, 12),
-        label: 'Old app',
-        createdAt: '2026-10-01T00:00:00.000Z',
-        lastUsedAt: '2026-11-17T13:00:00.000Z',
-      },
+  it("lists the caller's live tokens, newest first, without hashes", async () => {
+    const store = makeStore([
+      { hash: 'a'.repeat(64), user_id: 'u1', label: 'Old', created_at: '2026-01-01T00:00:00Z', last_used_at: '2026-02-01T00:00:00Z' },
+      { hash: 'b'.repeat(64), user_id: 'u1', label: 'New', created_at: '2026-03-01T00:00:00Z' },
+      { hash: 'c'.repeat(64), user_id: 'u1', label: 'Gone', created_at: '2026-04-01T00:00:00Z', revoked_at: '2026-04-02T00:00:00Z' },
+      { hash: 'd'.repeat(64), user_id: 'u2', label: 'Theirs', created_at: '2026-05-01T00:00:00Z' },
     ]);
-    expect(JSON.stringify(tokens)).not.toContain(older);
-    expect(JSON.stringify(tokens)).not.toContain(newer);
-  });
-
-  it('is empty for a cook with no tokens', async () => {
-    await expect(listTokens({ db, uid: UID })).resolves.toEqual([]);
+    const tokens = await listTokens({ store, uid: 'u1' });
+    expect(tokens).toEqual([
+      { id: 'bbbbbbbbbbbb', label: 'New', createdAt: '2026-03-01T00:00:00.000Z', lastUsedAt: null },
+      { id: 'aaaaaaaaaaaa', label: 'Old', createdAt: '2026-01-01T00:00:00.000Z', lastUsedAt: '2026-02-01T00:00:00.000Z' },
+    ]);
+    expect(JSON.stringify(tokens)).not.toContain('a'.repeat(64));
   });
 });
 
 describe('revokeToken', () => {
-  const HASH = sha('mine');
+  const rows = () => [
+    { hash: 'a'.repeat(64), user_id: 'u1', created_at: NOW.toISOString(), revoked_at: null },
+    { hash: 'b'.repeat(64), user_id: 'u2', created_at: NOW.toISOString(), revoked_at: null },
+  ];
 
-  beforeEach(() => {
-    db = makeFakeFirestore({
-      [`apiTokens/${HASH}`]: tokenDoc(),
-      [`apiTokens/${sha('theirs')}`]: tokenDoc({ uid: OTHER }),
+  it('revokes by public id among the caller’s own tokens, twice harmlessly', async () => {
+    const store = makeStore(rows());
+    await expect(revokeToken({ store, uid: 'u1', id: 'AAAAAAAAAAAA', now: NOW })).resolves.toEqual({ ok: true });
+    expect(store.rows[0].revoked_at).toBe(NOW.toISOString());
+    await revokeToken({ store, uid: 'u1', id: 'aaaaaaaaaaaa', now: NOW });
+    expect(store.revoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("cannot reach someone else's token, or take a full hash", async () => {
+    const store = makeStore(rows());
+    await expect(revokeToken({ store, uid: 'u1', id: 'bbbbbbbbbbbb' })).rejects.toMatchObject({ status: 'not-found' });
+    await expect(revokeToken({ store, uid: 'u1', id: 'a'.repeat(64) })).rejects.toMatchObject({
+      status: 'invalid-argument',
     });
-  });
-
-  it('sets revokedAt on the matching token', async () => {
-    await expect(revokeToken({ db, uid: UID, id: publicId(HASH), now: NOW })).resolves.toEqual({
-      ok: true,
-    });
-    expect(db.__writes).toEqual([
-      { op: 'update', path: `apiTokens/${HASH}`, data: { revokedAt: Timestamp.fromDate(NOW) } },
-    ]);
-  });
-
-  it('stops the token working on the board API straight away', async () => {
-    const token = (await createToken({ db, uid: UID, label: 'Fridge Board', now: NOW })).token;
-    db.__docs.set(`users/${UID}`, { email: 'cook@example.com' });
-    await revokeToken({ db, uid: UID, id: publicId(sha(token)), now: NOW });
-    await expect(resolveUser(db, `Bearer ${token}`)).rejects.toMatchObject({ status: 401 });
-  });
-
-  it('is a 404 for another cook’s token', async () => {
-    await expect(revokeToken({ db, uid: UID, id: publicId(sha('theirs')) })).rejects.toMatchObject({
-      code: 'not-found',
-    });
-    expect(db.__writes).toHaveLength(0);
-  });
-
-  it('never accepts a full hash from the client', async () => {
-    await expect(revokeToken({ db, uid: UID, id: HASH })).rejects.toMatchObject({
-      code: 'invalid-argument',
-    });
-    expect(db.__writes).toHaveLength(0);
-  });
-
-  it.each([[undefined], [''], ['not-hex-at-all'], [12]])('refuses id %j', async (id) => {
-    await expect(revokeToken({ db, uid: UID, id })).rejects.toMatchObject({
-      code: 'invalid-argument',
-    });
-  });
-
-  it('treats revoking twice as done, without rewriting', async () => {
-    await revokeToken({ db, uid: UID, id: publicId(HASH), now: NOW });
-    await revokeToken({ db, uid: UID, id: publicId(HASH), now: new Date() });
-    expect(db.__writes).toHaveLength(1);
+    expect(store.rows[1].revoked_at).toBeNull();
   });
 });
 
-describe('the callables', () => {
-  const signedIn = { auth: { uid: UID } };
-
-  it.each([
-    ['listApiTokens', listApiTokens, {}],
-    ['createApiToken', createApiToken, { label: 'Fridge Board' }],
-    ['revokeApiToken', revokeApiToken, { id: 'abcdefabcdef' }],
-  ])('%s refuses a signed-out caller', async (_name, fn, data) => {
-    await expect(fn.run(data, {})).rejects.toMatchObject({ code: 'unauthenticated' });
-    expect(db.__writes).toHaveLength(0);
-  });
-
-  it('round-trips create → list → revoke as the signed-in cook', async () => {
-    const created = await createApiToken.run({ label: 'Fridge Board' }, signedIn);
-    expect(created.token).toMatch(/^khapp_/);
-
-    const { tokens } = await listApiTokens.run({}, signedIn);
-    expect(tokens).toEqual([
-      { id: created.id, label: 'Fridge Board', createdAt: created.createdAt, lastUsedAt: null },
-    ]);
-
-    await expect(revokeApiToken.run({ id: created.id }, signedIn)).resolves.toEqual({ ok: true });
-    await expect(listApiTokens.run({}, signedIn)).resolves.toEqual({ tokens: [] });
-  });
-
-  it('acts only on the uid from the ID token, whatever the request says', async () => {
-    await createApiToken.run({ label: 'Fridge Board', uid: OTHER }, signedIn);
-    const [write] = db.__writes;
-    expect(write.data.uid).toBe(UID);
-  });
-
-  it('turns an unexpected failure into a generic internal error', async () => {
-    jest.spyOn(console, 'error').mockImplementation(() => {});
-    db.__failWith(new Error('firestore exploded at users/secret'));
-    await expect(listApiTokens.run({}, signedIn)).rejects.toMatchObject({
-      code: 'internal',
-      message: 'Something went wrong. Please try again.',
-    });
-    console.error.mockRestore();
+describe('handlers', () => {
+  it('answer the three requests by name', async () => {
+    const store = makeStore();
+    const made = await handlers.createApiToken({ store, uid: 'u1', data: { label: 'Board' } });
+    expect((await handlers.listApiTokens({ store, uid: 'u1' })).tokens).toHaveLength(1);
+    await handlers.revokeApiToken({ store, uid: 'u1', data: { id: made.id } });
+    expect((await handlers.listApiTokens({ store, uid: 'u1' })).tokens).toHaveLength(0);
   });
 });

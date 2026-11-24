@@ -1,6 +1,12 @@
 // functions/src/board/auth.js
 // Who is calling the `board` API.
 //
+// Since the move to Supabase the live site answers this in
+// netlify/lib/kitchenAuth.mjs (core.api_tokens and Hive passes, against
+// Hive's accounts); this module keeps the token and pass rules it shares
+// (hashToken, bearerToken, MIN_TOKEN_LENGTH, HttpError) and the
+// Firestore-shaped resolver the board tests drive.
+//
 // Hive sends `Authorization: Hive <pass>`: a two-minute pass for whoever is
 // signed in to Hive, made for KitchenHub only (./hivePass.js). Their confirmed
 // email finds their KitchenHub account. Nothing is stored for this.
@@ -22,7 +28,8 @@
 // The same scheme as LearnLeaf's personal API, so one habit covers both.
 
 const { createHash } = require('node:crypto');
-const admin = require('firebase-admin');
+
+const { FieldValue } = require('../utils/fieldValue');
 
 const { verifyHivePass } = require('./hivePass');
 
@@ -67,7 +74,7 @@ const resolveConnectedApp = async (db, hash) => {
   if (!profile.exists) throw new HttpError(401, UNAUTHORIZED);
 
   // Best-effort: not awaited, so a failed stamp never fails or delays the request.
-  ref.update({ lastUsedAt: admin.firestore.FieldValue.serverTimestamp() }).catch((err) => {
+  ref.update({ lastUsedAt: FieldValue.serverTimestamp() }).catch((err) => {
     console.warn('board API: could not stamp lastUsedAt:', err?.code || err?.name || 'error');
   });
 
@@ -87,15 +94,8 @@ const resolveConnectedApp = async (db, hash) => {
  * @param {string} authorization            the raw header value
  * @returns {Promise<{uid: string, profile: object}>}
  */
-/** The KitchenHub account with this email, or null. */
-const uidForEmail = async (email) => {
-  try {
-    return (await admin.auth().getUserByEmail(email)).uid;
-  } catch (err) {
-    if (err?.code === 'auth/user-not-found') return null;
-    throw err;
-  }
-};
+/** Without a way to look people up (see netlify/lib/kitchenAuth.mjs), nobody matches. */
+const uidForEmail = async () => null;
 
 /**
  * A Hive pass → the account with its confirmed email. No account (the board

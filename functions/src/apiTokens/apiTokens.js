@@ -6,32 +6,38 @@
 //   createApiToken   { label }   → { id, label, createdAt, token }
 //   revokeApiToken   { id }      → { ok: true }
 //
-// Callables, so Firebase verifies the caller's ID token and every call acts on
-// `context.auth.uid` alone — nothing in a request can name another user.
+// Served at /api/<name> (netlify/functions/api-tokens.mjs), for the cook the
+// Supabase access token names; nothing in a request can name another person.
 //
-// Storage is `apiTokens/{sha256(token)}`: the document id IS the hash, so the
-// API resolves a token with one `get` (see ../board/auth.js). The token itself
-// is generated here, returned once by createApiToken, and stored nowhere. The
-// security rules deny the client every read and write on `apiTokens/**`; only
-// these functions and the board API touch it, through the admin SDK.
+// Tokens live in Hive's core.api_tokens (app 'kitchenhub'), keyed by
+// sha256(token): the board API resolves a token with one lookup (see
+// netlify/lib/kitchenAuth.mjs). The token itself is generated here, returned
+// once by createApiToken, and stored nowhere. People cannot add rows to that
+// table themselves; only these functions (with the service role) do.
 //
-// Because the id is the hash, it never goes back to the browser. The public id
-// is its first 12 hex characters, and revoke resolves that against the
+// Because the key is the hash, it never goes back to the browser. The public
+// id is its first 12 hex characters, and revoke resolves that against the
 // caller's own tokens rather than accepting a hash from the client.
+//
+// `store` is the table: { owned(uid) → [{ hash, label, created_at,
+// last_used_at, revoked_at }], insert(row), revoke(hash, at) }.
 
 const { randomBytes } = require('node:crypto');
-const functions = require('firebase-functions');
-const { getFirestore, Timestamp } = require('firebase-admin/firestore');
 
 const { hashToken } = require('../board/auth');
 
-const COLLECTION = 'apiTokens';
 const TOKEN_PREFIX = 'khapp_';
 const MAX_ACTIVE_TOKENS = 20;
 const MAX_LABEL_LENGTH = 60;
 const PUBLIC_ID_LENGTH = 12;
 
-const { HttpsError } = functions.https;
+/** An error the HTTP layer reports with a callable-style status. */
+class CallableError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
+}
 
 /** `khapp_` + 32 CSPRNG bytes as base64url, no padding. */
 const generateToken = () => `${TOKEN_PREFIX}${randomBytes(32).toString('base64url')}`;
@@ -39,28 +45,14 @@ const generateToken = () => `${TOKEN_PREFIX}${randomBytes(32).toString('base64ur
 /** The non-reversible id the browser sees. */
 const publicId = (hash) => String(hash).slice(0, PUBLIC_ID_LENGTH);
 
-/** Firestore Timestamp (or Date) → ISO string, which survives the callable's JSON. */
-const toIso = (value) => {
-  if (!value) return null;
-  if (typeof value.toDate === 'function') return value.toDate().toISOString();
-  if (value instanceof Date) return value.toISOString();
-  return null;
-};
-
-const millis = (value) => {
-  if (!value) return 0;
-  if (typeof value.toMillis === 'function') return value.toMillis();
-  if (typeof value.toDate === 'function') return value.toDate().getTime();
-  if (value instanceof Date) return value.getTime();
-  return 0;
-};
+const toIso = (value) => (value ? new Date(value).toISOString() : null);
 
 /** Trimmed, 1..60 characters, or an invalid-argument the screen can show as is. */
 const cleanLabel = (label) => {
   const value = typeof label === 'string' ? label.trim() : '';
-  if (!value) throw new HttpsError('invalid-argument', 'Give the app a name.');
+  if (!value) throw new CallableError('invalid-argument', 'Give the app a name.');
   if (value.length > MAX_LABEL_LENGTH) {
-    throw new HttpsError(
+    throw new CallableError(
       'invalid-argument',
       `Keep the name to ${MAX_LABEL_LENGTH} characters or fewer.`
     );
@@ -68,41 +60,33 @@ const cleanLabel = (label) => {
   return value;
 };
 
-const requireUid = (context) => {
-  const uid = context?.auth?.uid;
-  if (!uid) throw new HttpsError('unauthenticated', 'Sign in to manage connected apps.');
+const requireUid = (uid) => {
+  if (!uid) throw new CallableError('unauthenticated', 'Sign in to manage connected apps.');
   return uid;
 };
 
-/** Every token document the user owns, revoked ones included. */
-const ownedTokens = async (db, uid) => {
-  const snap = await db.collection(COLLECTION).where('uid', '==', uid).get();
-  return snap.docs;
-};
-
-const isActive = (doc) => (doc.data() || {}).revokedAt == null;
+const isActive = (row) => row.revoked_at == null;
 
 /** Non-revoked tokens, newest first. The hash never leaves this function. */
-const listTokens = async ({ db, uid }) => {
-  const docs = (await ownedTokens(db, uid)).filter(isActive);
-  return docs
-    .map((doc) => ({ hash: doc.id, data: doc.data() || {} }))
-    .sort((a, b) => millis(b.data.createdAt) - millis(a.data.createdAt))
-    .map(({ hash, data }) => ({
-      id: publicId(hash),
-      label: data.label || '',
-      createdAt: toIso(data.createdAt),
-      lastUsedAt: toIso(data.lastUsedAt),
+const listTokens = async ({ store, uid }) => {
+  const rows = (await store.owned(requireUid(uid))).filter(isActive);
+  return rows
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    .map((row) => ({
+      id: publicId(row.hash),
+      label: row.label || '',
+      createdAt: toIso(row.created_at),
+      lastUsedAt: toIso(row.last_used_at),
     }));
 };
 
 /** Mint one token. The plain token is in this return value and nowhere else. */
-const createToken = async ({ db, uid, label, now = new Date(), newToken = generateToken }) => {
+const createToken = async ({ store, uid, label, now = new Date(), newToken = generateToken }) => {
+  requireUid(uid);
   const name = cleanLabel(label);
-
-  const active = (await ownedTokens(db, uid)).filter(isActive);
+  const active = (await store.owned(uid)).filter(isActive);
   if (active.length >= MAX_ACTIVE_TOKENS) {
-    throw new HttpsError(
+    throw new CallableError(
       'invalid-argument',
       `You can connect up to ${MAX_ACTIVE_TOKENS} apps. Revoke one you no longer use first.`
     );
@@ -110,80 +94,43 @@ const createToken = async ({ db, uid, label, now = new Date(), newToken = genera
 
   const token = newToken();
   const hash = hashToken(token);
-  const createdAt = Timestamp.fromDate(now);
-
-  await db.collection(COLLECTION).doc(hash).set({
-    uid,
-    label: name,
-    createdAt,
-    lastUsedAt: null,
-    revokedAt: null,
-  });
-
-  return { id: publicId(hash), label: name, createdAt: toIso(createdAt), token };
+  await store.insert({ hash, user_id: uid, label: name, created_at: now.toISOString() });
+  return { id: publicId(hash), label: name, createdAt: now.toISOString(), token };
 };
 
 /** Revoke by public id, only among the caller's own tokens. */
-const revokeToken = async ({ db, uid, id, now = new Date() }) => {
+const revokeToken = async ({ store, uid, id, now = new Date() }) => {
+  requireUid(uid);
   const wanted = typeof id === 'string' ? id.toLowerCase() : '';
   // Exactly a public id: a full hash (or anything else) is refused, not matched.
   if (!new RegExp(`^[0-9a-f]{${PUBLIC_ID_LENGTH}}$`).test(wanted)) {
-    throw new HttpsError('invalid-argument', 'That app id is not valid.');
+    throw new CallableError('invalid-argument', 'That app id is not valid.');
   }
-
-  const docs = await ownedTokens(db, uid);
-  const match = docs.find((doc) => publicId(doc.id) === wanted);
-  if (!match) throw new HttpsError('not-found', 'That app is not connected.');
-
+  const match = (await store.owned(uid)).find((row) => publicId(row.hash) === wanted);
+  if (!match) throw new CallableError('not-found', 'That app is not connected.');
   // Revoking twice (a double tap) is not an error.
-  if (isActive(match)) {
-    await db
-      .collection(COLLECTION)
-      .doc(match.id)
-      .update({ revokedAt: Timestamp.fromDate(now) });
-  }
+  if (isActive(match)) await store.revoke(match.hash, now.toISOString());
   return { ok: true };
 };
 
-/** Wraps a handler: auth, then HttpsErrors through, anything else as `internal`. */
-const callable = (name, handler) =>
-  functions.https.onCall(async (data, context) => {
-    const uid = requireUid(context);
-    try {
-      return await handler({ db: getFirestore(), uid, data: data || {} });
-    } catch (err) {
-      if (err instanceof HttpsError) throw err;
-      console.error(`${name} failed:`, err?.code || err?.name || 'error');
-      throw new HttpsError('internal', 'Something went wrong. Please try again.');
-    }
-  });
-
-const listApiTokens = callable('listApiTokens', async ({ db, uid }) => ({
-  tokens: await listTokens({ db, uid }),
-}));
-
-const createApiToken = callable('createApiToken', ({ db, uid, data }) =>
-  createToken({ db, uid, label: data.label })
-);
-
-const revokeApiToken = callable('revokeApiToken', ({ db, uid, data }) =>
-  revokeToken({ db, uid, id: data.id })
-);
+/** The three requests by name, as /api/<name> answers them. */
+const handlers = {
+  listApiTokens: async ({ store, uid }) => ({ tokens: await listTokens({ store, uid }) }),
+  createApiToken: ({ store, uid, data }) => createToken({ store, uid, label: data?.label }),
+  revokeApiToken: ({ store, uid, data }) => revokeToken({ store, uid, id: data?.id }),
+};
 
 module.exports = {
-  COLLECTION,
   TOKEN_PREFIX,
   MAX_ACTIVE_TOKENS,
   MAX_LABEL_LENGTH,
   PUBLIC_ID_LENGTH,
+  CallableError,
   generateToken,
-  hashToken,
   publicId,
   cleanLabel,
   listTokens,
   createToken,
   revokeToken,
-  listApiTokens,
-  createApiToken,
-  revokeApiToken,
+  handlers,
 };

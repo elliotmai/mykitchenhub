@@ -72,6 +72,10 @@ export const AUTH_ERROR_MESSAGES = {
   'auth/requires-recent-login': 'Please log out and log back in to perform this action.',
   'auth/missing-password': 'Please enter your password.',
   'auth/internal-error': 'Something went wrong signing you in. Please try again.',
+  'auth/email-not-confirmed': 'Confirm your email first: open the link we sent you.',
+  'auth/confirm-email': 'Check your email: open the link we sent to finish making your account.',
+  'auth/carry-over-emailed':
+    'Almost there: we emailed you a link to finish signing in. Open it on this device.',
 };
 
 /** A sentence for a Firebase Auth error code. Never returns undefined. */

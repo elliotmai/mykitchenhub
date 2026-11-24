@@ -14,7 +14,7 @@ import {
   orderBy,
   getDocs,
   serverTimestamp,
-} from 'firebase/firestore';
+} from '../backend/firestore';
 import { db } from '../services/firebase';
 import { useAuth } from './useAuth';
 import { friendlyError } from '../utils/firebaseErrors';

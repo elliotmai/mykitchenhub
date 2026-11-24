@@ -8,30 +8,9 @@
  * refuses to spend any more.
  */
 
-jest.mock('firebase-functions', () => {
-  class HttpsError extends Error {
-    constructor(code, message) {
-      super(message);
-      this.code = code;
-    }
-  }
-  const https = { onCall: jest.fn((handler) => handler), HttpsError };
-  return {
-    https,
-    runWith: jest.fn(() => ({ https })),
-    config: jest.fn(() => ({})),
-  };
-});
-
-jest.mock('firebase-admin', () => ({
-  apps: [],
-  initializeApp: jest.fn(),
-  credential: { cert: jest.fn() },
-  firestore: jest.fn(),
-}));
-
 const {
   runLegacySync,
+  handleLegacySync,
   clampLimit,
   emptyState,
   adminUids,
@@ -624,14 +603,45 @@ describe('runLegacySync — the off switch', () => {
   });
 });
 
-describe('deployment options', () => {
-  it('is publicly invokable, so every deploy grants the invoker role', () => {
-    // A failed first deploy left this function without allUsers invoker, and
-    // every call came back as a bare "internal". Updates only fix IAM when the
-    // option is stated. Auth is still enforced inside the handler.
-    const functions = require('firebase-functions');
-    expect(functions.runWith).toHaveBeenCalledWith(
-      expect.objectContaining({ invoker: 'public', timeoutSeconds: 540 })
+describe('handleLegacySync — who may run it', () => {
+  const deps = () => ({
+    db: makeDb(),
+    legacyDb: makeLegacyDb([WITH_INSTRUCTIONS]),
+    spoonacular: spoonHit(),
+    claude: claudeHit(),
+    now,
+  });
+
+  it('needs a signed-in cook', async () => {
+    await expect(handleLegacySync({ uid: null, ...deps(), env: ENV })).rejects.toMatchObject({
+      status: 'unauthenticated',
+    });
+  });
+
+  it('keeps to SYNC_ADMIN_UIDS when it is set', async () => {
+    const env = { ...ENV, SYNC_ADMIN_UIDS: 'admin-1' };
+    await expect(handleLegacySync({ uid: 'someone', ...deps(), env })).rejects.toMatchObject({
+      status: 'permission-denied',
+    });
+    const result = await handleLegacySync({ uid: 'admin-1', data: { dryRun: true }, ...deps(), env });
+    expect(result.imported).toBe(1);
+  });
+
+  it('records a failure for the dashboard and reports it', async () => {
+    const d = deps();
+    d.legacyDb.collectionGroup = () => {
+      throw new Error('legacy down');
+    };
+    const metaRef = d.db.collection('syncMetadata').doc(SYNC_DOC_ID);
+    metaRef.set = jest.fn(async () => undefined);
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(handleLegacySync({ uid: 'u', ...d, env: ENV })).rejects.toMatchObject({
+      status: 'internal',
+      message: 'legacy down',
+    });
+    expect(metaRef.set).toHaveBeenCalledWith(
+      expect.objectContaining({ currentStatus: STATUS.ERROR }),
+      { merge: true }
     );
   });
 });

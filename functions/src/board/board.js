@@ -7,8 +7,8 @@
 //   POST /shopping         { name, section? } → add a typed item
 //   POST /shopping/{id}    { bought: true|false } → tick a typed item off, or back
 //
-// Deployed URL: https://us-central1-mykitchenhub-db665.cloudfunctions.net/board
-// (1st gen, default region — the same as every other HTTP function here).
+// Served at https://kitchen.flyingdoublemranch.com/api/board
+// (netlify/functions/board.mjs).
 //
 // Auth is `Authorization: Bearer <token>`; see ./auth.js and
 // docs/BOARD_API.md. This uses the admin SDK, so Firestore security rules do
@@ -19,9 +19,7 @@
 // No CORS headers on purpose. Nothing calls this from a browser, and a token
 // that never sits in a page cannot leak from one.
 
-const admin = require('firebase-admin');
-const functions = require('firebase-functions');
-
+const { FieldValue } = require('../utils/fieldValue');
 const { HttpError, resolveUser } = require('./auth');
 const { resolveTimeZone, todayIn } = require('./dates');
 const { buildShoppingItem, buildShoppingList } = require('./shoppingList');
@@ -110,7 +108,7 @@ const addItem = async ({ db, uid, body }) => {
     .collection('users')
     .doc(uid)
     .collection('shoppingItems')
-    .add({ ...document, createdAt: admin.firestore.FieldValue.serverTimestamp() });
+    .add({ ...document, createdAt: FieldValue.serverTimestamp() });
 
   return { status: 200, body: { item: manualRow({ id: ref.id, ...document }) } };
 };
@@ -141,7 +139,7 @@ const tickItem = async ({ db, uid, id, body, now, timeZone }) => {
 
     await ref.update({
       status: body.bought ? 'bought' : 'pending',
-      boughtAt: body.bought ? admin.firestore.FieldValue.serverTimestamp() : null,
+      boughtAt: body.bought ? FieldValue.serverTimestamp() : null,
     });
     return { status: 200, body: { ok: true } };
   }
@@ -168,7 +166,6 @@ const tickItem = async ({ db, uid, id, body, now, timeZone }) => {
       buildShoppingList(weekEntries, inventory, boughtKeys).find((item) => derivedId(item) === id);
     if (!line) throw new HttpError(404, 'No such shopping item.');
 
-    const FieldValue = admin.firestore.FieldValue;
     const planRef = db.collection('users').doc(uid).collection('mealPlans').doc(weekStart);
     const planSnap = await planRef.get();
     if (planSnap.exists) {
@@ -209,11 +206,15 @@ const handleBoardRequest = async ({
   body,
   rawBody,
   now = new Date(),
+  authenticate = (authorization) => resolveUser(db, authorization),
 }) => {
   try {
     // Authenticate before routing, so an unauthenticated caller learns nothing
-    // about which paths exist.
-    const { uid, profile } = await resolveUser(db, headers.authorization);
+    // about which paths exist. On the live site `authenticate` also hands back
+    // the caller's own household kitchen (netlify/functions/board.mjs).
+    const who = await authenticate(headers.authorization);
+    const { uid, profile } = who;
+    if (who.db) db = who.db;
     const timeZone = resolveTimeZone(profile.timezone);
 
     const route = routeOf(String(method || '').toUpperCase(), path);
@@ -233,23 +234,9 @@ const handleBoardRequest = async ({
   }
 };
 
-const board = functions.https.onRequest(async (req, res) => {
-  const result = await handleBoardRequest({
-    db: admin.firestore(),
-    method: req.method,
-    path: req.path,
-    headers: req.headers,
-    body: req.body,
-    rawBody: req.rawBody,
-  });
-  res.set('Cache-Control', 'no-store');
-  res.status(result.status).json(result.body);
-});
-
 module.exports = {
   MAX_NAME_LENGTH,
   routeOf,
   parseBody,
   handleBoardRequest,
-  board,
 };
