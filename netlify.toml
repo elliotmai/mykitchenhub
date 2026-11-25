@@ -8,3 +8,9 @@
   status = 301
   force = true
 
+
+# Bundle each function into one file with esbuild. With the default packager
+# the functions that load the shared CommonJS modules in functions/src
+# (HelloFresh import, recipes from links) crashed on start with a bare 502.
+[functions]
+  node_bundler = "esbuild"
