@@ -14,6 +14,15 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.11.25.2',
+    date: 'November 2026',
+    items: [
+      '\u{1F91D} Plan events with people outside your household. Share one event from its card, or add event partners under Settings \u2192 Household who plan all your events and use your recipe book. They never see your pantry or meal plan. Note who\u2019s bringing each dish.',
+      '\u{1F5BC}\uFE0F Dish covers are made from their recipes\u2019 photos, or choose one with \u201CUse as dish cover\u201D. Family recipe cards show their original scan.',
+      '\u{1F517} Add a recipe from a link, or paste one an assistant wrote. It goes straight into the dish it belongs with (one tap to confirm) with a cover photo.',
+    ],
+  },
+  {
     version: '2026.11.25.1',
     date: 'November 2026',
     items: [
