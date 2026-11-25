@@ -9,8 +9,9 @@
   force = true
 
 
-# Bundle each function into one file with esbuild. With the default packager
-# the functions that load the shared CommonJS modules in functions/src
-# (HelloFresh import, recipes from links) crashed on start with a bare 502.
+# Functions are bundled before Netlify packages them (scripts/bundle-functions.mjs,
+# run by `npm run build`): Netlify's own packaging produced functions that
+# crashed on start with a bare 502 when they loaded the CommonJS modules in
+# functions/src. The sources stay in netlify/functions.
 [functions]
-  node_bundler = "esbuild"
+  directory = "netlify/functions-dist"

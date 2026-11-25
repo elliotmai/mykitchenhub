@@ -29,6 +29,7 @@
     "@testing-library/user-event": "^14.6.4",
     "@types/papaparse": "^5.3.14",
     "cross-env": "^7.0.3",
+    "esbuild": "^0.24.0",
     "eslint": "^8.55.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-config-react-app": "^7.0.1",
@@ -41,7 +42,7 @@
   "scripts": {
     "prepare": "node .githooks/install.mjs",
     "start": "craco start",
-    "build": "craco build",
+    "build": "craco build && node scripts/bundle-functions.mjs",
     "eject": "react-scripts eject",
     "test": "craco test",
     "test:ci": "cross-env CI=true craco test --coverage --watchAll=false --passWithNoTests",

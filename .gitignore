@@ -50,3 +50,4 @@ ui-debug.log
 
 # Playwright shared auth state
 e2e/.auth
+netlify/functions-dist/
