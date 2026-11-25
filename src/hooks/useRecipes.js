@@ -29,6 +29,7 @@ import {
 import { db } from '../services/firebase';
 import { useAuth } from './useAuth';
 import { friendlyError } from '../utils/firebaseErrors';
+import { normalizeTag, normalizeTags } from '../utils/tags';
 
 // ---------------------------------------------------------------------------
 // Contract constants — these mirror firestore.rules exactly.
@@ -119,9 +120,9 @@ export const instructionSteps = (instructions) => {
 
 /** Every tag across a list of recipes, de-duplicated and alphabetised. */
 export const collectTags = (recipes = []) =>
-  [...new Set(recipes.flatMap((r) => (Array.isArray(r.tags) ? r.tags : [])))]
-    .filter(Boolean)
-    .sort((a, b) => a.localeCompare(b));
+  normalizeTags(recipes.flatMap((r) => (Array.isArray(r.tags) ? r.tags : []))).sort((a, b) =>
+    a.localeCompare(b)
+  );
 
 /**
  * Free-text search across the fields a cook would actually search by: the
@@ -164,8 +165,8 @@ export const filterRecipes = (recipes = [], filters = {}) => {
     if (difficulty && recipe.difficulty !== difficulty) return false;
 
     if (tags.length > 0) {
-      const recipeTags = Array.isArray(recipe.tags) ? recipe.tags : [];
-      if (!tags.every((t) => recipeTags.includes(t))) return false;
+      const recipeTags = normalizeTags(recipe.tags);
+      if (!tags.every((t) => recipeTags.includes(normalizeTag(t)))) return false;
     }
 
     if (maxMinutes) {
@@ -228,11 +229,7 @@ export const buildRecipeDocument = (input = {}, source = 'user-created') => {
 
   const instructions = instructionSteps(input.instructions);
 
-  const tags = [
-    ...new Set((Array.isArray(input.tags) ? input.tags : []).map((t) => normalizeName(t))),
-  ]
-    .filter(Boolean)
-    .sort((a, b) => a.localeCompare(b));
+  const tags = normalizeTags(input.tags).sort((a, b) => a.localeCompare(b));
 
   return {
     name: String(input.name ?? '').trim(),

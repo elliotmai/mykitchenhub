@@ -2,6 +2,7 @@
 // One recipe in the grid: photo, timing, and the two actions a cook reaches
 // for most — open it, or record that they cooked it tonight.
 
+import { tagLabel } from '../../utils/tags';
 import React from 'react';
 import { Card, Badge, Button } from 'react-bootstrap';
 import { Clock, Users, ChefHat, Pencil, Trash2, UtensilsCrossed } from 'lucide-react';
@@ -122,7 +123,7 @@ const RecipeCard = ({ recipe, onView, onEdit, onDelete, onCook, currentUid }) =>
                   fontWeight: 'var(--mkh-font-weight-medium)',
                 }}
               >
-                {tag}
+                {tagLabel(tag)}
               </Badge>
             ))}
             {hiddenTagCount > 0 && (

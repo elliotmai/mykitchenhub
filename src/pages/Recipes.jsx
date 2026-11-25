@@ -36,6 +36,7 @@ const Recipes = () => {
     markCooked,
     getRecipeById,
     currentUid,
+    tags,
   } = useRecipes();
 
   const { items } = useInventory();
@@ -167,6 +168,7 @@ const Recipes = () => {
         onSave={handleSave}
         editRecipe={editRecipe}
         ingredientSuggestions={ingredientSuggestions}
+        tagSuggestions={tags}
       />
 
       <SyncDashboard show={showSync} onHide={() => setShowSync(false)} />

@@ -22,6 +22,7 @@
 // Everything here is pure so it can be tested without a browser or Firestore.
 
 import { unzipSync, strFromU8 } from 'fflate';
+import { normalizeTags } from './tags';
 
 const UNICODE_FRACTIONS = {
   '¼': 0.25,
@@ -581,13 +582,12 @@ export const IMPORT_ORIGINS = {
  */
 export const buildRecipeImportDocument = (draft, origin = 'pestle') => {
   const { importedFrom, tag } = IMPORT_ORIGINS[origin] ?? IMPORT_ORIGINS.pasted;
-  const tags = [
-    ...new Set(
-      [tag, ...draft.categories, ...draft.cuisines, ...(draft.tags ?? [])]
-        .filter(Boolean)
-        .map((t) => t.toLowerCase())
-    ),
-  ].sort((a, b) => a.localeCompare(b));
+  const tags = normalizeTags([
+    tag,
+    ...draft.categories,
+    ...draft.cuisines,
+    ...(draft.tags ?? []),
+  ]).sort((a, b) => a.localeCompare(b));
 
   // Only a total recorded (always the case for Pestle): it goes in cookTime so
   // totalTime() shows it. With prep and cook both given, keep them apart.

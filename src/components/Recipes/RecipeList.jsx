@@ -4,6 +4,7 @@
 // streamed by useRecipes, and a cook with a few hundred recipes gets an
 // instant response instead of a round trip per keystroke.
 
+import { tagLabel } from '../../utils/tags';
 import React, { useState, useMemo } from 'react';
 import { Row, Col, Form, InputGroup, Button, Spinner } from 'react-bootstrap';
 import { Search, Plus, X, BookOpen, RefreshCw, Upload } from 'lucide-react';
@@ -244,6 +245,7 @@ const RecipeList = ({
           selected={selectedTags}
           onToggle={toggleTag}
           label="Filter by tag"
+          formatLabel={tagLabel}
           className="mt-2"
         />
       </FilterPanel>
