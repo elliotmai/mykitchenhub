@@ -9,6 +9,7 @@ import { Alert, Button, Form, Modal, Spinner } from 'react-bootstrap';
 import { collection, getDocs, query, limit } from '../../backend/firestore';
 import { db } from '../../services/firebase';
 import { MEAL_TYPES } from '../../hooks/useMealPlan';
+import { groupDishes } from '../../dishes/dishLogic';
 
 /** Recipes are written with `name`; older legacy imports use `title`. Accept both. */
 export const recipeLabel = (recipe) => recipe?.name || recipe?.title || 'Untitled recipe';
@@ -28,6 +29,7 @@ export const recipeIngredients = (recipe) =>
 
 const ScheduleMealModal = ({ show, onHide, onSave, date, days = [] }) => {
   const [recipes, setRecipes] = useState([]);
+  const [dishDocs, setDishDocs] = useState({});
   const [loadingRecipes, setLoadingRecipes] = useState(false);
   const [recipeId, setRecipeId] = useState('');
   const [customName, setCustomName] = useState('');
@@ -58,9 +60,13 @@ const ScheduleMealModal = ({ show, onHide, onSave, date, days = [] }) => {
         // missing the field entirely, so ordering server-side would hide every
         // legacy recipe that only carries `title` — the very ones recipeLabel
         // exists to handle. Sorting a bounded page here costs nothing.
-        const snapshot = await getDocs(query(collection(db, 'recipes'), limit(100)));
+        const [snapshot, dishSnap] = await Promise.all([
+          getDocs(query(collection(db, 'recipes'), limit(100))),
+          getDocs(collection(db, 'dishes')).catch(() => ({ docs: [] })),
+        ]);
         if (!cancelled) {
           setRecipes(sortByLabel(snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))));
+          setDishDocs(Object.fromEntries((dishSnap?.docs || []).map((d) => [d.id, d.data()])));
         }
       } catch (err) {
         console.error('Error loading recipes:', err);
@@ -76,6 +82,12 @@ const ScheduleMealModal = ({ show, onHide, onSave, date, days = [] }) => {
     };
   }, [show]);
 
+  // Recipes for the same food sit under their dish; a dish can be planned
+  // as itself ("Lasagna", which one decided when cooking) or as one recipe.
+  const dishes = useMemo(() => groupDishes(recipes, dishDocs), [recipes, dishDocs]);
+  const selectedDish = recipeId.startsWith('dish:')
+    ? dishes.find((d) => `dish:${d.id}` === recipeId) || null
+    : null;
   const selectedRecipe = useMemo(
     () => recipes.find((recipe) => recipe.id === recipeId) || null,
     [recipes, recipeId]
@@ -85,7 +97,11 @@ const ScheduleMealModal = ({ show, onHide, onSave, date, days = [] }) => {
     event.preventDefault();
     setError('');
 
-    const name = selectedRecipe ? recipeLabel(selectedRecipe) : customName.trim();
+    const name = selectedDish
+      ? selectedDish.name
+      : selectedRecipe
+        ? recipeLabel(selectedRecipe)
+        : customName.trim();
     if (!name) {
       setError('Choose a recipe, or type what you are cooking.');
       return;
@@ -98,7 +114,13 @@ const ScheduleMealModal = ({ show, onHide, onSave, date, days = [] }) => {
       servings: Number(servings),
       recipeId: selectedRecipe?.id ?? null,
       recipeName: name,
-      usesIngredients: selectedRecipe ? recipeIngredients(selectedRecipe) : [],
+      // A dish's shopping comes from the recipe it would be cooked with.
+      usesIngredients: selectedRecipe
+        ? recipeIngredients(selectedRecipe)
+        : selectedDish
+          ? recipeIngredients(selectedDish.favorite)
+          : [],
+      ...(selectedDish ? { dishId: selectedDish.id } : {}),
     });
     setSaving(false);
 
@@ -138,11 +160,24 @@ const ScheduleMealModal = ({ show, onHide, onSave, date, days = [] }) => {
             ) : (
               <Form.Select value={recipeId} onChange={(event) => setRecipeId(event.target.value)}>
                 <option value="">Something else…</option>
-                {recipes.map((recipe) => (
-                  <option key={recipe.id} value={recipe.id}>
-                    {recipeLabel(recipe)}
-                  </option>
-                ))}
+                {dishes.map((dish) =>
+                  dish.recipes.length === 1 ? (
+                    <option key={dish.recipes[0].id} value={dish.recipes[0].id}>
+                      {recipeLabel(dish.recipes[0])}
+                    </option>
+                  ) : (
+                    <optgroup key={dish.id} label={dish.name}>
+                      <option value={`dish:${dish.id}`}>
+                        {dish.name}, choose the recipe when cooking
+                      </option>
+                      {dish.recipes.map((recipe) => (
+                        <option key={recipe.id} value={recipe.id}>
+                          {recipeLabel(recipe)}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )
+                )}
               </Form.Select>
             )}
           </Form.Group>

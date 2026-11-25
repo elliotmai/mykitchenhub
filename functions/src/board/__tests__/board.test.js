@@ -198,7 +198,7 @@ describe('POST /shopping', () => {
         data: {
           name: 'Oat milk',
           normalized: 'oat milk',
-          quantity: 1,
+          quantity: null,
           unit: '',
           notes: '',
           status: 'pending',

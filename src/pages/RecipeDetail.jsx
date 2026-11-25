@@ -54,6 +54,8 @@ const RecipeDetail = ({
   onCook,
   onEdit,
   onDelete,
+  dish = null,
+  onOpenDish,
 }) => {
   if (loading) {
     return (
@@ -117,6 +119,13 @@ const RecipeDetail = ({
                   </>
                 )}
               </small>
+              {dish && onOpenDish && (
+                <div>
+                  <Button variant="link" size="sm" className="p-0" onClick={() => onOpenDish(dish)}>
+                    One of {dish.recipes.length} {dish.name} recipes
+                  </Button>
+                </div>
+              )}
             </div>
 
             <div className="d-flex gap-2">

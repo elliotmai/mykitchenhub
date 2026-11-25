@@ -15,6 +15,8 @@ import useMealPlan from '../hooks/useMealPlan';
 import useShoppingList, { findDuplicateNames } from '../hooks/useShoppingList';
 import { ShoppingList as ShoppingListPanel } from '../components/MealPlan';
 import { useShoppingListActions } from '../components/MealPlan/useShoppingListActions';
+import useStores from '../stores/useStores';
+import { useToast } from '../components/Common';
 
 const ShoppingListPage = () => {
   // The derived half. useMealPlan is the only thing that computes it, and
@@ -23,6 +25,12 @@ const ShoppingListPage = () => {
   const { shoppingList, setDerivedBought } = useMealPlan();
   const { items: manualItems } = useShoppingList();
   const actions = useShoppingListActions({ setDerivedBought });
+  const storesApi = useStores();
+  const { showError } = useToast();
+  const report = (result) => {
+    if (result && !result.success) showError(result.error);
+    return result;
+  };
 
   const duplicateNames = findDuplicateNames(manualItems, shoppingList);
 
@@ -34,6 +42,12 @@ const ShoppingListPage = () => {
         manualItems={manualItems}
         duplicateNames={duplicateNames}
         {...actions}
+        stores={storesApi.stores}
+        storeOf={storesApi.storeOf}
+        usualStore={storesApi.usualStore}
+        onSetStore={(item, store) => storesApi.setStore(item, store).then(report)}
+        onAddStore={storesApi.addStore}
+        onRemoveStore={(id) => storesApi.removeStore(id).then(report)}
       />
     </Container>
   );

@@ -275,7 +275,7 @@ describe('manual items', () => {
 
     const nameBox = screen.getByLabelText('Add something to the shopping list');
     await user.type(nameBox, 'Birthday cake');
-    await user.type(screen.getByLabelText('How many'), '2');
+    await user.type(screen.getByLabelText('How many (optional)'), '2');
     await user.type(screen.getByLabelText('Unit'), 'box');
     await user.click(screen.getByRole('button', { name: /add/i }));
 

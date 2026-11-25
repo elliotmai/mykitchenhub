@@ -64,14 +64,22 @@ export const normalizeName = (value) =>
  * from. Returns null when there is no name left after trimming: a blank row is
  * unreadable on the list and the rules reject it anyway.
  */
-export const buildShoppingItem = ({ name, quantity = 1, unit = '', notes = '' } = {}) => {
+export const buildShoppingItem = ({
+  name,
+  quantity = null,
+  unit = '',
+  notes = '',
+  store = null,
+  recipeName = null,
+  eventId = null,
+} = {}) => {
   const cleanName = String(name ?? '').trim();
   if (!cleanName) return null;
 
-  // A cook who types nothing in the quantity box means "one of those", not
-  // "zero of those" — and the rules require > 0.
-  const parsed = Number(quantity);
-  const cleanQuantity = Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed * 100) / 100 : 1;
+  // How many is optional: "eggs" is a perfectly good line on its own.
+  const parsed = quantity === '' || quantity === null ? NaN : Number(quantity);
+  const cleanQuantity =
+    Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed * 100) / 100 : null;
 
   return {
     name: cleanName,
@@ -82,6 +90,9 @@ export const buildShoppingItem = ({ name, quantity = 1, unit = '', notes = '' } 
     status: 'pending',
     source: 'manual',
     boughtAt: null,
+    ...(store ? { store } : {}),
+    ...(recipeName ? { recipeName: String(recipeName).slice(0, 120) } : {}),
+    ...(eventId ? { eventId } : {}),
   };
 };
 
@@ -297,11 +308,15 @@ const useShoppingList = () => {
       }
 
       if (changes.quantity !== undefined) {
-        const cleanQuantity = Number(changes.quantity);
-        if (!Number.isFinite(cleanQuantity) || cleanQuantity <= 0) {
-          return { success: false, error: 'How many? It needs to be more than zero.' };
+        if (changes.quantity === '' || changes.quantity === null) {
+          patch.quantity = null; // how many is optional
+        } else {
+          const cleanQuantity = Number(changes.quantity);
+          if (!Number.isFinite(cleanQuantity) || cleanQuantity <= 0) {
+            return { success: false, error: 'How many? It needs to be more than zero.' };
+          }
+          patch.quantity = cleanQuantity;
         }
-        patch.quantity = cleanQuantity;
       }
 
       if (changes.unit !== undefined) patch.unit = String(changes.unit).trim();

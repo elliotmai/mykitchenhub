@@ -10,6 +10,8 @@ import React, { useState } from 'react';
 import { Badge, Button, Card, Form } from 'react-bootstrap';
 import { Check, GripVertical, Plus, Pencil, Trash2, UtensilsCrossed } from 'lucide-react';
 
+import DishPicker from '../../dishes/DishPicker';
+
 export const DRAG_TYPE = 'application/x-mykitchenhub-meal';
 
 const MEAL_TYPE_ICONS = {
@@ -91,6 +93,8 @@ const MealEntry = ({ entry, days, onCook, onRemove, onMove, onEdit, busy }) => {
             `From Let's Eat${entry.letsEat?.dayName ? `: ${entry.letsEat.dayName}` : ''}`}
         </div>
       )}
+
+      {!settled && entry.dishId && !entry.recipeId && <DishPicker entry={entry} />}
 
       {/* A cooked or skipped meal keeps its remove button: logging the wrong
           meal, or scheduling a recipe that has since been deleted, otherwise

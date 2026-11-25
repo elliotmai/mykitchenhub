@@ -157,12 +157,13 @@ const normalizeName = (value) =>
     .toLowerCase();
 
 /** See `buildShoppingItem` in src/hooks/useShoppingList.js. */
-const buildShoppingItem = ({ name, quantity = 1, unit = '', notes = '' } = {}) => {
+const buildShoppingItem = ({ name, quantity = null, unit = '', notes = '' } = {}) => {
   const cleanName = String(name ?? '').trim();
   if (!cleanName) return null;
 
-  const parsed = Number(quantity);
-  const cleanQuantity = Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed * 100) / 100 : 1;
+  const parsed = quantity === '' || quantity === null ? NaN : Number(quantity);
+  const cleanQuantity =
+    Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed * 100) / 100 : null;
 
   return {
     name: cleanName,

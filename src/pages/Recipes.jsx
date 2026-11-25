@@ -18,8 +18,12 @@ import SyncDashboard from '../components/Recipes/SyncDashboard';
 import RecipeImportModal from '../components/Recipes/RecipeImportModal';
 import ConfirmModal from '../components/Common/ConfirmModal';
 import RecipeDetail from './RecipeDetail';
+import useDishes from '../dishes/useDishes';
+import DishView from '../dishes/DishView';
+import { dishOf } from '../dishes/dishLogic';
 
 const RECIPE_PARAM = 'recipe';
+const DISH_PARAM = 'dish';
 
 // The Android share sheet (manifest.json `share_target`) lands here with the
 // shared text in these params, which open the importer's paste tab.
@@ -42,6 +46,11 @@ const Recipes = () => {
 
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedId = searchParams.get(RECIPE_PARAM);
+  const selectedDishId = searchParams.get(DISH_PARAM);
+  const dishActions = useDishes(recipes);
+  const selectedDish = selectedDishId
+    ? dishActions.dishes.find((d) => d.id === selectedDishId) || null
+    : null;
 
   const [showRecipeModal, setShowRecipeModal] = useState(false);
   const [editRecipe, setEditRecipe] = useState(null);
@@ -80,6 +89,8 @@ const Recipes = () => {
 
   // ── Navigation ───────────────────────────────────────────────────────────
   const openRecipe = (recipe) => setSearchParams({ [RECIPE_PARAM]: recipe.id });
+  const openDish = (dish) => setSearchParams({ [DISH_PARAM]: dish.id });
+  const recipeDish = selectedId ? dishOf(dishActions.dishes, selectedId) : null;
   const closeRecipe = () => setSearchParams({});
 
   // ── Create / edit ────────────────────────────────────────────────────────
@@ -145,6 +156,20 @@ const Recipes = () => {
           onCook={handleCook}
           onEdit={openEdit}
           onDelete={setDeleteTarget}
+          dish={recipeDish && recipeDish.recipes.length > 1 ? recipeDish : null}
+          onOpenDish={openDish}
+        />
+      ) : selectedDishId ? (
+        <DishView
+          dish={selectedDish}
+          dishes={dishActions.dishes}
+          onBack={closeRecipe}
+          onView={openRecipe}
+          onEdit={openEdit}
+          onDelete={setDeleteTarget}
+          onCook={handleCook}
+          currentUid={currentUid}
+          actions={dishActions}
         />
       ) : (
         <RecipeList
@@ -158,6 +183,8 @@ const Recipes = () => {
           onOpenSync={() => setShowSync(true)}
           onOpenImport={() => setShowImport(true)}
           currentUid={currentUid}
+          groupDishes={dishActions.group}
+          onOpenDish={openDish}
         />
       )}
 

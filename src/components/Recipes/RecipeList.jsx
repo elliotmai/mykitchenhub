@@ -11,6 +11,7 @@ import { Search, Plus, X, BookOpen, RefreshCw, Upload } from 'lucide-react';
 import { FilterPanel, ChipFilter } from '../Common';
 
 import RecipeCard from './RecipeCard';
+import DishCard from '../../dishes/DishCard';
 import {
   collectTags,
   filterRecipes,
@@ -53,7 +54,11 @@ const RecipeList = ({
   onOpenSync,
   onOpenImport,
   currentUid,
+  groupDishes,
+  onOpenDish,
 }) => {
+  // Dishes (recipes for the same food together) when the page can group them.
+  const [byDish, setByDish] = useState(Boolean(groupDishes));
   const [search, setSearch] = useState('');
   const [selectedTags, setSelectedTags] = useState([]);
   const [source, setSource] = useState('');
@@ -77,6 +82,14 @@ const RecipeList = ({
       ),
     [recipes, search, selectedTags, source, difficulty, maxMinutes, sortMode]
   );
+
+  const visibleDishes = useMemo(
+    () => (byDish && groupDishes ? groupDishes(visibleRecipes) : []),
+    [byDish, groupDishes, visibleRecipes]
+  );
+
+  const openDish = (dish) =>
+    dish.recipes.length === 1 || !onOpenDish ? onView(dish.recipes[0]) : onOpenDish(dish);
 
   const toggleTag = (tag) =>
     setSelectedTags((prev) =>
@@ -119,6 +132,9 @@ const RecipeList = ({
           <h1 className="h3 mb-0">Recipes</h1>
           <small className="text-muted">
             {recipes.length} recipe{recipes.length !== 1 ? 's' : ''} in your library
+            {groupDishes &&
+              byDish &&
+              `, as ${visibleDishes.length} dish${visibleDishes.length === 1 ? '' : 'es'}`}
           </small>
         </div>
         <div className="d-flex gap-2">
@@ -150,7 +166,7 @@ const RecipeList = ({
       </div>
 
       {/* ── Search: always visible, never folded away ── */}
-      <Row className="g-2 mb-2">
+      <Row className="g-2 mb-2 align-items-center">
         <Col xs={12} md={6}>
           <InputGroup>
             <InputGroup.Text
@@ -173,6 +189,26 @@ const RecipeList = ({
             )}
           </InputGroup>
         </Col>
+        {groupDishes && (
+          <Col xs="auto">
+            <div className="btn-group" role="group" aria-label="Show recipes">
+              <Button
+                variant={byDish ? 'primary' : 'outline-secondary'}
+                aria-pressed={byDish}
+                onClick={() => setByDish(true)}
+              >
+                Dishes
+              </Button>
+              <Button
+                variant={byDish ? 'outline-secondary' : 'primary'}
+                aria-pressed={!byDish}
+                onClick={() => setByDish(false)}
+              >
+                All recipes
+              </Button>
+            </div>
+          </Col>
+        )}
       </Row>
 
       {/* ── Everything else folds away ── */}
@@ -277,6 +313,14 @@ const RecipeList = ({
             Clear filters
           </Button>
         </div>
+      ) : byDish && groupDishes ? (
+        <Row xs={1} sm={2} md={3} lg={4} className="g-3">
+          {visibleDishes.map((dish) => (
+            <Col key={dish.id}>
+              <DishCard dish={dish} onOpen={openDish} />
+            </Col>
+          ))}
+        </Row>
       ) : (
         <Row xs={1} sm={2} md={3} lg={4} className="g-3">
           {visibleRecipes.map((recipe) => (

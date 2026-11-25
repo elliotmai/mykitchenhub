@@ -87,7 +87,7 @@ describe('buildShoppingItem', () => {
     expect(item).toEqual({
       name: 'Batteries',
       normalized: 'batteries',
-      quantity: 1,
+      quantity: null,
       unit: '',
       notes: '',
       status: 'pending',
@@ -133,12 +133,18 @@ describe('buildShoppingItem', () => {
     });
   });
 
-  it('defaults an unusable quantity to one of the thing', () => {
-    // Nothing typed means "one of those", not "zero of those" — and the rules
-    // require > 0, so a zero would be rejected at the database.
+  it('leaves how many unset when nothing usable was typed', () => {
+    // Shopping by item, Let's Eat's way: "eggs" is a whole line. No amount is
+    // shown for it, and a zero or a word is not an amount either.
     ['', null, undefined, 0, -3, 'lots', NaN].forEach((quantity) => {
-      expect(buildShoppingItem({ name: 'Milk', quantity })).toMatchObject({ quantity: 1 });
+      expect(buildShoppingItem({ name: 'Milk', quantity })).toMatchObject({ quantity: null });
     });
+  });
+
+  it('carries the store and where the line came from when given', () => {
+    expect(
+      buildShoppingItem({ name: 'Celery', store: 'costco', recipeName: 'Potato Salad', eventId: 'e1' })
+    ).toMatchObject({ store: 'costco', recipeName: 'Potato Salad', eventId: 'e1', quantity: null });
   });
 
   it('rounds a quantity to the two decimals the rest of the app uses', () => {
@@ -427,7 +433,7 @@ describe('adding an item', () => {
     expect(data).toMatchObject({
       name: 'Batteries',
       normalized: 'batteries',
-      quantity: 1,
+      quantity: null,
       unit: '',
       status: 'pending',
       source: 'manual',

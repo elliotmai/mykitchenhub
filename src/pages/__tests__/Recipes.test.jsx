@@ -35,17 +35,137 @@ const LIBRARY = [
 ];
 
 /** Render the page with a library and an inventory already delivered. */
-const renderRecipes = async ({ recipes = LIBRARY, items = [], route = '/recipes' } = {}) => {
+const renderRecipes = async ({
+  recipes = LIBRARY,
+  items = [],
+  route = '/recipes',
+  dishes = [],
+  view: show = 'recipes',
+} = {}) => {
   const view = renderWithProviders(<Recipes />, { route });
 
   await waitFor(() => expect(fs.onSnapshot).toHaveBeenCalled());
   await act(async () => {
     fs.__emit('recipes', asDocs(recipes));
     fs.__emit(`users/${UID}/inventory`, asDocs(items));
+    fs.__emit('dishes', asDocs(dishes));
   });
+
+  // The library opens on dishes; most of these tests are about recipe cards.
+  const allRecipes = screen.queryByRole('button', { name: 'All recipes' });
+  if (show === 'recipes' && allRecipes) await view.user.click(allRecipes);
 
   return view;
 };
+
+describe('Recipes page — dishes', () => {
+  const LASAGNAS = [
+    makeRecipe({ id: 'l1', name: 'Lasagna', source: 'user-created', timesCooked: 1 }),
+    makeRecipe({ id: 'l2', name: "Grandma's Lasagna", source: 'legacy', timesCooked: 4 }),
+    makeRecipe({ id: 'c1', name: 'Chili', source: 'legacy' }),
+  ];
+
+  it('groups recipes for the same food into one dish', async () => {
+    await renderRecipes({ recipes: LASAGNAS, view: 'dishes' });
+    expect(screen.getByText(/as 2 dishes/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Lasagna' })).toBeInTheDocument();
+    expect(screen.getByText('2 recipes')).toBeInTheDocument();
+  });
+
+  it('opens a dish to all its recipes, favourite first', async () => {
+    const { user } = await renderRecipes({
+      recipes: LASAGNAS,
+      view: 'dishes',
+      dishes: [{ id: 'lasagna', favoriteRecipeId: 'l1' }],
+    });
+    await user.click(screen.getByRole('button', { name: 'Lasagna' }));
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Lasagna');
+    expect(screen.getByText("Grandma's Lasagna")).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Favourite' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+  });
+
+  it('chooses a favourite, renames, moves and merges', async () => {
+    const { user } = await renderRecipes({
+      recipes: LASAGNAS,
+      route: '/recipes?dish=lasagna',
+      view: 'dishes',
+    });
+
+    await user.click(screen.getAllByRole('button', { name: 'Make favourite' })[0]);
+    expect(fs.setDoc).toHaveBeenCalledWith(
+      expect.objectContaining({ path: 'dishes/lasagna' }),
+      expect.objectContaining({ favoriteRecipeId: expect.any(String) }),
+      { merge: true }
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Rename Lasagna' }));
+    const nameBox = screen.getByLabelText('Dish name');
+    await user.clear(nameBox);
+    await user.type(nameBox, 'Lasagne');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(fs.setDoc).toHaveBeenCalledWith(
+      expect.objectContaining({ path: 'dishes/lasagna' }),
+      { name: 'Lasagne' },
+      { merge: true }
+    );
+
+    await user.selectOptions(
+      screen.getByLabelText("Move Grandma's Lasagna to another dish"),
+      'chili'
+    );
+    await user.click(screen.getAllByRole('button', { name: 'Move' })[0]);
+    expect(fs.updateDoc).toHaveBeenCalledWith(expect.objectContaining({ path: 'recipes/l2' }), {
+      dishId: 'chili',
+    });
+
+    await user.selectOptions(screen.getByLabelText('Merge Lasagna into another dish'), 'chili');
+    await user.click(screen.getByRole('button', { name: 'Merge' }));
+    expect(fs.setDoc).toHaveBeenCalledWith(
+      expect.objectContaining({ path: 'dishes/lasagna' }),
+      { mergedInto: 'chili' },
+      { merge: true }
+    );
+  });
+
+  it('starts a new dish for a recipe that does not belong', async () => {
+    const { user } = await renderRecipes({
+      recipes: LASAGNAS,
+      route: '/recipes?dish=lasagna',
+      view: 'dishes',
+    });
+    const picker = screen.getByLabelText('Move Lasagna to another dish');
+    await user.selectOptions(picker, '__new__');
+    await user.type(screen.getByLabelText('New dish name'), 'Lasagna Soup');
+    await user.click(within(picker.closest('form')).getByRole('button', { name: 'Move' }));
+    expect(fs.setDoc).toHaveBeenCalledWith(
+      expect.objectContaining({ path: 'dishes/lasagna-soup' }),
+      { name: 'Lasagna Soup' },
+      { merge: true }
+    );
+    expect(fs.updateDoc).toHaveBeenCalledWith(expect.objectContaining({ path: 'recipes/l1' }), {
+      dishId: 'lasagna-soup',
+    });
+  });
+
+  it('opens a one-recipe dish straight into its recipe, and links a recipe back to its dish', async () => {
+    const { user } = await renderRecipes({ recipes: LASAGNAS, view: 'dishes' });
+    await user.click(screen.getByRole('button', { name: 'Chili' }));
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Chili');
+
+    await renderRecipes({ recipes: LASAGNAS, route: '/recipes?recipe=l1', view: 'dishes' });
+    expect(
+      screen.getAllByRole('button', { name: /One of 2 Lasagna recipes/ }).length
+    ).toBeGreaterThan(0);
+  });
+
+  it('says so when a linked dish is gone', async () => {
+    await renderRecipes({ recipes: LASAGNAS, route: '/recipes?dish=nope', view: 'dishes' });
+    expect(screen.getByText('That dish has no recipes any more.')).toBeInTheDocument();
+  });
+});
 
 describe('Recipes page — browsing', () => {
   it('lists the library', async () => {

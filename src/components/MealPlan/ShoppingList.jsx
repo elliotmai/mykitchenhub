@@ -22,6 +22,8 @@ import { Check, Pencil, Plus, ShoppingCart, X } from 'lucide-react';
 import { amountLabel } from '../../hooks/useShoppingList';
 import { groupByStoreSection } from '../../config/storeSections';
 import { ingredientKey } from '../../utils/ingredientMeasure';
+import { NO_STORE, groupByStore } from '../../stores/storeLogic';
+import StoreBar, { StoreSelect } from '../../stores/StoreBar';
 
 // Re-exported because the fridge board renders the same rows from the same
 // helper: one definition, two surfaces.
@@ -74,7 +76,7 @@ const TickSpacer = () => (
  * while looking at the row next to it. A dialog would cover the rest of the
  * list to change one word, and on a phone it would cover all of it.
  */
-const ManualRow = ({ item, duplicate, busy, onToggleBought, onRemove, onEdit }) => {
+const ManualRow = ({ item, duplicate, busy, onToggleBought, onRemove, onEdit, storeControl }) => {
   const bought = item.status === 'bought';
   const amount = amountLabel(item);
 
@@ -183,6 +185,7 @@ const ManualRow = ({ item, duplicate, busy, onToggleBought, onRemove, onEdit }) 
           {item.name}
         </span>
         {amount && <span className="text-muted text-nowrap">{amount}</span>}
+        {storeControl}
         {onEdit && (
           <Button
             variant="link"
@@ -208,6 +211,7 @@ const ManualRow = ({ item, duplicate, busy, onToggleBought, onRemove, onEdit }) 
       </div>
 
       {item.notes && <div style={NOTE_INDENT}>{item.notes}</div>}
+      {item.recipeName && <div style={NOTE_INDENT}>for {item.recipeName}</div>}
 
       {duplicate && !bought && (
         // Shown, not merged. The two quantities come from different places and
@@ -223,7 +227,7 @@ const ManualRow = ({ item, duplicate, busy, onToggleBought, onRemove, onEdit }) 
  * One line the week's meals produced. Tickable when the surface can record it
  * (`onToggle`); the tick is stored on the week, not on a document of its own.
  */
-const DerivedRow = ({ item, busy, onToggle }) => {
+const DerivedRow = ({ item, busy, onToggle, storeControl }) => {
   const bought = item.bought === true;
   const note = bought ? null : stockNote(item);
   const amount = amountLabel(item);
@@ -250,6 +254,7 @@ const DerivedRow = ({ item, busy, onToggle }) => {
           {item.name}
         </span>
         {amount && <span className="text-muted text-nowrap">{amount}</span>}
+        {storeControl}
       </div>
       {note && <div style={NOTE_INDENT}>{note}</div>}
     </li>
@@ -287,7 +292,19 @@ const ShoppingList = ({
   onEditItem,
   onClearBought,
   onToggleDerived,
+  stores = null,
+  storeOf = () => NO_STORE,
+  usualStore = () => null,
+  onSetStore,
+  onAddStore,
+  onRemoveStore,
 }) => {
+  // Shopping by store (Let's Eat's way): read the list store by store, or
+  // just one store's part of it, and send each line to the store you buy it at.
+  const byStores = Array.isArray(stores);
+  const [groupBy, setGroupBy] = useState('aisle');
+  const [storeFilter, setStoreFilter] = useState('');
+  const [newStore, setNewStore] = useState('');
   const [busyDerivedKey, setBusyDerivedKey] = useState(null);
   const toggleDerived = onToggleDerived
     ? async (item, bought) => {
@@ -330,10 +347,24 @@ const ShoppingList = ({
   // Only pending rows are grouped. Bought and already-have rows keep their own
   // sections below, because they are answers to different questions.
   const manualIds = new Set(pendingManual.map((item) => item.id));
-  const aisles = useMemo(
-    () => groupByStoreSection([...pendingManual, ...toBuy]),
-    [pendingManual, toBuy]
-  );
+  const aisles = useMemo(() => {
+    const rows = [...pendingManual, ...toBuy].filter(
+      (row) => !storeFilter || storeOf(row) === storeFilter
+    );
+    return byStores && groupBy === 'store'
+      ? groupByStore(rows, stores, storeOf)
+      : groupByStoreSection(rows);
+  }, [pendingManual, toBuy, storeFilter, storeOf, byStores, groupBy, stores]);
+
+  const storeControl = (item) =>
+    byStores && stores.length > 0 && onSetStore ? (
+      <StoreSelect
+        item={item}
+        stores={stores}
+        value={storeOf(item)}
+        onChange={(storeId) => onSetStore(item, storeId)}
+      />
+    ) : null;
   const isEmpty = items.length === 0 && manualItems.length === 0;
 
   const handleAdd = async (event) => {
@@ -341,7 +372,8 @@ const ShoppingList = ({
     if (!name.trim() || adding) return;
 
     setAdding(true);
-    const result = await onAddItem({ name, quantity, unit });
+    const store = byStores ? newStore || usualStore(name) || null : null;
+    const result = await onAddItem({ name, quantity, unit, ...(store ? { store } : {}) });
     setAdding(false);
 
     // Only empty the boxes on a write that landed — a cook whose item was
@@ -382,8 +414,8 @@ const ShoppingList = ({
                 step="any"
                 value={quantity}
                 onChange={(event) => setQuantity(event.target.value)}
-                placeholder="1"
-                aria-label="How many"
+                placeholder="qty"
+                aria-label="How many (optional)"
                 style={{ maxWidth: '4.5rem' }}
               />
               <Form.Control
@@ -393,6 +425,22 @@ const ShoppingList = ({
                 placeholder="unit"
                 aria-label="Unit"
               />
+              {byStores && stores.length > 0 && (
+                <Form.Select
+                  size="sm"
+                  value={newStore}
+                  onChange={(event) => setNewStore(event.target.value)}
+                  aria-label="Store for the new item"
+                  style={{ maxWidth: '9rem' }}
+                >
+                  <option value="">Usual store</option>
+                  {stores.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </Form.Select>
+              )}
               <Button
                 type="submit"
                 size="sm"
@@ -405,6 +453,18 @@ const ShoppingList = ({
               </Button>
             </div>
           </Form>
+        )}
+
+        {byStores && (
+          <StoreBar
+            stores={stores}
+            groupBy={groupBy}
+            onGroupBy={setGroupBy}
+            storeFilter={storeFilter}
+            onStoreFilter={setStoreFilter}
+            onAddStore={onAddStore}
+            onRemoveStore={onRemoveStore}
+          />
         )}
 
         {isEmpty ? (
@@ -449,6 +509,7 @@ const ShoppingList = ({
                             onToggleBought={onToggleBought}
                             onRemove={onRemoveItem}
                             onEdit={onEditItem}
+                            storeControl={storeControl(item)}
                           />
                         ) : (
                           <DerivedRow
@@ -456,6 +517,7 @@ const ShoppingList = ({
                             item={item}
                             busy={busyDerivedKey === item.key}
                             onToggle={toggleDerived}
+                            storeControl={storeControl(item)}
                           />
                         )
                       )}

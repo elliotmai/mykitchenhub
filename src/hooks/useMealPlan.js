@@ -550,6 +550,7 @@ const useMealPlan = () => {
       notes = '',
       batchGroup = null,
       planId = null,
+      dishId = null,
     }) => {
       if (!user?.uid) return { success: false, error: 'Not authenticated' };
       if (!date) return { success: false, error: 'Pick a day for this meal.' };
@@ -573,6 +574,8 @@ const useMealPlan = () => {
           batchGroup,
           notes,
           planId,
+          // A dish planned as itself: the recipe is chosen when cooking.
+          ...(dishId ? { dishId } : {}),
         });
         return { success: true };
       } catch (err) {
