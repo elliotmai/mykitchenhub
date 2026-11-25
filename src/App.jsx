@@ -12,6 +12,7 @@ import './styles/index.css';
 // Providers
 import { AuthProvider } from './hooks/useAuth';
 import { ToastProvider, ErrorBoundary, PageLoader } from './components/Common';
+import { TimersProvider } from './timers';
 
 // Layout
 import { AppLayout } from './components/Layout';
@@ -214,7 +215,9 @@ const App = () => {
       <BrowserRouter>
         <AuthProvider>
           <ToastProvider position="top-end">
-            <AppRoutes />
+            <TimersProvider>
+              <AppRoutes />
+            </TimersProvider>
 
             {/* PWA Components */}
             <InstallPrompt />

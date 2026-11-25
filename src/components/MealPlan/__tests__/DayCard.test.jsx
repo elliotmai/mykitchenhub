@@ -76,6 +76,13 @@ describe('DayCard content', () => {
     expect(screen.getByText(/about to expire/)).toBeInTheDocument();
   });
 
+  it("names the Let's Eat day a meal came from", () => {
+    renderDay({
+      entries: [makeMealPlanEntry({ source: 'lets-eat', letsEat: { dayName: 'Thanksgiving' } })],
+    });
+    expect(screen.getByText("From Let's Eat: Thanksgiving")).toBeInTheDocument();
+  });
+
   it('marks today', () => {
     renderDay({ day: days.find((d) => d.isToday) });
     expect(screen.getByText('Today')).toBeInTheDocument();

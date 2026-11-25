@@ -41,6 +41,12 @@ jest.mock('./backend/firestore', () => require('./test-utils/mocks/firestore'));
 jest.mock('./backend/storage', () => require('./test-utils/mocks/storage'));
 jest.mock('./backend/functions', () => require('./test-utils/mocks/functions'));
 jest.mock('./backend/analytics', () => require('./test-utils/mocks/analytics'));
+jest.mock('./backend/timers', () => ({
+  listTimers: jest.fn(async () => []),
+  addTimer: jest.fn(async (row) => ({ id: 'timer-1', ...row })),
+  removeTimer: jest.fn(async () => undefined),
+  watchTimers: jest.fn(() => () => {}),
+}));
 jest.mock('./backend/supabase', () => ({
   supabase: {},
   kitchen: {},

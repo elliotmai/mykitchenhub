@@ -87,6 +87,8 @@ const MealEntry = ({ entry, days, onCook, onRemove, onMove, onEdit, busy }) => {
           {entry.source === 'ai' && 'Suggested by the planner'}
           {entry.source === 'hellofresh' && 'From your HelloFresh box'}
           {entry.source === 'waste-prevention' && 'Uses something about to expire'}
+          {entry.source === 'lets-eat' &&
+            `From Let's Eat${entry.letsEat?.dayName ? `: ${entry.letsEat.dayName}` : ''}`}
         </div>
       )}
 

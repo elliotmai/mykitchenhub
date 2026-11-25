@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 
 import { totalTime, instructionSteps, normalizeName, SOURCE_LABELS } from '../hooks/useRecipes';
+import StepTimer from '../timers/StepTimer';
 
 /** "https://www.example.com/x" → "example.com", or null for anything that isn't an http(s) URL. */
 const hostOf = (url) => {
@@ -240,6 +241,14 @@ const RecipeDetail = ({
                   {steps.map((step, index) => (
                     <li key={`step-${index}`} className="mb-2">
                       {step}
+                      <div>
+                        <StepTimer
+                          recipeId={recipe.id}
+                          recipeName={recipe.name}
+                          index={index}
+                          text={step}
+                        />
+                      </div>
                     </li>
                   ))}
                 </ol>

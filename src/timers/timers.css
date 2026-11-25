@@ -1,0 +1,115 @@
+/* Kitchen timers: the tray in the corner and the alarm over everything. */
+
+.kitchen-timer-tray {
+  position: fixed;
+  right: max(var(--mkh-spacing-md), env(safe-area-inset-right));
+  bottom: calc(var(--mkh-spacing-md) + env(safe-area-inset-bottom));
+  z-index: 1040;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--mkh-spacing-sm);
+  max-width: calc(100vw - 2 * var(--mkh-spacing-md));
+  pointer-events: none;
+}
+
+.kitchen-timer-tray > * {
+  pointer-events: auto;
+}
+
+.kitchen-timer-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mkh-spacing-sm);
+  min-height: 44px;
+  max-width: 100%;
+  padding: var(--mkh-spacing-sm) var(--mkh-spacing-md);
+  border: 1px solid var(--mkh-border);
+  border-radius: var(--mkh-radius-full);
+  background: var(--mkh-bg-card);
+  color: var(--mkh-text-primary);
+  box-shadow: var(--mkh-shadow-md);
+  font-variant-numeric: tabular-nums;
+}
+
+.kitchen-timer-chip__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 14rem;
+}
+
+.kitchen-timer-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--mkh-border);
+  border-radius: var(--mkh-radius-full);
+  background: var(--mkh-bg-card);
+  color: var(--mkh-text-primary);
+  box-shadow: var(--mkh-shadow-md);
+}
+
+.kitchen-timer-form {
+  width: min(20rem, calc(100vw - 2 * var(--mkh-spacing-md)));
+  padding: var(--mkh-spacing-md);
+  border: 1px solid var(--mkh-border);
+  border-radius: var(--mkh-radius-lg);
+  background: var(--mkh-bg-card);
+  box-shadow: var(--mkh-shadow-lg);
+}
+
+.kitchen-timer-alarm {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--mkh-spacing-md);
+  background: rgba(44, 62, 80, 0.55);
+}
+
+.kitchen-timer-alarm__card {
+  width: min(26rem, 100%);
+  padding: var(--mkh-spacing-xl) var(--mkh-spacing-lg);
+  border-radius: var(--mkh-radius-xl);
+  background: #b03a2e;
+  color: var(--mkh-text-inverse);
+  text-align: center;
+  box-shadow: var(--mkh-shadow-lg);
+}
+
+.kitchen-timer-alarm__bell {
+  margin-bottom: var(--mkh-spacing-md);
+  animation: kitchen-timer-ring 1s ease-in-out infinite;
+}
+
+@keyframes kitchen-timer-ring {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  25% {
+    transform: rotate(-14deg);
+  }
+  75% {
+    transform: rotate(14deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kitchen-timer-alarm__bell {
+    animation: none;
+  }
+}
+
+.kitchen-timer-step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mkh-spacing-xs);
+  margin-top: var(--mkh-spacing-xs);
+  font-variant-numeric: tabular-nums;
+}

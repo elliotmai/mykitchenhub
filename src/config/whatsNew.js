@@ -14,6 +14,14 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.11.25',
+    date: 'November 2026',
+    items: [
+      '\u23F2\uFE0F Kitchen timers that ring. Tap the timer button in the corner, or \u201CStart a 10 minute timer\u201D under a recipe step. When it\u2019s done it chimes, buzzes your phone and pops up until you tap Stop. Timers keep counting if you reload or close the app, and the fridge board and everyone\u2019s phones see the same ones. Allow notifications when asked and a finished timer also shows as a notification on that device.',
+      '\u{1F4C5} Meals you plan for a day in Let\u2019s Eat now show up on that day in your meal plan, linked to the recipe. Move the day and they move; take a recipe off and it goes. Meals you add here are left alone.',
+    ],
+  },
+  {
     version: '2026.11.18',
     date: 'November 2026',
     items: [
