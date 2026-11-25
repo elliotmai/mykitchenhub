@@ -93,13 +93,17 @@ it('changes a day and its menu, saving the whole event', async () => {
   expect(fs.pathOf(ref)).toBe('events/e1');
   expect(data.days[0].status).toBe('Shopping');
 
-  await user.selectOptions(screen.getByLabelText('Add to the Thanksgiving menu'), 'recipe:r1');
-  await user.click(
-    within(screen.getByLabelText('Add to the Thanksgiving menu').closest('form')).getByRole(
-      'button',
-      { name: /Add/ }
-    )
-  );
+  // The search matches any part of a name, filters as you type, and keeps
+  // what was typed across a pause.
+  const search = screen.getByLabelText('Add to the Thanksgiving menu');
+  await user.type(search, 'een');
+  await new Promise((r) => setTimeout(r, 1200));
+  await user.type(search, ' ri');
+  expect(search).toHaveValue('een ri');
+  const options = within(screen.getByRole('listbox')).getAllByRole('option');
+  expect(options.map((o) => o.textContent)).toEqual(['Green Rice']);
+  await user.click(options[0]);
+  expect(search).toHaveValue('');
   [ref, data] = fs.setDoc.mock.calls.at(-1);
   expect(data.days[0].menu).toEqual([
     { dishId: 'rib', label: 'Ribs', recipeIds: expect.arrayContaining(['r2', 'r3']) },

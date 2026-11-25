@@ -211,3 +211,43 @@ export function shoppingLines(
   }
   return out;
 }
+
+/** Lower case, no accents, single spaces: what "contains" compares. */
+const searchable = (s) =>
+  String(s ?? '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+/**
+ * What the menu search offers for a query: dishes and recipes whose name
+ * contains every word typed, in any order ("chili dip" finds "Cream Cheese
+ * Chili Dip"). A dish with several recipes offers "any recipe" first, then
+ * its matching recipes; a match on the dish's name keeps all its recipes.
+ * Options: [{ kind: 'dish'|'recipe', id, label, dishName? }]. An empty query
+ * offers everything.
+ */
+export function searchMenuOptions(dishes = [], query = '', label = (r) => r?.name || r?.title || 'Untitled recipe') {
+  const words = searchable(query).split(' ').filter(Boolean);
+  const hit = (text) => {
+    const s = searchable(text);
+    return words.every((w) => s.includes(w));
+  };
+  const out = [];
+  for (const dish of dishes) {
+    const recipes = dish.recipes || [];
+    if (!recipes.length) continue;
+    const dishHit = hit(dish.name);
+    const matching = dishHit ? recipes : recipes.filter((r) => hit(label(r)));
+    if (!matching.length) continue;
+    if (recipes.length === 1) {
+      out.push({ kind: 'recipe', id: recipes[0].id, label: label(recipes[0]) });
+      continue;
+    }
+    out.push({ kind: 'dish', id: dish.id, label: `${dish.name} (any recipe)` });
+    for (const r of matching) out.push({ kind: 'recipe', id: r.id, label: label(r), dishName: dish.name });
+  }
+  return out;
+}

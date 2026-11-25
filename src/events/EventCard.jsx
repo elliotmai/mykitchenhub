@@ -4,7 +4,7 @@
 // event's) goes onto the shopping list by item, no amounts, each line in the
 // store it's usually bought at.
 
-import React, { useState } from 'react';
+import React, { useId, useMemo, useState } from 'react';
 import { Badge, Button, Card, Form, InputGroup } from 'react-bootstrap';
 import { CalendarDays, Plus, ShoppingCart, Trash2, Users, X } from 'lucide-react';
 
@@ -17,6 +17,7 @@ import {
   menuRecipes,
   removeDay,
   removeFromMenu,
+  searchMenuOptions,
   setBringing,
   snapshotDishRecipes,
   sortedDays,
@@ -43,55 +44,132 @@ const formatDay = (iso) =>
       })
     : 'No date yet';
 
-/** "Add a dish or recipe" for one day. */
+/**
+ * "Add a dish or recipe" for one day: a search box that filters as you type,
+ * matching any part of a name (every word, any order, accents ignored). What
+ * you typed stays until you pick something or clear it.
+ */
 const MenuPicker = ({ dishes, onPick, dayName }) => {
-  const [value, setValue] = useState('');
-  const pick = (event) => {
-    event.preventDefault();
-    if (!value) return;
-    const [kind, id] = value.split(':');
-    const dish = dishes.find((d) =>
-      kind === 'dish' ? d.id === id : d.recipes.some((r) => r.id === id)
-    );
-    const recipe = kind === 'recipe' ? dish?.recipes.find((r) => r.id === id) : null;
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
+  const listId = useId();
+  const options = useMemo(
+    () => searchMenuOptions(dishes, query, recipeLabel).slice(0, 60),
+    [dishes, query]
+  );
+
+  const pick = (option) => {
+    if (!option) return;
+    const dish =
+      option.kind === 'dish'
+        ? dishes.find((d) => d.id === option.id)
+        : dishes.find((d) => d.recipes.some((r) => r.id === option.id));
+    const recipe = option.kind === 'recipe' ? dish?.recipes.find((r) => r.id === option.id) : null;
     onPick(
-      kind === 'dish'
-        ? { dishId: id, label: dish?.name, recipeIds: (dish?.recipes || []).map((r) => r.id) }
-        : { recipeId: id, label: recipe ? recipeLabel(recipe) : '' }
+      option.kind === 'dish'
+        ? { dishId: option.id, label: dish?.name, recipeIds: (dish?.recipes || []).map((r) => r.id) }
+        : { recipeId: option.id, label: recipe ? recipeLabel(recipe) : option.label }
     );
-    setValue('');
+    setQuery('');
+    setActive(0);
+    setOpen(false);
   };
+
+  const onKeyDown = (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setOpen(true);
+      setActive((i) => Math.min(i + 1, options.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActive((i) => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (open && options[active]) pick(options[active]);
+    } else if (e.key === 'Escape') {
+      setOpen(false);
+    }
+  };
+
+  const showList = open && (query.trim() !== '' || options.length > 0);
   return (
-    <Form onSubmit={pick}>
+    <div className="position-relative">
       <InputGroup size="sm">
-        <Form.Select
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
+        <Form.Control
+          type="search"
+          role="combobox"
+          aria-expanded={showList}
+          aria-controls={listId}
+          aria-autocomplete="list"
+          aria-activedescendant={showList && options[active] ? `${listId}-${active}` : undefined}
           aria-label={`Add to the ${dayName} menu`}
+          placeholder="Search recipes and dishes to add…"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setActive(0);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          onKeyDown={onKeyDown}
+        />
+        <Button
+          variant="outline-secondary"
+          disabled={!options[active] || !query.trim()}
+          onClick={() => pick(options[active])}
         >
-          <option value="">Add a dish or recipe…</option>
-          {dishes.map((dish) =>
-            dish.recipes.length === 1 ? (
-              <option key={dish.id} value={`recipe:${dish.recipes[0].id}`}>
-                {recipeLabel(dish.recipes[0])}
-              </option>
-            ) : (
-              <optgroup key={dish.id} label={dish.name}>
-                <option value={`dish:${dish.id}`}>{dish.name} (any recipe)</option>
-                {dish.recipes.map((r) => (
-                  <option key={r.id} value={`recipe:${r.id}`}>
-                    {recipeLabel(r)}
-                  </option>
-                ))}
-              </optgroup>
-            )
-          )}
-        </Form.Select>
-        <Button type="submit" variant="outline-secondary" disabled={!value}>
           <Plus size={14} aria-hidden="true" /> Add
         </Button>
       </InputGroup>
-    </Form>
+      {showList && (
+        <ul
+          id={listId}
+          role="listbox"
+          className="list-unstyled mb-0 position-absolute w-100 shadow-sm"
+          style={{
+            zIndex: 20,
+            maxHeight: '16rem',
+            overflowY: 'auto',
+            background: 'var(--mkh-surface, #fff)',
+            border: '1px solid var(--mkh-border-light)',
+            borderRadius: 6,
+            marginTop: 2,
+          }}
+        >
+          {options.length === 0 ? (
+            <li className="px-2 py-1" style={TINY}>
+              Nothing in the library matches “{query.trim()}”.
+            </li>
+          ) : (
+            options.map((o, i) => (
+              <li
+                key={`${o.kind}:${o.id}`}
+                id={`${listId}-${i}`}
+                role="option"
+                aria-selected={i === active}
+                className="px-2 py-1"
+                style={{
+                  ...SMALL,
+                  cursor: 'pointer',
+                  background: i === active ? 'var(--mkh-surface-hover, rgba(0,0,0,.06))' : undefined,
+                  fontWeight: o.kind === 'dish' ? 600 : undefined,
+                }}
+                onMouseEnter={() => setActive(i)}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  pick(o);
+                }}
+              >
+                {o.label}
+                {o.dishName && <span style={TINY}> · {o.dishName}</span>}
+              </li>
+            ))
+          )}
+        </ul>
+      )}
+    </div>
   );
 };
 
