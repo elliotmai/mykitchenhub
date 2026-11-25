@@ -36,7 +36,7 @@ it('makes a household for a new cook who has none', async () => {
   mockRpc
     .mockResolvedValueOnce({ data: null, error: null })
     .mockResolvedValueOnce({ data: 'hh-new', error: null });
-  expect(await sb.myHousehold()).toBe('hh-new');
+  expect(await sb.myHousehold({ create: true })).toBe('hh-new');
   expect(mockRpc).toHaveBeenLastCalledWith('core', 'create_household', { name: 'Kitchen' });
 });
 
@@ -57,5 +57,8 @@ it('refuses when nobody is signed in, or the lookup fails', async () => {
   mockRpc
     .mockResolvedValueOnce({ data: null, error: null })
     .mockResolvedValueOnce({ data: null, error: { code: '42501', message: 'no' } });
-  await expect(sb.myHousehold()).rejects.toThrow('no');
+  await expect(sb.myHousehold({ create: true })).rejects.toThrow('no');
+
+  mockRpc.mockResolvedValueOnce({ data: null, error: null });
+  await expect(sb.myHousehold()).rejects.toMatchObject({ code: 'permission-denied' });
 });

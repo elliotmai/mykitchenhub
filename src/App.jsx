@@ -19,6 +19,7 @@ import { AppLayout } from './components/Layout';
 
 // Auth Components
 import { ProtectedRoute, PublicOnlyRoute } from './components/Auth';
+import HouseholdGate from './components/Auth/HouseholdGate';
 
 // Route-level code splitting
 import { lazyWithRetry } from './utils/lazyWithRetry';
@@ -63,6 +64,7 @@ const Analytics = lazyWithRetry(() => import('./pages/Analytics'), 'Analytics');
 const Settings = lazyWithRetry(() => import('./pages/Settings'), 'Settings');
 const WasteAlerts = lazyWithRetry(() => import('./pages/WasteAlerts'), 'WasteAlerts');
 const ShoppingListPage = lazyWithRetry(() => import('./pages/ShoppingList'), 'ShoppingList');
+const Events = lazyWithRetry(() => import('./pages/Events'), 'Events');
 const Kiosk = lazyWithRetry(() => import('./pages/Kiosk'), 'Kiosk');
 
 /**
@@ -92,7 +94,9 @@ const AppRoutes = () => {
         <Route
           element={
             <ProtectedRoute>
-              <AppLayout />
+              <HouseholdGate>
+                <AppLayout />
+              </HouseholdGate>
             </ProtectedRoute>
           }
         >
@@ -101,6 +105,7 @@ const AppRoutes = () => {
           <Route path="/recipes" element={<Recipes />} />
           <Route path="/meal-plan" element={<MealPlan />} />
           <Route path="/shopping-list" element={<ShoppingListPage />} />
+          <Route path="/events" element={<Events />} />
           <Route path="/hellofresh" element={<HelloFresh />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/waste-alerts" element={<WasteAlerts />} />
@@ -115,7 +120,9 @@ const AppRoutes = () => {
           path="/kiosk"
           element={
             <ProtectedRoute>
-              <Kiosk />
+              <HouseholdGate>
+                <Kiosk />
+              </HouseholdGate>
             </ProtectedRoute>
           }
         />

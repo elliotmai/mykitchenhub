@@ -4,13 +4,14 @@
 import React, { useState } from 'react';
 import { Card, Form, Button, Row, Col, Alert, Spinner, Nav } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import { User, Lock, MapPin, Bell, Tv, Plug } from 'lucide-react';
+import { User, Lock, MapPin, Bell, Tv, Plug, Users } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import useStorageLocations from '../hooks/useStorageLocations';
 import { StorageLocationsList } from '../components/StorageLocations';
 import { SmsAlertSettings } from '../components/WasteAlerts';
 import { ConnectedApps } from '../components/ConnectedApps';
 import { isKioskDevice, setKioskDevice } from '../utils/kioskMode';
+import HouseholdSettings from '../components/Auth/HouseholdSettings';
 
 // ─── Section constants ───────────────────────────────────────────────────────
 const SECTIONS = {
@@ -20,6 +21,7 @@ const SECTIONS = {
   ALERTS: 'alerts',
   DISPLAY: 'display',
   APPS: 'apps',
+  HOUSEHOLD: 'household',
 };
 
 const Settings = () => {
@@ -165,6 +167,13 @@ const Settings = () => {
                   className="d-flex align-items-center gap-2 rounded-2 px-3 py-2"
                 >
                   <Plug size={16} /> Connected apps
+                </Nav.Link>
+                <Nav.Link
+                  active={activeSection === SECTIONS.HOUSEHOLD}
+                  onClick={() => setActiveSection(SECTIONS.HOUSEHOLD)}
+                  className="d-flex align-items-center gap-2 rounded-2 px-3 py-2"
+                >
+                  <Users size={16} /> Household
                 </Nav.Link>
               </Nav>
             </Card.Body>
@@ -378,6 +387,19 @@ const Settings = () => {
           )}
 
           {/* ── Connected apps ──────────────────────────────────────────── */}
+          {activeSection === SECTIONS.HOUSEHOLD && (
+            <Card>
+              <Card.Header className="bg-white border-bottom-0 pt-4 pb-2">
+                <h5 className="mb-0 d-flex align-items-center gap-2">
+                  <Users size={18} /> Household
+                </h5>
+              </Card.Header>
+              <Card.Body>
+                <HouseholdSettings />
+              </Card.Body>
+            </Card>
+          )}
+
           {activeSection === SECTIONS.APPS && (
             <Card>
               <Card.Header className="bg-white border-bottom-0 pt-4 pb-2">

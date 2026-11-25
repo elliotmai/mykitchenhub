@@ -216,3 +216,46 @@ describe('the recipe library the picker can actually see', () => {
     expect(onSave.mock.calls[0][0]).toMatchObject({ recipeName: 'Leftovers', usesIngredients: [] });
   });
 });
+
+describe('planning a dish', () => {
+  it('offers a dish with several recipes, decided when cooking, using its favourite for shopping', async () => {
+    const lasagnas = [
+      makeRecipe({
+        id: 'l1',
+        name: 'Lasagna',
+        ingredients: [{ name: 'pasta', quantity: 1, unit: 'box' }],
+      }),
+      makeRecipe({
+        id: 'l2',
+        name: "Grandma's Lasagna",
+        timesCooked: 9,
+        ingredients: [{ name: 'ricotta', quantity: 1, unit: 'tub' }],
+      }),
+    ];
+    fs.getDocs.mockImplementation(async (target) =>
+      fs.pathOf(target?.col ?? target) === 'dishes' ||
+      String(fs.pathOf(target)).startsWith('dishes')
+        ? fs.__querySnapshot([])
+        : fs.__querySnapshot(asDocs(lasagnas))
+    );
+    const onSave = jest.fn(async () => ({ success: true }));
+    renderModal({ onSave });
+    const user = userEvent.setup();
+    const select = await screen.findByLabelText('Recipe');
+    await waitFor(() =>
+      expect(
+        screen.getByRole('option', { name: /choose the recipe when cooking/ })
+      ).toBeInTheDocument()
+    );
+    await user.selectOptions(select, 'dish:lasagna');
+    await user.click(screen.getByRole('button', { name: 'Add to plan' }));
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recipeId: null,
+        dishId: 'lasagna',
+        recipeName: 'Lasagna',
+        usesIngredients: [expect.objectContaining({ name: 'ricotta' })],
+      })
+    );
+  });
+});

@@ -41,6 +41,13 @@ jest.mock('./backend/firestore', () => require('./test-utils/mocks/firestore'));
 jest.mock('./backend/storage', () => require('./test-utils/mocks/storage'));
 jest.mock('./backend/functions', () => require('./test-utils/mocks/functions'));
 jest.mock('./backend/analytics', () => require('./test-utils/mocks/analytics'));
+jest.mock('./backend/household', () => ({
+  currentHousehold: jest.fn(async () => 'household-1'),
+  createHousehold: jest.fn(async () => 'household-1'),
+  joinHousehold: jest.fn(async () => 'household-1'),
+  householdCode: jest.fn(async () => 'ABCD2345'),
+  newHouseholdCode: jest.fn(async () => 'WXYZ6789'),
+}));
 jest.mock('./backend/timers', () => ({
   listTimers: jest.fn(async () => []),
   addTimer: jest.fn(async (row) => ({ id: 'timer-1', ...row })),

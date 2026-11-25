@@ -14,6 +14,15 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.11.25.1',
+    date: 'November 2026',
+    items: [
+      '\u{1F37D}\uFE0F Dishes. Recipes for the same food sit together: open \u201CLasagna\u201D to see every lasagna recipe you have, each with its own ingredients, steps and photo. Star a favourite, move a recipe to another dish, or rename and merge dishes. Plan a dish for a night and pick which recipe when you cook.',
+      '\u{1F6D2} Shop by store, the Let\u2019s Eat way. Add stores under \u201CStores\u201D on the shopping list, send each item to the one you buy it at, and read the list store by store. An item remembers its store for next time, and how many is now optional.',
+      '\u{1F389} Events. Plan Thanksgiving or a birthday with a date or none, guests, notes and a menu of dishes, over one day or several, then put its whole menu on the shopping list in one tap.',
+    ],
+  },
+  {
     version: '2026.11.25',
     date: 'November 2026',
     items: [

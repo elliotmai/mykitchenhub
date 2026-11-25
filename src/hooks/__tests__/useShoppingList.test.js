@@ -143,7 +143,12 @@ describe('buildShoppingItem', () => {
 
   it('carries the store and where the line came from when given', () => {
     expect(
-      buildShoppingItem({ name: 'Celery', store: 'costco', recipeName: 'Potato Salad', eventId: 'e1' })
+      buildShoppingItem({
+        name: 'Celery',
+        store: 'costco',
+        recipeName: 'Potato Salad',
+        eventId: 'e1',
+      })
     ).toMatchObject({ store: 'costco', recipeName: 'Potato Salad', eventId: 'e1', quantity: null });
   });
 

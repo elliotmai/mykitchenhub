@@ -16,6 +16,7 @@ import {
   X,
   ChefHat,
   ShoppingCart,
+  CalendarHeart,
 } from 'lucide-react';
 import './Sidebar.css';
 
@@ -42,6 +43,11 @@ const NAV_ITEMS = [
     path: '/meal-plan',
     icon: Calendar,
     label: 'Meal Plan',
+  },
+  {
+    path: '/events',
+    icon: CalendarHeart,
+    label: 'Events',
   },
   {
     path: '/shopping-list',

@@ -38,10 +38,11 @@ let household = null;
 let householdFor = null;
 
 /**
- * The household this kitchen belongs to (Hive's core.households), made on
- * first use for someone who has none yet, so a new cook still gets a kitchen.
+ * The household this kitchen belongs to (Hive's core.households). Someone
+ * with none yet makes one or joins one with a code first
+ * (components/Auth/HouseholdGate.jsx); `create` makes one on the spot.
  */
-export async function myHousehold({ create = true } = {}) {
+export async function myHousehold({ create = false } = {}) {
   const { data: auth } = await supabase.auth.getSession();
   const uid = auth.session?.user?.id || null;
   if (!uid) throw Object.assign(new Error('Sign in first.'), { code: 'permission-denied' });

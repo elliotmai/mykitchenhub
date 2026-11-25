@@ -11,3 +11,4 @@ export { default as HelloFresh } from './HelloFresh';
 export { default as Analytics } from './Analytics';
 export { default as WasteAlerts } from './WasteAlerts';
 export { default as Settings } from './Settings';
+export { default as Events } from './Events';
