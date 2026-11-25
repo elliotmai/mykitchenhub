@@ -29,6 +29,7 @@ import { db, functions } from '../services/firebase';
 import { useAuth } from './useAuth';
 import useInventory from './useInventory';
 import { friendlyError } from '../utils/firebaseErrors';
+import { isFarmSupplied } from '../utils/farmEggs';
 import { withRetry } from '../utils/retry';
 import {
   canonicalUnit,
@@ -138,7 +139,8 @@ const indexStock = (inventoryItems) => {
   inventoryItems.forEach((item) => {
     const name = ingredientKey(item.normalized || item.name);
     if (!name) return;
-    if (item.alwaysHave === true) {
+    // Eggs the farm is laying count as always on hand (src/utils/farmEggs.js).
+    if (item.alwaysHave === true || isFarmSupplied(item)) {
       staples.add(name);
       (Array.isArray(item.alsoCovers) ? item.alsoCovers : []).forEach((alias) => {
         const key = ingredientKey(alias);

@@ -142,3 +142,34 @@ describe('ItemCard staples', () => {
     expect(screen.queryByText('No expiry')).not.toBeInTheDocument();
   });
 });
+
+describe('ItemCard eggs from the farm', () => {
+  it('says the eggs come from the farm and how many came in today', () => {
+    const today = new Date();
+    const day = [
+      today.getFullYear(),
+      String(today.getMonth() + 1).padStart(2, '0'),
+      String(today.getDate()).padStart(2, '0'),
+    ].join('-');
+    render(
+      <ItemCard
+        item={makeItem({
+          name: 'Eggs',
+          farm: {
+            source: 'galaxyfarm',
+            name: 'Galaxy Farm',
+            entries: { 'l:a': { v: 1, n: 6, d: day } },
+          },
+        })}
+      />
+    );
+    expect(screen.getByTestId('farm-source')).toHaveTextContent(
+      'From Galaxy Farm · 6 collected today'
+    );
+  });
+
+  it('says nothing about a farm for an ordinary item', () => {
+    render(<ItemCard item={makeItem({ name: 'Milk' })} />);
+    expect(screen.queryByTestId('farm-source')).not.toBeInTheDocument();
+  });
+});

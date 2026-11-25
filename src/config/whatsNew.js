@@ -14,6 +14,13 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.11.25.3',
+    date: 'November 2026',
+    items: [
+      '\u{1F414} Eggs from the farm. Eggs logged on Galaxy Farm now go straight into your Eggs, in the fridge, and eggs given away or sold there come off. The card says how many came in today. Cooking and your own edits work as before, and eggs stay off the shopping list while the hens are laying.',
+    ],
+  },
+  {
     version: '2026.11.25.2',
     date: 'November 2026',
     items: [

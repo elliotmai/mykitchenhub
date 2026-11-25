@@ -10,6 +10,7 @@ import {
   getExpirationLevel,
   getExpirationBadgeStyle,
 } from '../../hooks/useInventory';
+import { farmLine } from '../../utils/farmEggs';
 
 const LOCATION_TYPE_ICONS = {
   fridge: '🧊',
@@ -35,6 +36,8 @@ const ItemCard = ({ item, location, onEdit, onDelete }) => {
   // Only the two levels a cook has to act on today get a written warning —
   // a warning on every card is a warning on none.
   const showWarning = level.status === 'expired' || level.status === 'critical';
+  // Eggs the farm keeps in step: say so, and how many came in today.
+  const fromFarm = farmLine(item);
 
   return (
     <Card
@@ -89,6 +92,15 @@ const ItemCard = ({ item, location, onEdit, onDelete }) => {
           </span>
           {item.unit && <span className="ms-1">{item.unit}</span>}
         </div>
+
+        {fromFarm ? (
+          <div
+            data-testid="farm-source"
+            style={{ fontSize: 'var(--mkh-font-size-tiny)', color: 'var(--mkh-text-secondary)' }}
+          >
+            🐔 {fromFarm}
+          </div>
+        ) : null}
 
         {/* Location row */}
         <div

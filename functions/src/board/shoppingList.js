@@ -35,6 +35,8 @@ const {
   measureKey,
 } = require('./ingredientMeasure');
 
+const { isFarmSupplied } = require('../farm/farmEggs');
+
 const capitalizeFirst = (text) => (text ? text[0].toUpperCase() + text.slice(1) : text);
 
 const indexStock = (inventoryItems) => {
@@ -44,7 +46,8 @@ const indexStock = (inventoryItems) => {
   inventoryItems.forEach((item) => {
     const name = ingredientKey(item.normalized || item.name);
     if (!name) return;
-    if (item.alwaysHave === true) {
+    // Eggs the farm is laying count as always on hand (src/utils/farmEggs.js).
+    if (item.alwaysHave === true || isFarmSupplied(item, new Date().toISOString().slice(0, 10))) {
       staples.add(name);
       (Array.isArray(item.alsoCovers) ? item.alsoCovers : []).forEach((alias) => {
         const key = ingredientKey(alias);

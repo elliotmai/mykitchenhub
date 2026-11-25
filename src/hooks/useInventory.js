@@ -102,7 +102,7 @@ export const calcExpiresAt = (locationType, shelfLifeDays) => {
 // Older documents
 // ---------------------------------------------------------------------------
 
-const VALID_SOURCES = ['manual', 'hellofresh', 'csv-import', 'seed'];
+const VALID_SOURCES = ['manual', 'hellofresh', 'csv-import', 'seed', 'galaxyfarm'];
 const VALID_LOCATION_TYPES = ['fridge', 'freezer', 'pantry'];
 
 /**
