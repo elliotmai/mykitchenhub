@@ -9,10 +9,12 @@ import { Alert, Button, Col, Form, InputGroup, Row } from 'react-bootstrap';
 import { ArrowLeft, Pencil, Star } from 'lucide-react';
 
 import RecipeCard from '../components/Recipes/RecipeCard';
+import DishCollage from './DishCollage';
 
 const NEW_DISH = '__new__';
 
-const RecipeTools = ({ recipe, dish, dishes, isFavorite, onFavorite, onMove, onMoveNew }) => {
+/** Move a recipe to another dish, or to a new one. */
+export const MoveToDish = ({ recipe, dish, dishes, onMove, onMoveNew }) => {
   const [target, setTarget] = useState('');
   const [newName, setNewName] = useState('');
 
@@ -23,17 +25,7 @@ const RecipeTools = ({ recipe, dish, dishes, isFavorite, onFavorite, onMove, onM
   };
 
   return (
-    <Form onSubmit={move} className="mt-2 d-flex flex-column gap-2">
-      <Button
-        size="sm"
-        variant={isFavorite ? 'primary' : 'outline-secondary'}
-        className="d-flex align-items-center gap-1 align-self-start"
-        aria-pressed={isFavorite}
-        onClick={() => onFavorite(isFavorite ? null : recipe.id)}
-      >
-        <Star size={14} aria-hidden="true" />
-        {isFavorite ? 'Favourite' : 'Make favourite'}
-      </Button>
+    <Form onSubmit={move} className="d-flex flex-column gap-2">
       <InputGroup size="sm">
         <Form.Select
           aria-label={`Move ${recipe.name} to another dish`}
@@ -42,7 +34,7 @@ const RecipeTools = ({ recipe, dish, dishes, isFavorite, onFavorite, onMove, onM
         >
           <option value="">Move to…</option>
           {dishes
-            .filter((d) => d.id !== dish.id)
+            .filter((d) => d.id !== dish?.id)
             .map((d) => (
               <option key={d.id} value={d.id}>
                 {d.name}
@@ -70,6 +62,22 @@ const RecipeTools = ({ recipe, dish, dishes, isFavorite, onFavorite, onMove, onM
     </Form>
   );
 };
+
+const RecipeTools = ({ recipe, dish, dishes, isFavorite, onFavorite, onMove, onMoveNew }) => (
+  <div className="mt-2 d-flex flex-column gap-2">
+    <Button
+      size="sm"
+      variant={isFavorite ? 'primary' : 'outline-secondary'}
+      className="d-flex align-items-center gap-1 align-self-start"
+      aria-pressed={isFavorite}
+      onClick={() => onFavorite(isFavorite ? null : recipe.id)}
+    >
+      <Star size={14} aria-hidden="true" />
+      {isFavorite ? 'Favourite' : 'Make favourite'}
+    </Button>
+    <MoveToDish recipe={recipe} dish={dish} dishes={dishes} onMove={onMove} onMoveNew={onMoveNew} />
+  </div>
+);
 
 const DishView = ({
   dish,
@@ -120,6 +128,20 @@ const DishView = ({
       <Button variant="link" className="px-0 mb-2" onClick={onBack}>
         <ArrowLeft size={16} className="me-1" /> Back to recipes
       </Button>
+
+      <div className="mb-3" style={{ maxWidth: 560 }}>
+        <DishCollage dish={dish} height={220} radius="var(--mkh-radius-lg)" />
+        {dish.coverUrl && (
+          <Button
+            variant="link"
+            size="sm"
+            className="p-0 mt-1"
+            onClick={() => actions.setCover(dish.id, null).then(report)}
+          >
+            Make the cover from its recipes’ photos again
+          </Button>
+        )}
+      </div>
 
       <div className="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3">
         <div>

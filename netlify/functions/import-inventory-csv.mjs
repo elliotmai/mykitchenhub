@@ -6,7 +6,9 @@ const { makeHandler } = csvModule;
 
 const handler = makeHandler({
   authenticate: async (header) => {
-    const token = String(header).replace(/^Bearer\s+/i, '').trim();
+    const token = String(header)
+      .replace(/^Bearer\s+/i, '')
+      .trim();
     const { data, error } = await service().auth.getUser(token);
     if (error || !data?.user) throw new Error('bad token');
     return { uid: data.user.id };

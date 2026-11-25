@@ -12,6 +12,7 @@ import { SmsAlertSettings } from '../components/WasteAlerts';
 import { ConnectedApps } from '../components/ConnectedApps';
 import { isKioskDevice, setKioskDevice } from '../utils/kioskMode';
 import HouseholdSettings from '../components/Auth/HouseholdSettings';
+import { useKitchen } from '../components/Auth/HouseholdGate';
 
 // ─── Section constants ───────────────────────────────────────────────────────
 const SECTIONS = {
@@ -39,6 +40,7 @@ const Settings = () => {
   } = useStorageLocations();
 
   // ─── Active section ──────────────────────────────────────────────────────
+  const { active } = useKitchen();
   const [activeSection, setActiveSection] = useState(SECTIONS.PROFILE);
 
   // ─── Profile form state ──────────────────────────────────────────────────
@@ -395,7 +397,14 @@ const Settings = () => {
                 </h5>
               </Card.Header>
               <Card.Body>
-                <HouseholdSettings />
+                {active ? (
+                  <p className="mb-0 text-muted">
+                    You’re planning with {active.household}. Its household settings are theirs to
+                    change.
+                  </p>
+                ) : (
+                  <HouseholdSettings />
+                )}
               </Card.Body>
             </Card>
           )}

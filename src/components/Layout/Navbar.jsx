@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import './Navbar.css';
+import KitchenSwitcher from '../../sharing/KitchenSwitcher';
 import '../../pwa-safe-area.css';
 
 /**
@@ -94,6 +95,7 @@ const Navbar = ({ onToggleSidebar, alertCount = 0 }) => {
 
         {/* Right Side Items */}
         <div className="app-navbar__right">
+          <KitchenSwitcher className="d-none d-sm-block" />
           {/* Notifications */}
           <button
             type="button"

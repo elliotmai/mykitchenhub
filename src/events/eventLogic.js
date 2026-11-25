@@ -73,7 +73,11 @@ export const updateDay = (event, dayId, patch = {}) =>
   });
 
 /** Put a dish ({ dishId }) or one recipe ({ recipeId }) on a day's menu, once. */
-export const addToMenu = (event, dayId, { dishId = null, recipeId = null, label = '' } = {}) => {
+export const addToMenu = (
+  event,
+  dayId,
+  { dishId = null, recipeId = null, label = '', recipeIds = null } = {}
+) => {
   if (!dishId && !recipeId) return event;
   return mapDays(event, (d) => {
     if (d.id !== dayId) return d;
@@ -92,6 +96,8 @@ export const addToMenu = (event, dayId, { dishId = null, recipeId = null, label 
         {
           ...(dishId ? { dishId } : {}),
           ...(recipeId ? { recipeId } : {}),
+          // A dish's recipes as it stands, so a guest on this event may read them.
+          ...(dishId && Array.isArray(recipeIds) ? { recipeIds: recipeIds.slice(0, 50) } : {}),
           label: String(label).slice(0, 120),
         },
       ],
@@ -102,6 +108,37 @@ export const addToMenu = (event, dayId, { dishId = null, recipeId = null, label 
 export const removeFromMenu = (event, dayId, index) =>
   mapDays(event, (d) =>
     d.id === dayId ? { ...d, menu: (d.menu || []).filter((_, i) => i !== index) } : d
+  );
+
+/**
+ * Each dish line with the ids of its dish's recipes now: a guest on the event
+ * may read exactly those (kitchen.on_my_event_menu in the database).
+ */
+export const snapshotDishRecipes = (event, dishes = []) =>
+  mapDays(event, (d) => ({
+    ...d,
+    menu: (d.menu || []).map((m) => {
+      const dish = m.dishId ? dishes.find((x) => x.id === m.dishId) : null;
+      return dish ? { ...m, recipeIds: dish.recipes.map((r) => r.id).slice(0, 50) } : m;
+    }),
+  }));
+
+/** Who is bringing a menu line ("Aunt Sue"), or '' to clear it. */
+export const setBringing = (event, dayId, index, who) =>
+  mapDays(event, (d) =>
+    d.id === dayId
+      ? {
+          ...d,
+          menu: (d.menu || []).map((m, i) => {
+            if (i !== index) return m;
+            const name = String(who ?? '')
+              .trim()
+              .slice(0, 80);
+            const { bringing, ...rest } = m;
+            return name ? { ...rest, bringing: name } : rest;
+          }),
+        }
+      : d
   );
 
 /** The days an event has, earliest first, undated last. */

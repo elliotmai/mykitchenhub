@@ -91,7 +91,7 @@ const useRecipeImport = (existingRecipes = []) => {
   );
 
   const prepareText = useCallback(
-    (text) => {
+    (text, { origin = 'pasted', extra = null } = {}) => {
       setError('');
       setResult(null);
       const chunks = pastedTextToFiles(text);
@@ -100,7 +100,14 @@ const useRecipeImport = (existingRecipes = []) => {
         setError('Paste a recipe first.');
         return null;
       }
-      const next = planRecipeImport(chunks, existingRecipes, 'pasted');
+      const planned = planRecipeImport(chunks, existingRecipes, origin);
+      // A web page's photo and address ride along with what it made.
+      const next = extra
+        ? {
+            ...planned,
+            ready: planned.ready.map((r) => ({ ...r, document: { ...r.document, ...extra } })),
+          }
+        : planned;
       setPlan(next);
       if (next.ready.length === 0 && next.duplicates.length === 0) {
         setError(
@@ -144,7 +151,12 @@ const useRecipeImport = (existingRecipes = []) => {
         imported += chunk.length;
         setProgress({ done: imported, total: ready.length });
       }
-      const outcome = { success: true, imported, ids };
+      const outcome = {
+        success: true,
+        imported,
+        ids,
+        recipes: ready.map((item, i) => ({ id: ids[i], ...item.document })),
+      };
       setResult(outcome);
       return outcome;
     } catch (err) {

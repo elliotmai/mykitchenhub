@@ -1,10 +1,13 @@
 // src/dishes/DishCard.jsx
 // One dish in the recipe library: its name, how many recipes, and the one
-// you'd cook (the favourite, else the most cooked).
+// you'd cook (the favourite, else the most cooked), under a cover made from its
+// recipes' photos (./DishCollage.jsx).
 
 import React from 'react';
 import { Card } from 'react-bootstrap';
-import { BookOpen, Star } from 'lucide-react';
+import { Star } from 'lucide-react';
+
+import DishCollage from './DishCollage';
 
 const DishCard = ({ dish, onOpen }) => {
   const count = dish.recipes.length;
@@ -18,22 +21,7 @@ const DishCard = ({ dish, onOpen }) => {
         overflow: 'hidden',
       }}
     >
-      {lead?.imageUrl ? (
-        <Card.Img
-          variant="top"
-          src={lead.imageUrl}
-          alt=""
-          style={{ height: 140, objectFit: 'cover' }}
-        />
-      ) : (
-        <div
-          aria-hidden="true"
-          className="d-flex align-items-center justify-content-center"
-          style={{ height: 80, background: 'var(--mkh-bg-hover)', color: 'var(--mkh-text-muted)' }}
-        >
-          <BookOpen size={28} />
-        </div>
-      )}
+      <DishCollage dish={dish} />
       <Card.Body className="d-flex flex-column">
         <Card.Title as="div" className="mb-1">
           <button

@@ -37,6 +37,30 @@ export const core = supabase.schema('core');
 let household = null;
 let householdFor = null;
 
+// A kitchen shared with me (as an event partner or guest) can be the one the
+// app works in; the database decides what of it I may see.
+const ACTIVE_KEY = 'kitchenhub.activeKitchen';
+let active = null;
+try {
+  active = JSON.parse(window.localStorage.getItem(ACTIVE_KEY) || 'null');
+} catch {
+  active = null;
+}
+
+/** The shared kitchen the app is working in, or null for my own household. */
+export const activeKitchen = () => active;
+
+/** Work in a shared kitchen ({ household_id, household, kind, event_id, can_edit }), or null for mine. */
+export function setActiveKitchen(share) {
+  active = share && share.household_id ? share : null;
+  try {
+    if (active) window.localStorage.setItem(ACTIVE_KEY, JSON.stringify(active));
+    else window.localStorage.removeItem(ACTIVE_KEY);
+  } catch {
+    /* private window: fine for this visit */
+  }
+}
+
 /**
  * The household this kitchen belongs to (Hive's core.households). Someone
  * with none yet makes one or joins one with a code first
@@ -46,6 +70,7 @@ export async function myHousehold({ create = false } = {}) {
   const { data: auth } = await supabase.auth.getSession();
   const uid = auth.session?.user?.id || null;
   if (!uid) throw Object.assign(new Error('Sign in first.'), { code: 'permission-denied' });
+  if (active?.household_id) return active.household_id;
   if (household && householdFor === uid) return household;
   const { data, error } = await core.rpc('my_household');
   if (error) throw Object.assign(new Error(error.message), { code: error.code });
@@ -69,6 +94,13 @@ export const forgetHousehold = () => {
   household = null;
   householdFor = null;
 };
+
+/** My own household's id, ignoring a shared kitchen I'm working in (null if none). */
+export async function ownHousehold() {
+  const { data, error } = await core.rpc('my_household');
+  if (error) throw Object.assign(new Error(error.message), { code: error.code });
+  return data || null;
+}
 
 /** The signed-in person's access token, for KitchenHub's own server functions. */
 export async function accessToken() {

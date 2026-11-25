@@ -32,7 +32,11 @@ async function uidFromToken(token) {
   if (token.length < MIN_TOKEN_LENGTH) return null;
   const hash = hashToken(token);
   const tokens = service().schema('core').from('api_tokens');
-  const { data, error } = await tokens.select('user_id, revoked_at').eq('hash', hash).eq('app', 'kitchenhub').maybeSingle();
+  const { data, error } = await tokens
+    .select('user_id, revoked_at')
+    .eq('hash', hash)
+    .eq('app', 'kitchenhub')
+    .maybeSingle();
   if (error || !data || data.revoked_at) return null;
   // Best-effort: never fails or delays the request.
   tokens
@@ -63,8 +67,14 @@ export const tokenStore = () => {
   };
   return {
     owned: async (uid) =>
-      must(await table().select('hash, label, created_at, last_used_at, revoked_at').eq('user_id', uid).eq('app', 'kitchenhub')) || [],
+      must(
+        await table()
+          .select('hash, label, created_at, last_used_at, revoked_at')
+          .eq('user_id', uid)
+          .eq('app', 'kitchenhub')
+      ) || [],
     insert: async (row) => must(await table().insert({ ...row, app: 'kitchenhub' })),
-    revoke: async (hash, at) => must(await table().update({ revoked_at: at }).eq('hash', hash).eq('app', 'kitchenhub')),
+    revoke: async (hash, at) =>
+      must(await table().update({ revoked_at: at }).eq('hash', hash).eq('app', 'kitchenhub')),
   };
 };

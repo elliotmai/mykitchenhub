@@ -16,7 +16,8 @@ import { fromRow, newTimerRow } from '../../src/timers/timerLogic.js';
 
 const { handleBoardRequest } = boardModule;
 
-const reply = (status, body) => Response.json(body, { status, headers: { 'cache-control': 'no-store' } });
+const reply = (status, body) =>
+  Response.json(body, { status, headers: { 'cache-control': 'no-store' } });
 
 /** The timers routes, for the caller's own household only. */
 async function timers(req, rest) {
@@ -29,7 +30,10 @@ async function timers(req, rest) {
   const table = () => service().schema('kitchen').from('timers');
   const hid = who.db.householdId;
   const list = async () => {
-    const { data, error } = await table().select('id, key, label, duration_s, ends_at').eq('household_id', hid).order('ends_at');
+    const { data, error } = await table()
+      .select('id, key, label, duration_s, ends_at')
+      .eq('household_id', hid)
+      .order('ends_at');
     if (error) throw new Error(error.message);
     return (data || []).map(fromRow);
   };
@@ -39,7 +43,12 @@ async function timers(req, rest) {
   const body = await req.json().catch(() => ({}));
 
   if (!rest) {
-    const row = newTimerRow({ label: body.label, minutes: body.minutes, seconds: body.seconds, key: body.key });
+    const row = newTimerRow({
+      label: body.label,
+      minutes: body.minutes,
+      seconds: body.seconds,
+      key: body.key,
+    });
     if (!row) return reply(400, { error: 'minutes must be between a second and a day.' });
     const { data, error } = await table()
       .insert({ ...row, household_id: hid, created_by: who.uid })
@@ -49,7 +58,10 @@ async function timers(req, rest) {
     return reply(200, { timer: fromRow(data) });
   }
   if (body.stop !== true) return reply(400, { error: 'stop must be true.' });
-  const { error } = await table().delete().eq('household_id', hid).eq('id', decodeURIComponent(rest));
+  const { error } = await table()
+    .delete()
+    .eq('household_id', hid)
+    .eq('id', decodeURIComponent(rest));
   if (error) return reply(404, { error: 'No such timer.' });
   return reply(200, { ok: true });
 }

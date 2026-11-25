@@ -22,6 +22,7 @@ import React, {
 } from 'react';
 
 import { useAuth } from '../hooks/useAuth';
+import { activeKitchen } from '../backend/supabase';
 import { addTimer, listTimers, removeTimer, watchTimers } from '../backend/timers';
 import { fromRow, newTimerRow, ringing, sortTimers, timerForKey } from './timerLogic';
 import { askToNotify, notifyDone, startRinging, unlockAudio } from './ringer';
@@ -56,7 +57,8 @@ export function TimersProvider({ children, now: fixedNow }) {
   const [error, setError] = useState(null);
   const [clock, setClock] = useState(() => Date.now());
   const now = fixedNow ?? clock;
-  const signedIn = Boolean(user?.uid);
+  // Timers are the household's own: not offered while working in a shared kitchen.
+  const signedIn = Boolean(user?.uid) && !activeKitchen();
 
   const reload = useCallback(async () => {
     try {

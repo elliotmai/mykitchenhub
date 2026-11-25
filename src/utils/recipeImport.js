@@ -349,6 +349,16 @@ const stripFences = (markdown) =>
     .split(/\r?\n/)
     .filter((l) => !/^\s*```/.test(l));
 
+/** An assistant's aside ("Sure! Here's a cozy recipe for you."), never a title. */
+const isChatter = (line) =>
+  /^(sure|of course|absolutely|certainly|okay|ok|great|happy to)\b/i.test(line) ||
+  /\b(here'?s|here is|i'?ve|let me|for you)\b/i.test(line) ||
+  /[!?]$/.test(line) ||
+  (/\.$/.test(line) && line.split(/\s+/).length > 6);
+
+/** "Enjoy!" closing the method is a sign-off, not a step. */
+const SIGN_OFF = /^(enjoy|bon app[ée]tit|happy cooking|serve and enjoy)\b[^.]{0,30}[.!]*$/i;
+
 /**
  * Parse one Markdown recipe.
  *
@@ -382,7 +392,8 @@ export const parseRecipeMarkdown = (markdown) => {
         (firstSection === -1 || idx < firstSection) &&
         l.trim() &&
         !readField(l.trim()) &&
-        !readHeading(l.trim())
+        !readHeading(l.trim()) &&
+        !isChatter(l.trim())
     );
   }
   if (titleIndex === -1) return null;
@@ -467,7 +478,7 @@ export const parseRecipeMarkdown = (markdown) => {
 
     // "Serves 8" / "Makes 12" on its own line, wherever it turns up.
     const servingsLine = line.match(/^(?:serves|makes|yields?)\s*:?\s*(\d[^]{0,24})$/i);
-    if (servingsLine && section !== 'header') {
+    if (servingsLine) {
       draft.servings = draft.servings ?? parseServings(servingsLine[1]);
       continue;
     }
@@ -533,6 +544,12 @@ export const parseRecipeMarkdown = (markdown) => {
     }
   }
 
+  while (
+    draft.instructions.length &&
+    SIGN_OFF.test(draft.instructions[draft.instructions.length - 1])
+  ) {
+    draft.instructions.pop();
+  }
   draft.description = descriptionLines.join('\n').trim();
   draft.notes = notesLines.join('\n').trim();
   return draft;
@@ -571,6 +588,25 @@ const asUrl = (value) => {
 export const IMPORT_ORIGINS = {
   pestle: { importedFrom: 'pestle', tag: 'pestle' },
   pasted: { importedFrom: 'pasted', tag: null },
+  web: { importedFrom: 'web', tag: null },
+};
+
+/**
+ * A recipe read from a web page (netlify/functions/recipe-web.mjs) → the same
+ * Markdown a paste is, so it goes through the same review and save.
+ */
+export const webRecipeToMarkdown = (recipe, pageUrl = '') => {
+  const minutes = (n) => (Number.isFinite(n) && n > 0 ? `${n} minutes` : '');
+  const lines = [`# ${recipe.name}`, ''];
+  if (recipe.description) lines.push(recipe.description, '');
+  if (pageUrl) lines.push(`Source: ${pageUrl}`);
+  if (recipe.servings) lines.push(`Servings: ${recipe.servings}`);
+  if (minutes(recipe.prepTime)) lines.push(`Prep time: ${minutes(recipe.prepTime)}`);
+  if (minutes(recipe.cookTime)) lines.push(`Cook time: ${minutes(recipe.cookTime)}`);
+  if (recipe.tags?.length) lines.push(`Tags: ${recipe.tags.join(', ')}`);
+  lines.push('', '## Ingredients', ...(recipe.ingredients || []).map((i) => `- ${i}`));
+  lines.push('', '## Instructions', ...(recipe.instructions || []).map((x, n) => `${n + 1}. ${x}`));
+  return lines.join('\n');
 };
 
 /**

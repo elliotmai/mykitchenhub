@@ -25,6 +25,7 @@ import {
 
 import { totalTime, instructionSteps, normalizeName, SOURCE_LABELS } from '../hooks/useRecipes';
 import StepTimer from '../timers/StepTimer';
+import { MoveToDish } from '../dishes/DishView';
 
 /** "https://www.example.com/x" → "example.com", or null for anything that isn't an http(s) URL. */
 const hostOf = (url) => {
@@ -57,6 +58,10 @@ const RecipeDetail = ({
   onDelete,
   dish = null,
   onOpenDish,
+  dishes = [],
+  onMoveDish,
+  onMoveNewDish,
+  onUseAsCover,
 }) => {
   if (loading) {
     return (
@@ -86,6 +91,9 @@ const RecipeDetail = ({
   const have = new Set(inventoryNames.map(normalizeName));
   const isMine = recipe.source === 'user-created';
   const sourceHost = hostOf(recipe.sourceUrl);
+  const scans = (Array.isArray(recipe.scans) ? recipe.scans : [])
+    .filter((x) => x && typeof x.url === 'string')
+    .sort((a, b) => (a.page ?? 0) - (b.page ?? 0));
 
   return (
     <div className="recipe-detail">
@@ -102,6 +110,18 @@ const RecipeDetail = ({
             style={{ maxHeight: 280, objectFit: 'cover' }}
           />
         ) : null}
+        {recipe.imageUrl && dish && onUseAsCover && dish.coverRecipeId !== recipe.id && (
+          <div className="px-3 pt-2">
+            <Button
+              variant="link"
+              size="sm"
+              className="p-0"
+              onClick={() => onUseAsCover(dish, recipe)}
+            >
+              Use as dish cover
+            </Button>
+          </div>
+        )}
 
         <Card.Body>
           <div className="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-2">
@@ -123,8 +143,21 @@ const RecipeDetail = ({
               {dish && onOpenDish && (
                 <div>
                   <Button variant="link" size="sm" className="p-0" onClick={() => onOpenDish(dish)}>
-                    One of {dish.recipes.length} {dish.name} recipes
+                    {dish.recipes.length > 1
+                      ? `One of ${dish.recipes.length} ${dish.name} recipes`
+                      : `Dish: ${dish.name}`}
                   </Button>
+                </div>
+              )}
+              {onMoveDish && dishes.length > 0 && (
+                <div className="mt-1" style={{ maxWidth: '18rem' }}>
+                  <MoveToDish
+                    recipe={recipe}
+                    dish={dish}
+                    dishes={dishes}
+                    onMove={onMoveDish}
+                    onMoveNew={onMoveNewDish}
+                  />
                 </div>
               )}
             </div>
@@ -169,7 +202,7 @@ const RecipeDetail = ({
               </span>
             )}
             <span className="d-flex align-items-center gap-1">
-              <Users size={14} /> Serves {recipe.servings ?? 1}
+              <Users size={14} /> {recipe.servingsText || `Serves ${recipe.servings ?? 1}`}
             </span>
             <span className="d-flex align-items-center gap-1">
               <ChefHat size={14} /> Cooked {recipe.timesCooked ?? 0}×
@@ -264,6 +297,17 @@ const RecipeDetail = ({
                 </ol>
               )}
 
+              {recipe.timesAsWritten && Object.keys(recipe.timesAsWritten).length > 0 && (
+                <p
+                  className="mt-3 mb-0 text-muted"
+                  style={{ fontSize: 'var(--mkh-font-size-small)' }}
+                >
+                  As written:{' '}
+                  {Object.entries(recipe.timesAsWritten)
+                    .map(([k, v]) => `${k} ${v}`)
+                    .join(' · ')}
+                </p>
+              )}
               {recipe.notes && (
                 <>
                   <h2 className="h5 mt-4 mb-2">Notes</h2>
@@ -274,6 +318,40 @@ const RecipeDetail = ({
               )}
             </Col>
           </Row>
+
+          {scans.length > 0 && (
+            <section className="mt-4" aria-label="Original scan">
+              <h2 className="h5 mb-2">Original scan</h2>
+              <div className="d-flex flex-column gap-3">
+                {scans.map((scan, i) => (
+                  <a
+                    key={scan.url}
+                    href={scan.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="d-block"
+                  >
+                    <img
+                      src={scan.url}
+                      alt={
+                        scans.length > 1
+                          ? `${recipe.name}, page ${i + 1} of ${scans.length} of the original`
+                          : `${recipe.name}, the original`
+                      }
+                      loading="lazy"
+                      decoding="async"
+                      style={{
+                        width: '100%',
+                        maxWidth: 720,
+                        borderRadius: 'var(--mkh-radius-md)',
+                        border: '1px solid var(--mkh-border)',
+                      }}
+                    />
+                  </a>
+                ))}
+              </div>
+            </section>
+          )}
         </Card.Body>
       </Card>
     </div>

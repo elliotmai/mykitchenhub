@@ -100,7 +100,30 @@ const useDishes = (recipes = []) => {
     [dishes, run]
   );
 
-  return { dishes, group, error, renameDish, setFavorite, moveRecipe, moveToNewDish, mergeDish };
+  /** A recipe's photo as the dish's cover (instead of the collage); no url goes back to the collage. */
+  const setCover = useCallback(
+    (dishId, url, recipeId = null) =>
+      run('change the dish cover', () =>
+        setDoc(
+          doc(db, 'dishes', dishId),
+          { coverUrl: url || null, coverRecipeId: url ? recipeId : null },
+          { merge: true }
+        )
+      ),
+    [run]
+  );
+
+  return {
+    dishes,
+    group,
+    error,
+    renameDish,
+    setFavorite,
+    moveRecipe,
+    moveToNewDish,
+    mergeDish,
+    setCover,
+  };
 };
 
 export default useDishes;

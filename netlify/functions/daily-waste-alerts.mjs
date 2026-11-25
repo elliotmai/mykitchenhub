@@ -18,7 +18,11 @@ export default async () => {
   const now = new Date();
   if (!isAlertHour(now)) return new Response('Not 9 AM in the kitchen yet.');
 
-  const { data, error } = await service().schema('kitchen').from('docs').select('household_id').like('path', 'users/%');
+  const { data, error } = await service()
+    .schema('kitchen')
+    .from('docs')
+    .select('household_id')
+    .like('path', 'users/%');
   if (error) throw new Error(error.message);
   const households = [...new Set((data || []).map((r) => r.household_id))];
 

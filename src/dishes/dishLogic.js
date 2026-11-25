@@ -85,6 +85,8 @@ const JOINERS = new Set(['and', 'n', 'with', 'w', 'of', 'in', 'on', 'for']);
 /** "potatoes" → "potato", "berries" → "berry", "dishes" → "dish", "ribs" → "rib". */
 export function singular(word) {
   if (word.length <= 3 || /(ss|us|is)$/.test(word)) return word;
+  // cookies, brownies, pies, smoothies, veggies → -ie; berries, candies, patties → -y
+  if (/(k|p|n|h|g|z)ies$/.test(word)) return word.slice(0, -1);
   if (/ies$/.test(word)) return `${word.slice(0, -3)}y`;
   if (/(oes|ches|shes|xes|zes|sses)$/.test(word)) return word.slice(0, -2);
   if (/s$/.test(word)) return word.slice(0, -1);
@@ -203,6 +205,8 @@ export function groupDishes(recipes = [], dishDocs = {}) {
         recipes: sorted,
         favoriteId,
         favorite: sorted[0],
+        coverUrl: doc.coverUrl || null,
+        coverRecipeId: doc.coverRecipeId || null,
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -222,4 +226,85 @@ export function newDishId(name, existingIds = []) {
   let n = 2;
   while (existingIds.includes(`${base}-${n}`)) n += 1;
   return `${base}-${n}`;
+}
+
+/** When a recipe was added, as milliseconds (Firestore-style, {$ts} or ISO). */
+const addedAt = (r) => {
+  const v = r?.createdAt;
+  if (!v) return 0;
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string') return Date.parse(v) || 0;
+  if (typeof v.$ts === 'number') return v.$ts;
+  if (typeof v.toMillis === 'function') return v.toMillis();
+  if (typeof v.seconds === 'number') return v.seconds * 1000;
+  return 0;
+};
+
+/**
+ * The pictures a dish's cover shows: its chosen cover alone, else up to four
+ * of its recipes' photos, favourite first then most recently added.
+ * `more` is how many covered recipes did not fit.
+ */
+export function dishCover(dish) {
+  if (!dish) return { images: [], more: 0 };
+  if (dish.coverUrl) return { images: [{ url: dish.coverUrl, alt: dish.name }], more: 0 };
+  const covered = (dish.recipes || [])
+    .filter((r) => typeof r.imageUrl === 'string' && r.imageUrl.trim())
+    .sort(
+      (a, b) => (b.id === dish.favoriteId) - (a.id === dish.favoriteId) || addedAt(b) - addedAt(a)
+    );
+  return {
+    images: covered.slice(0, 4).map((r) => ({ url: r.imageUrl, alt: r.name || dish.name })),
+    more: Math.max(covered.length - 4, 0),
+  };
+}
+
+/** Edit distance up to `max` (then max + 1): "lasagne" ~ "lasagna". */
+const near = (a, b, max = 1) => {
+  if (a === b) return true;
+  if (Math.abs(a.length - b.length) > max || Math.min(a.length, b.length) < 5) return false;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i += 1) {
+    const row = [i];
+    for (let j = 1; j <= b.length; j += 1) {
+      row[j] = Math.min(prev[j] + 1, row[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    prev = row;
+  }
+  return prev[b.length] <= max;
+};
+
+/** How alike two names are, 0–1, on their dish words ("Best Easy Swedish Meatballs" ~ "Meatballs"). */
+export function nameMatch(a, b) {
+  const x = dishKey(a).split(' ').filter(Boolean);
+  const y = dishKey(b).split(' ').filter(Boolean);
+  if (!x.length || !y.length) return 0;
+  if (x.join(' ') === y.join(' ')) return 1;
+  const shared = y.filter((w) => x.some((v) => near(v, w))).length;
+  if (!shared) return 0;
+  const dice = (2 * shared) / (x.length + y.length);
+  // Every word of the shorter name is in the longer: a kind of that dish.
+  const short = Math.min(x.length, y.length);
+  return shared === short ? Math.max(dice, 0.75) : dice;
+}
+
+/**
+ * The dish a new recipe most likely belongs to, from the dishes' names and
+ * their recipes' names: { dish, score } or null when nothing is close.
+ */
+export function suggestDish(name, dishes = [], threshold = 0.6) {
+  let best = null;
+  for (const dish of dishes) {
+    const names = [dish.name, ...(dish.recipes || []).map((r) => r.name || r.title)];
+    const score = Math.max(...names.map((n) => nameMatch(name, n)));
+    if (
+      score >= threshold &&
+      (!best ||
+        score > best.score ||
+        (score === best.score && dish.recipes.length > best.dish.recipes.length))
+    ) {
+      best = { dish, score };
+    }
+  }
+  return best;
 }

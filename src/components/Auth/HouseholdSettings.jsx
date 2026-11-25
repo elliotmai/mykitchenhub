@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { Alert, Button } from 'react-bootstrap';
 
 import { currentHousehold, householdCode, newHouseholdCode } from '../../backend/household';
+import ShareControls from '../../sharing/ShareControls';
 
 const HouseholdSettings = () => {
   const [code, setCode] = useState('');
@@ -57,6 +58,13 @@ const HouseholdSettings = () => {
         <small className="text-muted">It doesn’t expire. “New code” stops this one working.</small>
       )}
       {problem && <Alert variant="warning">{problem}</Alert>}
+      <hr className="my-1" />
+      <h6 className="mb-0">Event partners</h6>
+      <p className="mb-0 text-muted">
+        People outside the household who always plan events with you: every event, its menu and
+        shopping, and the recipe book. They don’t see the pantry, meal plan, timers or settings.
+      </p>
+      <ShareControls kind="partner" what="plan all your events with you and use your recipe book" />
     </div>
   );
 };

@@ -9,6 +9,7 @@ import { Badge, Button, Card, Form, InputGroup } from 'react-bootstrap';
 import { CalendarDays, Plus, ShoppingCart, Trash2, Users, X } from 'lucide-react';
 
 import { recipeLabel } from '../components/MealPlan/ScheduleMealModal';
+import ShareControls from '../sharing/ShareControls';
 import {
   EVENT_STATUSES,
   addDay,
@@ -16,6 +17,8 @@ import {
   menuRecipes,
   removeDay,
   removeFromMenu,
+  setBringing,
+  snapshotDishRecipes,
   sortedDays,
   updateDay,
 } from './eventLogic';
@@ -53,7 +56,7 @@ const MenuPicker = ({ dishes, onPick, dayName }) => {
     const recipe = kind === 'recipe' ? dish?.recipes.find((r) => r.id === id) : null;
     onPick(
       kind === 'dish'
-        ? { dishId: id, label: dish?.name }
+        ? { dishId: id, label: dish?.name, recipeIds: (dish?.recipes || []).map((r) => r.id) }
         : { recipeId: id, label: recipe ? recipeLabel(recipe) : '' }
     );
     setValue('');
@@ -92,13 +95,25 @@ const MenuPicker = ({ dishes, onPick, dayName }) => {
   );
 };
 
-const EventCard = ({ event, dishes, recipesById, onSave, onDelete, onShop }) => {
+const EventCard = ({
+  event,
+  dishes,
+  recipesById,
+  onSave,
+  onDelete,
+  onShop,
+  canEdit = true,
+  canDelete = true,
+  canShare = false,
+}) => {
+  const [sharing, setSharing] = useState(false);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(event.name);
   const [guests, setGuests] = useState(event.guests || '');
   const [notes, setNotes] = useState(event.notes || '');
 
-  const save = (next) => onSave({ ...next, id: event.id });
+  // Dish lines keep their recipes as they stand, for guests (snapshotDishRecipes).
+  const save = (next) => onSave({ ...snapshotDishRecipes(next, dishes), id: event.id });
   const saveDetails = async (e) => {
     e.preventDefault();
     const result = await save({
@@ -161,19 +176,41 @@ const EventCard = ({ event, dishes, recipesById, onSave, onDelete, onShop }) => 
               )}
             </div>
             <div className="d-flex gap-1 flex-shrink-0">
-              <Button size="sm" variant="outline-secondary" onClick={() => setEditing(true)}>
-                Edit
-              </Button>
-              <Button
-                size="sm"
-                variant="outline-secondary"
-                aria-label={`Delete ${event.name}`}
-                onClick={() => onDelete(event)}
-              >
-                <Trash2 size={14} />
-              </Button>
+              {canShare && (
+                <Button
+                  size="sm"
+                  variant={sharing ? 'primary' : 'outline-secondary'}
+                  aria-expanded={sharing}
+                  onClick={() => setSharing((s) => !s)}
+                >
+                  Share
+                </Button>
+              )}
+              {canEdit && (
+                <Button size="sm" variant="outline-secondary" onClick={() => setEditing(true)}>
+                  Edit
+                </Button>
+              )}
+              {canDelete && (
+                <Button
+                  size="sm"
+                  variant="outline-secondary"
+                  aria-label={`Delete ${event.name}`}
+                  onClick={() => onDelete(event)}
+                >
+                  <Trash2 size={14} />
+                </Button>
+              )}
             </div>
           </div>
+        )}
+
+        {sharing && (
+          <ShareControls
+            kind="event"
+            eventId={event.id}
+            what={`plan ${event.name} with you: its days, menu, who's bringing what and its shopping`}
+          />
         )}
 
         {days.map((day) => {
@@ -231,7 +268,7 @@ const EventCard = ({ event, dishes, recipesById, onSave, onDelete, onShop }) => 
                 <span style={TINY}>Nothing on the menu yet.</span>
               ) : (
                 <ul className="list-unstyled mb-0 d-flex flex-column gap-1">
-                  {menu.map(({ label, dish, recipe }, index) => (
+                  {menu.map(({ label, dish, recipe, line }, index) => (
                     <li
                       key={`${label}-${index}`}
                       className="d-flex align-items-center gap-2"
@@ -248,25 +285,44 @@ const EventCard = ({ event, dishes, recipesById, onSave, onDelete, onShop }) => 
                         )}
                         {!recipe && <span style={TINY}> · not in the library</span>}
                       </span>
-                      <Button
-                        size="sm"
-                        variant="link"
-                        className="p-0 text-muted"
-                        aria-label={`Take ${label} off the menu`}
-                        onClick={() => save(removeFromMenu(event, day.id, index))}
-                      >
-                        <X size={14} />
-                      </Button>
+                      {canEdit ? (
+                        <Form.Control
+                          size="sm"
+                          style={{ maxWidth: '9rem' }}
+                          defaultValue={line.bringing || ''}
+                          placeholder="Who's bringing it"
+                          aria-label={`Who's bringing ${label}`}
+                          onBlur={(e) =>
+                            e.target.value.trim() !== (line.bringing || '') &&
+                            save(setBringing(event, day.id, index, e.target.value))
+                          }
+                        />
+                      ) : (
+                        line.bringing && <span style={TINY}>{line.bringing} is bringing it</span>
+                      )}
+                      {canEdit && (
+                        <Button
+                          size="sm"
+                          variant="link"
+                          className="p-0 text-muted"
+                          aria-label={`Take ${label} off the menu`}
+                          onClick={() => save(removeFromMenu(event, day.id, index))}
+                        >
+                          <X size={14} />
+                        </Button>
+                      )}
                     </li>
                   ))}
                 </ul>
               )}
 
-              <MenuPicker
-                dishes={dishes}
-                dayName={day.name}
-                onPick={(line) => save(addToMenu(event, day.id, line))}
-              />
+              {canEdit && (
+                <MenuPicker
+                  dishes={dishes}
+                  dayName={day.name}
+                  onPick={(line) => save(addToMenu(event, day.id, line))}
+                />
+              )}
 
               {menu.some((m) => m.recipe) && (
                 <Button

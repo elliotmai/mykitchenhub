@@ -477,3 +477,58 @@ describe('pasted recipes', () => {
     expect(parseRecipeMarkdown('## Ingredients\n* 1 egg')).toBeNull();
   });
 });
+
+describe('plain text an assistant wrote, and a web page', () => {
+  const { parseRecipeMarkdown, webRecipeToMarkdown, planRecipeImport } = require('../recipeImport');
+
+  it('skips the chatter around a plain-text recipe', () => {
+    const draft = parseRecipeMarkdown(
+      [
+        "Sure! Here's a cozy recipe for you.",
+        '',
+        'Creamy Tuscan Chicken',
+        'Serves 4',
+        '',
+        'Ingredients:',
+        '- 4 chicken breasts',
+        '- 1 cup heavy cream',
+        '',
+        'Instructions:',
+        '1. Sear the chicken.',
+        '2. Add the cream and simmer.',
+        '',
+        'Enjoy!',
+      ].join('\n')
+    );
+    expect(draft.name).toBe('Creamy Tuscan Chicken');
+    expect(draft.servings).toBe(4);
+    expect(draft.ingredients).toHaveLength(2);
+    expect(draft.instructions).toEqual(['Sear the chicken.', 'Add the cream and simmer.']);
+  });
+
+  it('turns a page’s recipe into the same import', () => {
+    const md = webRecipeToMarkdown(
+      {
+        name: 'Pancakes',
+        ingredients: ['1 cup flour', '1 egg'],
+        instructions: ['Mix.', 'Fry.'],
+        servings: 2,
+        prepTime: 5,
+        cookTime: 10,
+        tags: ['Breakfast'],
+      },
+      'https://cook.test/pancakes'
+    );
+    const { ready } = planRecipeImport([{ fileName: 'web', text: md }], [], 'web');
+    expect(ready[0].document).toMatchObject({
+      name: 'Pancakes',
+      importedFrom: 'web',
+      sourceUrl: 'https://cook.test/pancakes',
+      servings: 2,
+      prepTime: 5,
+      cookTime: 10,
+      instructions: ['Mix.', 'Fry.'],
+      tags: ['breakfast'],
+    });
+  });
+});

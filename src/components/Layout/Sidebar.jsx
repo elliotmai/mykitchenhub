@@ -19,6 +19,7 @@ import {
   CalendarHeart,
 } from 'lucide-react';
 import './Sidebar.css';
+import { SHARED_PATHS, useKitchen } from '../Auth/HouseholdGate';
 
 /**
  * Navigation Items Configuration
@@ -93,6 +94,9 @@ const BOTTOM_NAV_ITEMS = [
 const Sidebar = ({ isOpen, onClose, alertCount = 0 }) => {
   const location = useLocation();
   const sidebarRef = useRef(null);
+  // A shared kitchen offers the event side of the app only.
+  const { active } = useKitchen();
+  const offered = (item) => !active || SHARED_PATHS.includes(item.path);
 
   // Close sidebar on route change (mobile)
   useEffect(() => {
@@ -175,7 +179,7 @@ const Sidebar = ({ isOpen, onClose, alertCount = 0 }) => {
         {/* Navigation */}
         <nav className="app-sidebar__nav">
           <ul className="app-sidebar__list">
-            {NAV_ITEMS.map((item) => (
+            {NAV_ITEMS.filter(offered).map((item) => (
               <li key={item.path} className="app-sidebar__item">
                 <NavLink
                   to={item.path}
@@ -195,7 +199,7 @@ const Sidebar = ({ isOpen, onClose, alertCount = 0 }) => {
 
           {/* Bottom Navigation */}
           <ul className="app-sidebar__list app-sidebar__list--bottom">
-            {BOTTOM_NAV_ITEMS.map((item) => (
+            {BOTTOM_NAV_ITEMS.filter(offered).map((item) => (
               <li key={item.path} className="app-sidebar__item">
                 <NavLink
                   to={item.path}

@@ -65,6 +65,7 @@ const Settings = lazyWithRetry(() => import('./pages/Settings'), 'Settings');
 const WasteAlerts = lazyWithRetry(() => import('./pages/WasteAlerts'), 'WasteAlerts');
 const ShoppingListPage = lazyWithRetry(() => import('./pages/ShoppingList'), 'ShoppingList');
 const Events = lazyWithRetry(() => import('./pages/Events'), 'Events');
+const JoinShare = lazyWithRetry(() => import('./pages/JoinShare'), 'JoinShare');
 const Kiosk = lazyWithRetry(() => import('./pages/Kiosk'), 'Kiosk');
 
 /**
@@ -89,6 +90,9 @@ const AppRoutes = () => {
             </PublicOnlyRoute>
           }
         />
+
+        {/* An invite to plan events with a household, or to one event */}
+        <Route path="/join/:token" element={<JoinShare />} />
 
         {/* Protected Routes with Layout */}
         <Route

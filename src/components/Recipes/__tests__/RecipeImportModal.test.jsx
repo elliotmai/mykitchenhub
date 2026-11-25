@@ -238,3 +238,50 @@ describe('pasting a recipe', () => {
     delete document.execCommand;
   });
 });
+
+describe('from a link', () => {
+  const { __callable } = require('../../../test-utils/mocks/functions');
+
+  it('reads a page’s recipe and photo, then saves it for its dish and cover', async () => {
+    __callable('recipeFromUrl').mockResolvedValue({
+      data: {
+        recipe: {
+          name: 'Web Pancakes',
+          ingredients: ['1 cup flour', '1 egg'],
+          instructions: ['Mix.', 'Fry.'],
+          servings: 2,
+          tags: [],
+        },
+        imageUrl: 'https://cook.test/p.jpg',
+        pageUrl: 'https://cook.test/pancakes',
+      },
+    });
+    const onImported = jest.fn();
+    const { user } = renderWithProviders(
+      <RecipeImportModal show onHide={jest.fn()} existingRecipes={[]} onImported={onImported} />
+    );
+    await user.click(screen.getByRole('tab', { name: 'From a link' }));
+    await user.type(screen.getByLabelText('Recipe page address'), 'https://cook.test/pancakes');
+    await user.click(screen.getByRole('button', { name: 'Read' }));
+    expect(await screen.findByText('Web Pancakes')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Import 1/ }));
+    await waitFor(() => expect(onImported).toHaveBeenCalled());
+    expect(onImported.mock.calls[0][0].recipes[0]).toMatchObject({
+      name: 'Web Pancakes',
+      sourceUrl: 'https://cook.test/pancakes',
+      imageUrl: 'https://cook.test/p.jpg',
+      coverSource: { kind: 'web', pageUrl: 'https://cook.test/pancakes' },
+    });
+  });
+
+  it('says so when a page has no recipe', async () => {
+    __callable('recipeFromUrl').mockResolvedValue({
+      data: { recipe: null, title: 'Blog', imageUrl: null, pageUrl: 'https://x.test' },
+    });
+    const { user } = renderWithProviders(<RecipeImportModal show onHide={jest.fn()} />);
+    await user.click(screen.getByRole('tab', { name: 'From a link' }));
+    await user.type(screen.getByLabelText('Recipe page address'), 'https://x.test');
+    await user.click(screen.getByRole('button', { name: 'Read' }));
+    expect(await screen.findByText(/No recipe was found on that page/)).toBeInTheDocument();
+  });
+});

@@ -22,8 +22,11 @@ let client = null;
 export function service() {
   if (client) return client;
   const key = env('SUPABASE_SERVICE_ROLE_KEY');
-  if (!key) throw Object.assign(new Error('SUPABASE_SERVICE_ROLE_KEY is not set'), { unconfigured: true });
-  client = createClient(SUPABASE_URL(), key, { auth: { persistSession: false, autoRefreshToken: false } });
+  if (!key)
+    throw Object.assign(new Error('SUPABASE_SERVICE_ROLE_KEY is not set'), { unconfigured: true });
+  client = createClient(SUPABASE_URL(), key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
   return client;
 }
 
@@ -58,7 +61,11 @@ export async function signedIn(req) {
   const { data, error } = await service().auth.getUser(token);
   if (error || !data?.user) return null;
   const kitchen = await kitchenFor(data.user.id);
-  return { uid: data.user.id, email: data.user.email || null, ...(kitchen || { householdId: null, db: null }) };
+  return {
+    uid: data.user.id,
+    email: data.user.email || null,
+    ...(kitchen || { householdId: null, db: null }),
+  };
 }
 
 export const json = (status, body, headers = {}) =>
@@ -79,7 +86,8 @@ const HTTP = {
  */
 export function callable(run, { needsKitchen = true } = {}) {
   return async (req) => {
-    if (req.method !== 'POST') return json(405, { error: { status: 'invalid-argument', message: 'Use POST.' } });
+    if (req.method !== 'POST')
+      return json(405, { error: { status: 'invalid-argument', message: 'Use POST.' } });
     let who;
     try {
       who = await signedIn(req);
@@ -89,7 +97,9 @@ export function callable(run, { needsKitchen = true } = {}) {
     }
     if (!who) return json(401, { error: { status: 'unauthenticated', message: 'Sign in first.' } });
     if (needsKitchen && !who.db) {
-      return json(412, { error: { status: 'failed-precondition', message: 'Join or make a household first.' } });
+      return json(412, {
+        error: { status: 'failed-precondition', message: 'Join or make a household first.' },
+      });
     }
     const body = await req.json().catch(() => ({}));
     try {
@@ -115,7 +125,9 @@ export async function expressish(handler, req, extra = {}) {
   } catch {
     body = text;
   }
-  const headers = Object.fromEntries([...req.headers.entries()].map(([k, v]) => [k.toLowerCase(), v]));
+  const headers = Object.fromEntries(
+    [...req.headers.entries()].map(([k, v]) => [k.toLowerCase(), v])
+  );
   const out = { status: 200, headers: {}, body: undefined, json: false };
   const res = {
     set: (k, v) => ((out.headers[k] = v), res),
@@ -123,7 +135,17 @@ export async function expressish(handler, req, extra = {}) {
     json: (b) => ((out.body = b), (out.json = true), res),
     send: (b) => ((out.body = b), res),
   };
-  await handler({ method: req.method, headers, body, rawBody: Buffer.from(text || ''), path: new URL(req.url).pathname, ...extra }, res);
+  await handler(
+    {
+      method: req.method,
+      headers,
+      body,
+      rawBody: Buffer.from(text || ''),
+      path: new URL(req.url).pathname,
+      ...extra,
+    },
+    res
+  );
   if (out.json) return Response.json(out.body, { status: out.status, headers: out.headers });
   return new Response(out.body ?? '', { status: out.status, headers: out.headers });
 }

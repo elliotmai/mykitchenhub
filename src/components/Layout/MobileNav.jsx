@@ -17,7 +17,16 @@
 
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, Package, BookOpen, AlertTriangle, Menu } from 'lucide-react';
+import {
+  Home,
+  Package,
+  BookOpen,
+  AlertTriangle,
+  Menu,
+  CalendarHeart,
+  ShoppingCart,
+} from 'lucide-react';
+import { useKitchen } from '../Auth/HouseholdGate';
 import './MobileNav.css';
 
 /**
@@ -39,40 +48,51 @@ export const MOBILE_NAV_ITEMS = [
  * @param {function} onOpenMore - opens the drawer holding the remaining pages
  * @param {number}   alertCount - unread waste alerts, shown on the Alerts tab
  */
-const MobileNav = ({ onOpenMore, alertCount = 0 }) => (
-  <nav className="mobile-nav" aria-label="Primary">
-    <ul className="mobile-nav__list">
-      {MOBILE_NAV_ITEMS.map((item) => (
-        <li key={item.path} className="mobile-nav__item">
-          <NavLink
-            to={item.path}
-            className={({ isActive }) =>
-              `mobile-nav__link ${isActive ? 'mobile-nav__link--active' : ''}`
-            }
-          >
-            <span className="mobile-nav__icon-wrap">
-              <item.icon size={22} aria-hidden="true" />
-              {item.path === '/waste-alerts' && alertCount > 0 && (
-                <span className="mobile-nav__badge" aria-hidden="true">
-                  {alertCount > 9 ? '9+' : alertCount}
-                </span>
-              )}
-            </span>
-            <span className="mobile-nav__label">{item.label}</span>
-          </NavLink>
-        </li>
-      ))}
+const MobileNav = ({ onOpenMore, alertCount = 0 }) => {
+  const { active } = useKitchen();
+  // A shared kitchen offers the event side of the app only.
+  const items = active
+    ? [
+        { path: '/events', icon: CalendarHeart, label: 'Events' },
+        { path: '/recipes', icon: BookOpen, label: 'Recipes' },
+        { path: '/shopping-list', icon: ShoppingCart, label: 'Shopping' },
+      ]
+    : MOBILE_NAV_ITEMS;
+  return (
+    <nav className="mobile-nav" aria-label="Primary">
+      <ul className="mobile-nav__list">
+        {items.map((item) => (
+          <li key={item.path} className="mobile-nav__item">
+            <NavLink
+              to={item.path}
+              className={({ isActive }) =>
+                `mobile-nav__link ${isActive ? 'mobile-nav__link--active' : ''}`
+              }
+            >
+              <span className="mobile-nav__icon-wrap">
+                <item.icon size={22} aria-hidden="true" />
+                {item.path === '/waste-alerts' && alertCount > 0 && (
+                  <span className="mobile-nav__badge" aria-hidden="true">
+                    {alertCount > 9 ? '9+' : alertCount}
+                  </span>
+                )}
+              </span>
+              <span className="mobile-nav__label">{item.label}</span>
+            </NavLink>
+          </li>
+        ))}
 
-      <li className="mobile-nav__item">
-        <button type="button" className="mobile-nav__link" onClick={onOpenMore}>
-          <span className="mobile-nav__icon-wrap">
-            <Menu size={22} aria-hidden="true" />
-          </span>
-          <span className="mobile-nav__label">More</span>
-        </button>
-      </li>
-    </ul>
-  </nav>
-);
+        <li className="mobile-nav__item">
+          <button type="button" className="mobile-nav__link" onClick={onOpenMore}>
+            <span className="mobile-nav__icon-wrap">
+              <Menu size={22} aria-hidden="true" />
+            </span>
+            <span className="mobile-nav__label">More</span>
+          </button>
+        </li>
+      </ul>
+    </nav>
+  );
+};
 
 export default MobileNav;

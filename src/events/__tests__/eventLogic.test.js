@@ -140,3 +140,26 @@ describe('menus feed the shopping list', () => {
     expect(shoppingLines([day, day], dishes, recipes).length).toBe(4);
   });
 });
+
+describe('who is bringing what, and what a dish line holds', () => {
+  const { addToMenu, setBringing } = require('../eventLogic');
+  const event = { id: 'e', name: 'Party', days: [{ id: 'd1', name: 'Day', menu: [] }] };
+
+  it('keeps a dish line’s recipes so a guest may read them', () => {
+    const next = addToMenu(event, 'd1', {
+      dishId: 'lasagna',
+      label: 'Lasagna',
+      recipeIds: ['a', 'b'],
+    });
+    expect(next.days[0].menu[0]).toMatchObject({ dishId: 'lasagna', recipeIds: ['a', 'b'] });
+    const plain = addToMenu(event, 'd1', { recipeId: 'a', label: 'A', recipeIds: ['x'] });
+    expect(plain.days[0].menu[0].recipeIds).toBeUndefined();
+  });
+
+  it('sets and clears who is bringing a line', () => {
+    const withLine = addToMenu(event, 'd1', { recipeId: 'a', label: 'A' });
+    const bringing = setBringing(withLine, 'd1', 0, '  Aunt Sue ');
+    expect(bringing.days[0].menu[0].bringing).toBe('Aunt Sue');
+    expect(setBringing(bringing, 'd1', 0, '').days[0].menu[0]).not.toHaveProperty('bringing');
+  });
+});

@@ -102,7 +102,7 @@ it('changes a day and its menu, saving the whole event', async () => {
   );
   [ref, data] = fs.setDoc.mock.calls.at(-1);
   expect(data.days[0].menu).toEqual([
-    { dishId: 'rib', label: 'Ribs' },
+    { dishId: 'rib', label: 'Ribs', recipeIds: expect.arrayContaining(['r2', 'r3']) },
     { recipeId: 'r1', label: 'Green Rice' },
   ]);
 
@@ -156,4 +156,52 @@ it('says so when the menu is already on the list', async () => {
   await user.click(screen.getByRole('button', { name: /Add Thanksgiving to the shopping list/ }));
   expect(await screen.findByText(/already on the shopping list/)).toBeInTheDocument();
   expect(fs.addDoc).not.toHaveBeenCalled();
+});
+
+it('notes who is bringing a dish, and keeps a dish line’s recipes for guests', async () => {
+  const { user } = await renderEvents();
+  await user.type(screen.getByLabelText("Who's bringing Ribs"), 'Aunt Sue');
+  await user.tab();
+  expect(fs.setDoc.mock.calls.at(-1)[1].days[0].menu[0]).toMatchObject({
+    dishId: 'rib',
+    bringing: 'Aunt Sue',
+  });
+  const line = fs.setDoc.mock.calls.at(-1)[1].days[0].menu[0];
+  expect([...line.recipeIds].sort()).toEqual(['r2', 'r3']);
+});
+
+it('offers sharing in your own kitchen', async () => {
+  const { user } = await renderEvents();
+  const card = screen.getByRole('heading', { name: 'Thanksgiving' }).closest('.card');
+  await user.click(within(card).getByRole('button', { name: 'Share' }));
+  await user.click(within(card).getByRole('button', { name: /Get the invite link/ }));
+  expect(await within(card).findByRole('button', { name: /Copy/ })).toBeInTheDocument();
+});
+
+describe('in a kitchen shared with you', () => {
+  const gate = require('../../components/Auth/HouseholdGate');
+  afterEach(() => jest.restoreAllMocks());
+  const as = (share) =>
+    jest.spyOn(gate, 'useKitchen').mockReturnValue({ own: null, shares: [share], active: share });
+
+  it('a guest on one event can edit it but not add, delete or share events', async () => {
+    as({ household_id: 'h2', household: 'Smiths', kind: 'event', event_id: 'e1', can_edit: true });
+    await renderEvents();
+    expect(screen.getByText(/Planning with Smiths\./)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Add event/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete Thanksgiving' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Edit' }).length).toBeGreaterThan(0);
+  });
+
+  it('view only shows the plan without changing it', async () => {
+    as({ household_id: 'h2', household: 'Smiths', kind: 'partner', event_id: '', can_edit: false });
+    await renderEvents();
+    expect(screen.getByText(/Planning with Smiths \(view only\)/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Add to the Thanksgiving menu')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Take Ribs off the menu' })
+    ).not.toBeInTheDocument();
+  });
 });

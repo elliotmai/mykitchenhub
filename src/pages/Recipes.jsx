@@ -21,6 +21,8 @@ import RecipeDetail from './RecipeDetail';
 import useDishes from '../dishes/useDishes';
 import DishView from '../dishes/DishView';
 import { dishOf } from '../dishes/dishLogic';
+import RecipeFinish from '../dishes/RecipeFinish';
+import { adoptWebCover, dishFor, placeInDish } from '../dishes/newRecipe';
 
 const RECIPE_PARAM = 'recipe';
 const DISH_PARAM = 'dish';
@@ -80,6 +82,10 @@ const Recipes = () => {
     setSharedText('');
   };
   const [actionError, setActionError] = useState('');
+  const report = (result) => {
+    if (result && !result.success) setActionError(result.error);
+    return result;
+  };
 
   // Inventory feeds both the ingredient autocomplete and the "in your kitchen"
   // markers on the detail view.
@@ -107,7 +113,26 @@ const Recipes = () => {
 
   const handleSave = async (data) => {
     if (editRecipe) return updateRecipe(editRecipe.id, data);
-    return addRecipe(data);
+    const result = await addRecipe(data);
+    if (result?.success && result.id) setFinishing({ id: result.id, ...data });
+    return result;
+  };
+
+  // ── A recipe just added: its dish and cover (src/dishes/newRecipe.js) ──────
+  const [finishing, setFinishing] = useState(null);
+  const handleImported = async ({ recipes: added = [] }) => {
+    const covered = await Promise.all(
+      added.map(async (r) => ({ ...r, imageUrl: await adoptWebCover(r) }))
+    );
+    if (covered.length === 1) {
+      closeImport();
+      setFinishing(covered[0]);
+      return;
+    }
+    // Several at once: each takes its suggested dish, else is a dish of its own.
+    for (const r of covered) {
+      await placeInDish(r, dishFor(r, dishActions.dishes), dishActions.dishes, dishActions);
+    }
   };
 
   // ── Cook counter ─────────────────────────────────────────────────────────
@@ -157,8 +182,12 @@ const Recipes = () => {
           onCook={handleCook}
           onEdit={openEdit}
           onDelete={setDeleteTarget}
-          dish={recipeDish && recipeDish.recipes.length > 1 ? recipeDish : null}
+          dish={recipeDish}
           onOpenDish={openDish}
+          dishes={dishActions.dishes}
+          onMoveDish={(r, to) => dishActions.moveRecipe(r.id, to).then(report)}
+          onMoveNewDish={(r, n) => dishActions.moveToNewDish(r.id, n).then(report)}
+          onUseAsCover={(d, r) => dishActions.setCover(d.id, r.imageUrl, r.id).then(report)}
         />
       ) : selectedDishId ? (
         <DishView
@@ -206,7 +235,21 @@ const Recipes = () => {
         existingRecipes={recipes}
         initialText={sharedText}
         onOpenRecipe={(id) => setSearchParams({ [RECIPE_PARAM]: id })}
+        onImported={handleImported}
       />
+
+      {finishing && (
+        <RecipeFinish
+          recipe={finishing}
+          dishes={dishActions.dishes}
+          actions={dishActions}
+          onDone={() => {
+            const id = finishing.id;
+            setFinishing(null);
+            setSearchParams({ [RECIPE_PARAM]: id });
+          }}
+        />
+      )}
 
       <ConfirmModal
         show={Boolean(deleteTarget)}

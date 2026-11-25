@@ -18,11 +18,12 @@ import {
 import { Upload, CheckCircle, Copy, Check } from 'lucide-react';
 
 import useRecipeImport from '../../hooks/useRecipeImport';
-import { RECIPE_FORMAT_PROMPT } from '../../utils/recipeImport';
+import { RECIPE_FORMAT_PROMPT, webRecipeToMarkdown } from '../../utils/recipeImport';
+import { recipeFromUrl } from '../../services/recipeWeb';
 
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-export const IMPORT_TABS = { paste: 'paste', pestle: 'pestle' };
+export const IMPORT_TABS = { paste: 'paste', link: 'link', pestle: 'pestle' };
 
 /** Clipboard write with a fallback for browsers that refuse the async API. */
 const copyText = async (text) => {
@@ -49,6 +50,7 @@ const copyText = async (text) => {
  * @param {string}   initialTab      - 'paste' (default) or 'pestle'
  * @param {string}   initialText     - prefill for the paste box (from the share sheet)
  * @param {function} onOpenRecipe    - (id) => void, offered after a single import
+ * @param {function} onImported      - ({ ids, recipes }) => void, after a save
  */
 const RecipeImportModal = ({
   show,
@@ -57,6 +59,7 @@ const RecipeImportModal = ({
   initialTab = IMPORT_TABS.paste,
   initialText = '',
   onOpenRecipe,
+  onImported,
 }) => {
   const {
     plan,
@@ -74,6 +77,42 @@ const RecipeImportModal = ({
   const [tab, setTab] = useState(initialTab);
   const [text, setText] = useState(initialText);
   const [copied, setCopied] = useState(false);
+  const [link, setLink] = useState('');
+  const [reading, setReading] = useState(false);
+  const [linkProblem, setLinkProblem] = useState('');
+
+  const readLink = async (event) => {
+    event.preventDefault();
+    reset();
+    setLinkProblem('');
+    setReading(true);
+    try {
+      const page = await recipeFromUrl(link);
+      if (!page?.recipe?.name) {
+        setLinkProblem(
+          'No recipe was found on that page. Copy the recipe’s text and use “Paste a recipe”.'
+        );
+        return;
+      }
+      prepareText(webRecipeToMarkdown(page.recipe, page.pageUrl), {
+        origin: 'web',
+        extra: {
+          sourceUrl: page.pageUrl,
+          imageUrl: page.imageUrl || null,
+          ...(page.imageUrl ? { coverSource: { kind: 'web', pageUrl: page.pageUrl } } : {}),
+        },
+      });
+    } catch (err) {
+      setLinkProblem(err.message || 'That page could not be read.');
+    } finally {
+      setReading(false);
+    }
+  };
+
+  const save = async () => {
+    const outcome = await commit();
+    if (outcome?.success && outcome.imported) onImported?.(outcome);
+  };
 
   useEffect(() => {
     if (show) {
@@ -275,6 +314,32 @@ const RecipeImportModal = ({
               {summary}
             </Tab>
 
+            <Tab eventKey={IMPORT_TABS.link} title="From a link" disabled={committing}>
+              <p className="text-muted small mb-2">
+                Paste the address of a recipe page. Its photo comes along as the cover.
+              </p>
+              <Form onSubmit={readLink} className="d-flex gap-2 mb-3">
+                <Form.Control
+                  type="url"
+                  inputMode="url"
+                  aria-label="Recipe page address"
+                  placeholder="https://…"
+                  value={link}
+                  onChange={(e) => setLink(e.target.value)}
+                  disabled={reading || committing}
+                />
+                <Button
+                  type="submit"
+                  variant="outline-primary"
+                  disabled={!link.trim() || reading || committing}
+                >
+                  {reading ? <Spinner size="sm" /> : 'Read'}
+                </Button>
+              </Form>
+              {(linkProblem || error) && <Alert variant="danger">{linkProblem || error}</Alert>}
+              {summary}
+            </Tab>
+
             <Tab eventKey={IMPORT_TABS.pestle} title="Pestle export" disabled={committing}>
               <p className="text-muted">
                 In Pestle, use <strong>Export all</strong> and choose the .zip it gives you. You can
@@ -332,7 +397,7 @@ const RecipeImportModal = ({
             <Button
               variant="primary"
               className="d-flex align-items-center gap-2"
-              onClick={commit}
+              onClick={save}
               disabled={!readyCount || preparing || committing}
             >
               {committing ? <Spinner size="sm" /> : <Upload size={16} />}

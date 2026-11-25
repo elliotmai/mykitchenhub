@@ -15,6 +15,7 @@ import EventCard from '../events/EventCard';
 import { shoppingLines, sortEvents } from '../events/eventLogic';
 import ConfirmModal from '../components/Common/ConfirmModal';
 import { useToast } from '../components/Common';
+import { useKitchen } from '../components/Auth/HouseholdGate';
 
 const todayKey = () => {
   const d = new Date();
@@ -28,6 +29,10 @@ const Events = () => {
   const { items, addItem } = useShoppingList();
   const { usualStore } = useStores();
   const { showError, showSuccess } = useToast();
+  // In someone else's kitchen: partners plan every event, guests their one.
+  const { active } = useKitchen();
+  const canEdit = !active || active.can_edit !== false;
+  const canCreate = !active || (active.kind === 'partner' && canEdit);
 
   const [name, setName] = useState('');
   const [date, setDate] = useState('');
@@ -83,6 +88,9 @@ const Events = () => {
         onSave={(next) => save(next).then(report)}
         onDelete={setDeleting}
         onShop={shop}
+        canEdit={canEdit}
+        canDelete={canCreate}
+        canShare={!active}
       />
     ));
 
@@ -91,57 +99,61 @@ const Events = () => {
       <div>
         <h1 className="h3 mb-0">Events</h1>
         <small className="text-muted">
-          Plan the menu for a holiday or a get-together, then shop for it in one go.
+          {active
+            ? `Planning with ${active.household}${canEdit ? '' : ' (view only)'}.`
+            : 'Plan the menu for a holiday or a get-together, then shop for it in one go.'}
         </small>
       </div>
 
       {error && <Alert variant="danger">{error}</Alert>}
 
-      <Form onSubmit={submit} aria-label="New event">
-        <Row className="g-2 align-items-end">
-          <Col xs={12} md={4}>
-            <Form.Label htmlFor="event-name" className="small mb-1">
-              Event
-            </Form.Label>
-            <Form.Control
-              id="event-name"
-              placeholder="Thanksgiving"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </Col>
-          <Col xs={6} md={3}>
-            <Form.Label htmlFor="event-date" className="small mb-1">
-              Date (optional)
-            </Form.Label>
-            <Form.Control
-              id="event-date"
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-            />
-          </Col>
-          <Col xs={6} md={3}>
-            <Form.Label htmlFor="event-guests" className="small mb-1">
-              Guests (optional)
-            </Form.Label>
-            <Form.Control
-              id="event-guests"
-              value={guests}
-              onChange={(e) => setGuests(e.target.value)}
-            />
-          </Col>
-          <Col xs={12} md={2}>
-            <Button
-              type="submit"
-              className="w-100 d-flex align-items-center justify-content-center gap-1"
-              disabled={!name.trim() || adding}
-            >
-              <Plus size={16} aria-hidden="true" /> Add event
-            </Button>
-          </Col>
-        </Row>
-      </Form>
+      {canCreate && (
+        <Form onSubmit={submit} aria-label="New event">
+          <Row className="g-2 align-items-end">
+            <Col xs={12} md={4}>
+              <Form.Label htmlFor="event-name" className="small mb-1">
+                Event
+              </Form.Label>
+              <Form.Control
+                id="event-name"
+                placeholder="Thanksgiving"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </Col>
+            <Col xs={6} md={3}>
+              <Form.Label htmlFor="event-date" className="small mb-1">
+                Date (optional)
+              </Form.Label>
+              <Form.Control
+                id="event-date"
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+              />
+            </Col>
+            <Col xs={6} md={3}>
+              <Form.Label htmlFor="event-guests" className="small mb-1">
+                Guests (optional)
+              </Form.Label>
+              <Form.Control
+                id="event-guests"
+                value={guests}
+                onChange={(e) => setGuests(e.target.value)}
+              />
+            </Col>
+            <Col xs={12} md={2}>
+              <Button
+                type="submit"
+                className="w-100 d-flex align-items-center justify-content-center gap-1"
+                disabled={!name.trim() || adding}
+              >
+                <Plus size={16} aria-hidden="true" /> Add event
+              </Button>
+            </Col>
+          </Row>
+        </Form>
+      )}
 
       {loading ? (
         <div className="d-flex align-items-center gap-2 text-muted">

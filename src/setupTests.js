@@ -48,6 +48,21 @@ jest.mock('./backend/household', () => ({
   householdCode: jest.fn(async () => 'ABCD2345'),
   newHouseholdCode: jest.fn(async () => 'WXYZ6789'),
 }));
+jest.mock('./backend/sharing', () => ({
+  shareLink: jest.fn(async () => 'tok'.repeat(10)),
+  joinShare: jest.fn(async () => ({
+    household_id: 'hh-2',
+    household: 'Smiths',
+    kind: 'partner',
+    event_id: '',
+  })),
+  inviteByEmail: jest.fn(async (kind, eventId, email) => email),
+  acceptMyInvites: jest.fn(async () => 0),
+  sharingPeople: jest.fn(async () => []),
+  setSharing: jest.fn(async () => undefined),
+  myShares: jest.fn(async () => []),
+  joinUrl: (token) => `https://kitchen.test/join/${token}`,
+}));
 jest.mock('./backend/timers', () => ({
   listTimers: jest.fn(async () => []),
   addTimer: jest.fn(async (row) => ({ id: 'timer-1', ...row })),
@@ -61,6 +76,9 @@ jest.mock('./backend/supabase', () => ({
   myHousehold: jest.fn(async () => 'household-1'),
   forgetHousehold: jest.fn(),
   accessToken: jest.fn(async () => 'test-access-token'),
+  activeKitchen: jest.fn(() => null),
+  setActiveKitchen: jest.fn(),
+  ownHousehold: jest.fn(async () => 'household-1'),
   HIVE_ORIGIN: 'https://hive.test',
 }));
 
