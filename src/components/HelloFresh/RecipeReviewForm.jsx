@@ -4,6 +4,7 @@
 // Doubles as the manual-entry form: `useHelloFreshImport.startManualEntry()`
 // hands it a blank draft, and everything below works the same way.
 
+import { normalizeTags } from '../../utils/tags';
 import React, { useEffect, useState } from 'react';
 import { Alert, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import { Plus, Save, Trash2, X } from 'lucide-react';
@@ -14,11 +15,7 @@ const blankIngredient = () => ({ name: '', quantity: 1, unit: '' });
 
 /** Tags round-trip through free text, so a comma can actually be typed. */
 const tagsToText = (tags) => (tags ?? []).join(', ');
-const textToTags = (text) =>
-  String(text ?? '')
-    .split(',')
-    .map((tag) => tag.trim())
-    .filter(Boolean);
+const textToTags = (text) => normalizeTags(String(text ?? '').split(','));
 
 const RecipeReviewForm = ({
   draft,

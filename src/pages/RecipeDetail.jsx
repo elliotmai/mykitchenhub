@@ -9,6 +9,7 @@
 // normalized name, the same field the inventory writes, so "Chicken Breast" in
 // the fridge lights up "chicken breast" in a recipe.
 
+import { tagLabel } from '../utils/tags';
 import React from 'react';
 import { Card, Badge, Button, Row, Col, Alert, ListGroup, Spinner } from 'react-bootstrap';
 import {
@@ -190,7 +191,7 @@ const RecipeDetail = ({
                     border: '1px solid var(--mkh-border)',
                   }}
                 >
-                  {tag}
+                  {tagLabel(tag)}
                 </Badge>
               ))}
             </div>

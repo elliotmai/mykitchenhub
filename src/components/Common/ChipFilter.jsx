@@ -29,6 +29,7 @@ export const ChipFilter = ({
   onToggle,
   visibleCount = DEFAULT_VISIBLE_CHIPS,
   label = 'Filter by tag',
+  formatLabel = (option) => option,
   className = '',
 }) => {
   const [expanded, setExpanded] = useState(false);
@@ -67,7 +68,7 @@ export const ChipFilter = ({
               outline: active ? 'none' : '1px solid var(--mkh-border)',
             }}
           >
-            {option}
+            {formatLabel(option)}
           </Badge>
         );
       })}

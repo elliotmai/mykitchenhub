@@ -50,7 +50,8 @@ describe('RecipeCard', () => {
   it('shows the first few tags and counts the rest', () => {
     render({ recipe: makeRecipe({ tags: ['a', 'b', 'c', 'd', 'e'] }) });
 
-    expect(screen.getByText('a')).toBeInTheDocument();
+    // Shown in sentence case; stored lower case.
+    expect(screen.getByText('A')).toBeInTheDocument();
     expect(screen.getByText('+2')).toBeInTheDocument();
   });
 

@@ -161,7 +161,7 @@ describe('RecipeList', () => {
     it('filters by tag when a chip is pressed', async () => {
       const { user } = render();
 
-      await user.click(screen.getByRole('button', { name: 'breakfast' }));
+      await user.click(screen.getByRole('button', { name: 'Breakfast' }));
 
       expect(screen.getByText('Morning Toast')).toBeInTheDocument();
       expect(screen.queryByText('Quick Pasta')).not.toBeInTheDocument();
@@ -170,17 +170,17 @@ describe('RecipeList', () => {
     it('narrows further with a second tag rather than widening', async () => {
       const { user } = render();
 
-      await user.click(screen.getByRole('button', { name: 'dinner' }));
+      await user.click(screen.getByRole('button', { name: 'Dinner' }));
       expect(screen.getByText('Slow Stew')).toBeInTheDocument();
 
-      await user.click(screen.getByRole('button', { name: 'quick' }));
+      await user.click(screen.getByRole('button', { name: 'Quick' }));
       expect(screen.getByText('Quick Pasta')).toBeInTheDocument();
       expect(screen.queryByText('Slow Stew')).not.toBeInTheDocument();
     });
 
     it('unpresses a tag chip on a second click', async () => {
       const { user } = render();
-      const chip = screen.getByRole('button', { name: 'breakfast' });
+      const chip = screen.getByRole('button', { name: 'Breakfast' });
 
       await user.click(chip);
       expect(chip).toHaveAttribute('aria-pressed', 'true');

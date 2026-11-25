@@ -6,6 +6,7 @@
 // sync de-duplicates against), so the form disables the field rather than
 // letting a cook type a new name and watch the save bounce.
 
+import { matchExistingTag, normalizeTags, suggestTags, tagLabel } from '../../utils/tags';
 import React, { useState, useEffect } from 'react';
 import { Modal, Form, Button, Row, Col, Alert, Badge, Image, Spinner } from 'react-bootstrap';
 import { BookOpen, X, Upload } from 'lucide-react';
@@ -13,7 +14,7 @@ import { BookOpen, X, Upload } from 'lucide-react';
 import IngredientInput, { emptyIngredient } from './IngredientInput';
 import InstructionBuilder from './InstructionBuilder';
 import useRecipeImageUpload from '../../hooks/useRecipeImageUpload';
-import { DIFFICULTIES, normalizeName, instructionSteps } from '../../hooks/useRecipes';
+import { DIFFICULTIES, instructionSteps } from '../../hooks/useRecipes';
 
 const EMPTY_FORM = {
   name: '',
@@ -66,6 +67,7 @@ const AddRecipeModal = ({
   onSave,
   editRecipe = null,
   ingredientSuggestions = [],
+  tagSuggestions = [],
 }) => {
   const isEditing = Boolean(editRecipe);
 
@@ -87,8 +89,9 @@ const AddRecipeModal = ({
   const patch = (field) => (e) => setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
   // ── Tags ────────────────────────────────────────────────────────────────
+  // An existing tag wins over a near-duplicate ("Potato" → "potatoes").
   const addTag = (raw) => {
-    const tag = normalizeName(raw);
+    const tag = matchExistingTag(raw, tagSuggestions);
     if (!tag) return;
     setForm((prev) => (prev.tags.includes(tag) ? prev : { ...prev, tags: [...prev.tags, tag] }));
     setTagDraft('');
@@ -119,7 +122,9 @@ const AddRecipeModal = ({
     setError('');
 
     // A tag left in the box when the cook hits save is one they meant to add.
-    const tags = tagDraft.trim() ? [...form.tags, normalizeName(tagDraft)] : form.tags;
+    const tags = normalizeTags(
+      tagDraft.trim() ? [...form.tags, matchExistingTag(tagDraft, tagSuggestions)] : form.tags
+    );
 
     const payload = {
       name: form.name,
@@ -248,7 +253,13 @@ const AddRecipeModal = ({
               onChange={(e) => setTagDraft(e.target.value)}
               onKeyDown={handleTagKeyDown}
               maxLength={30}
+              list="recipe-tag-suggestions"
             />
+            <datalist id="recipe-tag-suggestions">
+              {suggestTags(tagDraft, tagSuggestions, form.tags).map((tag) => (
+                <option key={tag} value={tag} />
+              ))}
+            </datalist>
             {form.tags.length > 0 && (
               <div className="d-flex gap-2 flex-wrap mt-2">
                 {form.tags.map((tag) => (
@@ -262,7 +273,7 @@ const AddRecipeModal = ({
                       border: '1px solid var(--mkh-border)',
                     }}
                   >
-                    {tag}
+                    {tagLabel(tag)}
                     <Button
                       variant="link"
                       className="p-0 border-0 d-flex align-items-center"

@@ -7,6 +7,7 @@
 // recipe is created under the signed-in user's credentials and the `recipes`
 // security rules apply.
 
+import { normalizeTags } from '../utils/tags';
 import { useCallback, useMemo, useState } from 'react';
 import { addDoc, collection, serverTimestamp } from '../backend/firestore';
 
@@ -75,7 +76,7 @@ export function validateDraft(draft) {
 
 /** Strip a draft down to the document the rules accept, dropping empty rows. */
 export function toRecipeDocument(draft) {
-  const tags = Array.from(new Set([...(draft.tags ?? []), 'hellofresh'].filter(Boolean)));
+  const tags = normalizeTags([...(draft.tags ?? []), 'hellofresh']);
 
   return {
     name: draft.name.trim(),
