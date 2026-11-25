@@ -66,7 +66,7 @@ it('lists upcoming events with their guests, notes and menu, and hides past ones
   expect(within(card).getByText('The Smiths')).toBeInTheDocument();
   expect(within(card).getByText('Bring chairs')).toBeInTheDocument();
   expect(within(card).getByText('Ribs', { selector: 'span' })).toBeInTheDocument();
-  expect(within(card).getByText(/any of 2/)).toBeInTheDocument();
+  expect(within(card).getByText(/any of 2 recipes/)).toBeInTheDocument();
   expect(screen.queryByRole('heading', { name: 'Fourth' })).not.toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: /Show past events \(1\)/ }));
   expect(screen.getByRole('heading', { name: 'Fourth' })).toBeInTheDocument();

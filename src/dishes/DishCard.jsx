@@ -47,7 +47,7 @@ const DishCard = ({ dish, onOpen }) => {
         <div className="text-muted" style={{ fontSize: 'var(--mkh-font-size-small)' }}>
           {count === 1 ? '1 recipe' : `${count} recipes`}
         </div>
-        {count > 1 && lead && (
+        {count > 1 && lead && (dish.favoriteId || lead.name !== dish.name) && (
           <div
             className="mt-auto pt-2 d-flex align-items-center gap-1"
             style={{ fontSize: 'var(--mkh-font-size-small)' }}

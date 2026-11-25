@@ -242,7 +242,8 @@ const EventCard = ({ event, dishes, recipesById, onSave, onDelete, onShop }) => 
                         {dish && dish.recipes.length > 1 && !(day.menu[index] || {}).recipeId && (
                           <span style={TINY}>
                             {' '}
-                            · {dish.name}, any of {dish.recipes.length}
+                            · {label === dish.name ? '' : `${dish.name}, `}any of{' '}
+                            {dish.recipes.length} recipes
                           </span>
                         )}
                         {!recipe && <span style={TINY}> · not in the library</span>}

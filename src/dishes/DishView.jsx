@@ -40,7 +40,7 @@ const RecipeTools = ({ recipe, dish, dishes, isFavorite, onFavorite, onMove, onM
           value={target}
           onChange={(e) => setTarget(e.target.value)}
         >
-          <option value="">Move to another dish…</option>
+          <option value="">Move to…</option>
           {dishes
             .filter((d) => d.id !== dish.id)
             .map((d) => (
