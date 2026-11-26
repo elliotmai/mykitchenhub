@@ -10,7 +10,7 @@
 // the fridge lights up "chicken breast" in a recipe.
 
 import { tagLabel } from '../utils/tags';
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, Badge, Button, Row, Col, Alert, ListGroup, Spinner } from 'react-bootstrap';
 import {
   ArrowLeft,
@@ -21,11 +21,13 @@ import {
   Trash2,
   Check,
   UtensilsCrossed,
+  Play,
 } from 'lucide-react';
 
 import { totalTime, instructionSteps, normalizeName, SOURCE_LABELS } from '../hooks/useRecipes';
 import StepTimer from '../timers/StepTimer';
 import { MoveToDish } from '../dishes/DishView';
+import CookMode from '../components/Recipes/CookMode';
 
 /** "https://www.example.com/x" → "example.com", or null for anything that isn't an http(s) URL. */
 const hostOf = (url) => {
@@ -44,7 +46,7 @@ const hostOf = (url) => {
  * @param {boolean}  loading
  * @param {array}    inventoryNames  - normalized names currently in the kitchen
  * @param {function} onBack          - () => void
- * @param {function} onCook          - (recipe) => void
+ * @param {function} onCook          - (recipe) => void — logs a cook ("I cooked this")
  * @param {function} onEdit          - (recipe) => void
  * @param {function} onDelete        - (recipe) => void
  */
@@ -63,6 +65,9 @@ const RecipeDetail = ({
   onMoveNewDish,
   onUseAsCover,
 }) => {
+  // Cook mode, opened by the Cook button: the recipe as step-by-step cards.
+  const [cooking, setCooking] = useState(false);
+
   if (loading) {
     return (
       <div className="d-flex align-items-center justify-content-center py-5 text-muted gap-2">
@@ -162,9 +167,16 @@ const RecipeDetail = ({
               )}
             </div>
 
-            <div className="d-flex gap-2">
+            <div className="d-flex gap-2 flex-wrap">
               <Button
                 variant="primary"
+                className="d-flex align-items-center gap-2"
+                onClick={() => setCooking(true)}
+              >
+                <Play size={16} /> Cook
+              </Button>
+              <Button
+                variant="light"
                 className="d-flex align-items-center gap-2"
                 onClick={() => onCook?.(recipe)}
               >
@@ -354,6 +366,10 @@ const RecipeDetail = ({
           )}
         </Card.Body>
       </Card>
+
+      {cooking && (
+        <CookMode recipe={recipe} onClose={() => setCooking(false)} onCooked={onCook} />
+      )}
     </div>
   );
 };

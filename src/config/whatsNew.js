@@ -14,6 +14,13 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.11.26.1',
+    date: 'November 2026',
+    items: [
+      '\u{1F373} Cook any recipe, step by step. Open a recipe and tap Cook: gather the ingredients, then follow one big card per step, with its timer right there. It works whether or not the recipe is on your meal plan, and the last card logs it as cooked.',
+    ],
+  },
+  {
     version: '2026.11.25.3',
     date: 'November 2026',
     items: [

@@ -140,6 +140,7 @@ const Recipes = () => {
     setActionError('');
     const result = await markCooked(recipe.id);
     if (!result?.success) setActionError(result?.error || 'Could not record that cook.');
+    return result;
   };
 
   // ── Delete ───────────────────────────────────────────────────────────────
