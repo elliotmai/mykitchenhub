@@ -393,6 +393,13 @@ a:hover {
     box-shadow var(--mkh-transition-fast);
 }
 
+/* The shorthand above also wiped Bootstrap's room for the select's arrow, so
+   a select sized to its text ran its last letters under the chevron
+   ("Not Starte⌄" on an event day). */
+.form-select {
+  padding-right: 2.25rem;
+}
+
 .form-control:focus,
 .form-select:focus {
   border-color: var(--mkh-primary);

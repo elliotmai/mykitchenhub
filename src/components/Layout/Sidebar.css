@@ -25,11 +25,13 @@
   .app-sidebar {
     top: 0;
     transform: translateX(-100%);
-    box-shadow: var(--mkh-shadow-xl);
   }
 
+  /* Shadow only while open: on the closed drawer it bled in from the left
+     edge as a grey band down the whole screen. */
   .app-sidebar--open {
     transform: translateX(0);
+    box-shadow: var(--mkh-shadow-xl);
   }
 }
 

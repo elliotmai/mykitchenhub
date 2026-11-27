@@ -13,6 +13,14 @@
   pointer-events: none;
 }
 
+/* Clear of the bottom tab bar on phones and tablets (MobileNav.css), which
+   it otherwise sat on top of, covering "More". */
+@media (max-width: 991.98px) {
+  .kitchen-timer-tray {
+    bottom: calc(56px + var(--mkh-spacing-md) + env(safe-area-inset-bottom));
+  }
+}
+
 .kitchen-timer-tray > * {
   pointer-events: auto;
 }

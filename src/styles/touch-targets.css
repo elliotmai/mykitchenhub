@@ -48,6 +48,20 @@
     min-height: 44px;
   }
 
+  /* 16px is the size below which iOS zooms the page in when a field is
+     focused, and inside Hive's frame nothing zooms it back out. The small
+     fields (size="sm", the meal-plan "move to" select with its inline tiny
+     font) were 12–14px. !important is for those inline styles; no field in
+     the app is meant to be larger than 16px except the kiosk's add box,
+     which sets its own max(16px, …) and is left alone. */
+  .form-control,
+  .form-select,
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not(.kiosk__add-input),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
   /* A checkbox or radio is drawn at 1em; the label next to it is the real
      target, so give the pair enough height rather than a huge tick box. */
   .form-check {
