@@ -51,15 +51,18 @@
     "test:functions": "npm --prefix functions test",
     "test:rules": "npm --prefix firestore run test:rules",
     "test:e2e": "npm run build:e2e && npm run test:e2e:only",
-    "test:e2e:ui": "npm run build:e2e && firestore/node_modules/.bin/firebase emulators:exec --only auth,firestore --project mykitchenhub-e2e \"playwright test --ui\"",
+    "test:e2e:ui": "npm run build:e2e && playwright test --ui",
     "test:all": "run-s test:ci test:functions test:rules",
     "lint": "eslint src/ e2e/ --ext .js,.jsx --max-warnings=0",
     "lint:fix": "eslint src/ e2e/ --ext .js,.jsx --fix",
     "format": "prettier --write src/ e2e/ *.js",
     "format:check": "prettier --check src/ e2e/ *.js",
     "validate": "run-s lint format:check test:ci build",
-    "build:e2e": "cross-env REACT_APP_USE_EMULATORS=true REACT_APP_FIREBASE_API_KEY=fake-api-key REACT_APP_FIREBASE_AUTH_DOMAIN=localhost REACT_APP_FIREBASE_PROJECT_ID=mykitchenhub-e2e REACT_APP_FIREBASE_STORAGE_BUCKET=mykitchenhub-e2e.appspot.com REACT_APP_FIREBASE_MESSAGING_SENDER_ID=000000000000 REACT_APP_FIREBASE_APP_ID=1:000000000000:web:e2e REACT_APP_FIREBASE_FUNCTIONS_URL=http://127.0.0.1:5001/mykitchenhub-e2e/us-central1 craco build",
-    "test:e2e:only": "firestore/node_modules/.bin/firebase emulators:exec --only auth,firestore --project mykitchenhub-e2e \"playwright test\""
+    "build:e2e": "cross-env REACT_APP_USE_EMULATORS=true REACT_APP_SUPABASE_URL=http://127.0.0.1:54321 REACT_APP_SUPABASE_PUBLISHABLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0 REACT_APP_HIVE_ORIGIN=http://127.0.0.1:9 REACT_APP_FIREBASE_FUNCTIONS_URL=http://127.0.0.1:5001/mykitchenhub-e2e/us-central1 craco build",
+    "test:e2e:only": "playwright test",
+    "e2e:db:start": "npx --yes supabase@3.4.0 start --workdir e2e -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,postgres-meta,mailpit",
+    "e2e:db:stop": "npx --yes supabase@3.4.0 stop --workdir e2e --no-backup",
+    "e2e:db:sync": "node scripts/sync-hive-schema.mjs"
   },
   "eslintConfig": {
     "extends": [

@@ -61,6 +61,14 @@
     min-height: 22px;
   }
 
+  /* The label is the part of the pair a thumb lands on, so it takes the
+     full height too; otherwise only its line of text (~26px) toggles. */
+  .form-check-label {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+
   /* The exception to the rule above.
      
      That rule keeps tick boxes small because the label beside them is bound to

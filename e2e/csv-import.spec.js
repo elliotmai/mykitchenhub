@@ -3,7 +3,7 @@
 // reject an item tagged with the wrong `source`.
 
 const { test, expect, chooseCSV, CSV_HEADER: HEADER } = require('./fixtures');
-const { inventoryItemsNamed, importHistoryRecords } = require('./firestore-admin');
+const { inventoryItemsNamed, importHistoryRecords } = require('./kitchen-db');
 
 /** Waits for items to reach Firestore, read from outside the browser. */
 const storedItems = async (prefix, expectedCount) => {

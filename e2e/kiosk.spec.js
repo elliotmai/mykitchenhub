@@ -14,7 +14,7 @@ const {
   deleteMealPlanEntry,
   seedRecipe,
   deleteRecipe,
-} = require('./firestore-admin');
+} = require('./kitchen-db');
 
 /** Today as the board keys it — local date, not UTC, same as buildWeekDays. */
 const todayKey = () => {

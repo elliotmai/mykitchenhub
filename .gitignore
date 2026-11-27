@@ -51,3 +51,7 @@ ui-debug.log
 # Playwright shared auth state
 e2e/.auth
 netlify/functions-dist/
+
+# Local Supabase stack state (npm run e2e:db:start)
+e2e/supabase/.temp
+e2e/supabase/.branches
