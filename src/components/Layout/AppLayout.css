@@ -6,6 +6,20 @@
 /* --------------------------------------------------------------------------
    Layout Container
    -------------------------------------------------------------------------- */
+/* The top bar's height, shared by the bar and everything that clears it.
+   Below the sidebar breakpoint it's 52px: on a phone, and inside Hive where
+   Hive's own bar already sits above it, 64px was a tall band for one row of
+   icons. */
+:root {
+  --mkh-navbar-h: 64px;
+}
+
+@media (max-width: 991.98px) {
+  :root {
+    --mkh-navbar-h: 52px;
+  }
+}
+
 .app-layout {
   min-height: 100vh;
   background-color: var(--mkh-bg-primary);
@@ -16,7 +30,7 @@
    -------------------------------------------------------------------------- */
 .app-layout__main {
   min-height: 100vh;
-  padding-top: 64px; /* Height of navbar */
+  padding-top: var(--mkh-navbar-h);
   display: flex;
   flex-direction: column;
   transition: margin-left var(--mkh-transition-base);
@@ -43,6 +57,13 @@
 @media (max-width: 576px) {
   .app-layout__content {
     padding: var(--mkh-spacing-md);
+  }
+}
+
+/* Under the top bar the page title needs a little air, not a full gutter. */
+@media (max-width: 991.98px) {
+  .app-layout__content {
+    padding-top: 0.75rem;
   }
 }
 
