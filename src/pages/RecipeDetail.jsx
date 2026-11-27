@@ -367,9 +367,7 @@ const RecipeDetail = ({
         </Card.Body>
       </Card>
 
-      {cooking && (
-        <CookMode recipe={recipe} onClose={() => setCooking(false)} onCooked={onCook} />
-      )}
+      {cooking && <CookMode recipe={recipe} onClose={() => setCooking(false)} onCooked={onCook} />}
     </div>
   );
 };
