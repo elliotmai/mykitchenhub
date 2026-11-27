@@ -21,7 +21,21 @@ const SERVICE_ROLE_KEY =
   process.env.E2E_SUPABASE_SERVICE_ROLE_KEY ||
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU';
 
-const NO_SESSION = { auth: { persistSession: false, autoRefreshToken: false } };
+/**
+ * Stands in for the Realtime transport, which the test process never uses.
+ * supabase-js otherwise looks for a global WebSocket when a client is made,
+ * and Node 20 (CI) has none.
+ */
+class NoRealtime {
+  constructor() {
+    throw new Error('e2e/supabase-admin.js does not use Realtime');
+  }
+}
+
+const NO_SESSION = {
+  auth: { persistSession: false, autoRefreshToken: false },
+  realtime: { transport: NoRealtime },
+};
 
 /** Service role: bypasses row-level security. Test process only. */
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, NO_SESSION);
