@@ -9,7 +9,7 @@ const {
   seedMealPlanEntry,
   seedInventoryItem,
   inventoryItemById,
-} = require('./firestore-admin');
+} = require('./kitchen-db');
 
 /** `YYYY-MM-DD` in local time — the format meal plan entries use. */
 const toDayKey = (date) => {

@@ -1,0 +1,53 @@
+# The local Supabase stack the end-to-end suite runs against
+# (npm run e2e:db:start). A throwaway copy of Hive's project: the same schema,
+# from ./migrations, with nothing in it until e2e/global-setup.js seeds it.
+project_id = "mykitchenhub-e2e"
+
+[api]
+enabled = true
+port = 54321
+# KitchenHub reads and writes through these two (src/backend/supabase.js).
+schemas = ["public", "graphql_public", "core", "kitchen"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 17
+
+[db.seed]
+enabled = false
+
+[realtime]
+enabled = true
+
+[storage]
+enabled = true
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:3000"
+additional_redirect_urls = ["http://127.0.0.1:3000"]
+enable_signup = true
+
+[auth.email]
+enabled = true
+# Accounts are made already confirmed; the suite never reads an inbox.
+enable_confirmations = false
+
+[auth.rate_limit]
+# auth.spec.js fails a sign-in on purpose, and every worker signs in at once.
+sign_in_sign_ups = 1000
+token_refresh = 1000
+
+[studio]
+enabled = false
+
+[local_smtp]
+enabled = false
+
+[edge_runtime]
+enabled = false
+
+[analytics]
+enabled = false

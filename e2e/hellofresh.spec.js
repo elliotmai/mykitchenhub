@@ -20,7 +20,7 @@ const {
   hellofreshRecipes,
   inventoryItems,
   mealPlanEntry,
-} = require('./firestore-admin');
+} = require('./kitchen-db');
 
 /** `YYYY-MM-DD` in local time — the format meal plan entries use. */
 const toDayKey = (date) => {

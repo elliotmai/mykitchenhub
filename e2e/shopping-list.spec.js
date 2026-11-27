@@ -1,13 +1,13 @@
 // Adding something to the shopping list that no recipe asked for.
 //
 // The rest of that list is derived: buildShoppingList() computes it from the
-// week's meals minus the kitchen and stores nothing, so it cannot survive a
-// reload and there is nothing to tick. These specs are about the half that has
-// documents behind it — every assertion is confirmed in Firestore, through the
-// real security rules, not just on screen.
+// week's meals minus the kitchen, and a tick on one of those lines is kept on
+// the week's own document (boughtKeys), not as an item. These specs are mostly
+// about the half that has documents behind it — every assertion is confirmed
+// in the database, through real row-level security, not just on screen.
 
 const { test, expect, fillUntilEnabled } = require('./fixtures');
-const { shoppingItem, shoppingItems, seedMealPlanEntry } = require('./firestore-admin');
+const { shoppingItem, shoppingItems, seedMealPlanEntry, mealPlanWeeks } = require('./kitchen-db');
 
 /** `YYYY-MM-DD` in local time — the format meal plan entries use. */
 const toDayKey = (date) => {
@@ -17,11 +17,11 @@ const toDayKey = (date) => {
 
 const TODAY = toDayKey(new Date());
 
-/** Poll Firestore until the item exists, then hand it back. */
+/** Poll the database until the item exists, then hand it back. */
 const storedItem = async (name) => {
   await expect
     .poll(async () => Boolean(await shoppingItem(name)), {
-      message: `waiting for "${name}" to reach Firestore`,
+      message: `waiting for "${name}" to reach the database`,
       timeout: 10_000,
     })
     .toBe(true);
@@ -32,8 +32,8 @@ const storedItem = async (name) => {
  * Type an item into the panel and wait for it to land in the database.
  *
  * Returns only once the write has settled, which is also what makes a reload
- * safe afterwards: a navigation issued while a Firestore write is still in
- * flight is the case that hangs rather than fails (see TESTING.md).
+ * safe afterwards: a navigation issued while a write is still in flight is
+ * the case that hangs rather than fails (see TESTING.md).
  */
 const addItem = async (page, { name, quantity, unit }) => {
   const field = page.getByLabel('Add something to the shopping list');
@@ -74,7 +74,8 @@ test.describe('manual shopping list items', () => {
     expect(stored).toMatchObject({
       name,
       normalized: name.toLowerCase(),
-      quantity: 1,
+      // How many is optional: left blank, none is stored.
+      quantity: null,
       unit: '',
       status: 'pending',
       source: 'manual',
@@ -234,11 +235,13 @@ test.describe('manual shopping list items', () => {
     await expect(page.getByText('200 g')).toBeVisible();
   });
 
-  test('gives no tick to a line the week computed', async ({ authedPage: page }) => {
-    // A derived row has no document, so there is nowhere to record that it was
-    // bought — and creating one on a tick would make the same list true in two
-    // places. No checkbox is the honest answer, and nothing must appear in the
-    // collection as a side effect of the row being on screen.
+  test('ticks off a line the week computed on the week, not as an item', async ({
+    authedPage: page,
+  }) => {
+    // A derived row has no document of its own. Its tick is kept on the
+    // week's mealPlans document (boughtKeys, keyed by ingredient and kind of
+    // measure), so it belongs to that week; making a shopping item for it
+    // would put the same line on the list twice.
     const stamp = Date.now();
     const ingredient = `E2E Paprika ${stamp}`;
 
@@ -254,11 +257,25 @@ test.describe('manual shopping list items', () => {
     await expect(page.getByText(ingredient)).toBeVisible();
 
     const derivedRow = page.locator('li').filter({ hasText: ingredient });
-    await expect(derivedRow.getByRole('checkbox')).toHaveCount(0);
+    await derivedRow.getByRole('checkbox', { name: /^Tick .* off$/ }).click();
+    await expect(
+      derivedRow.getByRole('checkbox', { name: /^Put .* back on the list$/ })
+    ).toBeChecked();
 
-    // And no document appeared for it.
+    const normalized = ingredient.toLowerCase();
+    await expect
+      .poll(
+        async () =>
+          (await mealPlanWeeks()).some((week) =>
+            (week.boughtKeys || []).some((key) => key.startsWith(`${normalized}|`))
+          ),
+        { message: `waiting for the tick on "${ingredient}" to reach the week`, timeout: 10_000 }
+      )
+      .toBe(true);
+
+    // And no item appeared for it.
     const stored = await shoppingItems();
-    expect(stored.some((item) => item.name === ingredient)).toBe(false);
+    expect(stored.some((item) => item.name.toLowerCase() === normalized)).toBe(false);
   });
 
   test('corrects a typed line in place, keeping the document it already had', async ({

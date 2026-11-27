@@ -14,7 +14,7 @@
 // empty week forever.
 
 const { test, expect, addInventoryItem } = require('./fixtures');
-const { mealPlanEntry, recipeCount, seedRecipe } = require('./firestore-admin');
+const { mealPlanEntry, recipeCount, seedRecipe } = require('./kitchen-db');
 
 const statValues = (page) => page.getByTestId('stat-card-value');
 

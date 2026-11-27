@@ -26,6 +26,20 @@ const suppressWhatsNewPopup = (page) =>
     [WHATS_NEW_KEY, WHATS_NEW[0].version]
   );
 
+/**
+ * Saves a signed-in browser's state for later tests to start from.
+ *
+ * The Supabase session is the `hive-auth` cookie (src/backend/supabase.js),
+ * which storageState carries. The What's New marker is taken out first: the
+ * popup records itself as seen the moment it shows, including on the login
+ * page this state was captured from, and a saved marker would hide it from
+ * the spec that tests it. Every other spec sets it again (suppressWhatsNew).
+ */
+const saveSignedInState = async (page, file) => {
+  await page.evaluate((key) => window.localStorage.removeItem(key), WHATS_NEW_KEY);
+  await page.context().storageState({ path: file });
+};
+
 /** How long one sign-in attempt gets before it is treated as failed. */
 const LOGIN_TIMEOUT_MS = 20_000;
 
@@ -125,7 +139,7 @@ const login = async (page, account = TEST_USER) => {
  * Shared because three specs need it and every one of them needs it to be the
  * *shipped* writer: the dashboard, the analytics page and the waste alerts all
  * read a collection the inventory page owns, and a fixture written straight to
- * Firestore proves nothing about whether those two halves agree.
+ * the database proves nothing about whether those two halves agree.
  *
  * Fields are addressed by placeholder. The modal has two <select> elements
  * (unit, then storage location) and its Form.Label elements are not associated
@@ -218,9 +232,9 @@ const test = withWhatsNewOption(base).extend({
       const file = workerStatePath(workerInfo.parallelIndex);
       fs.mkdirSync(path.dirname(file), { recursive: true });
 
-      // Captured fresh every run rather than reused from disk: the emulator's
-      // ID tokens expire after an hour, and a stale file restores a browser
-      // that looks signed in until the first Firestore read is refused.
+      // Captured fresh every run rather than reused from disk: global-setup
+      // makes every account again, so a session saved by an earlier run
+      // belongs to a user that no longer exists.
       //
       // baseURL has to be passed in by hand. `use.baseURL` is applied by the
       // `context` fixture, and this page comes straight off `browser`, so
@@ -235,10 +249,7 @@ const test = withWhatsNewOption(base).extend({
         // Confirm the app really considers us signed in before capturing.
         await expect(page.getByText(/good (morning|afternoon|evening)/i)).toBeVisible();
 
-        // indexedDB: true is essential — the Firebase JS SDK persists its
-        // session there, not in localStorage, so state saved without it
-        // restores a signed-out browser.
-        await page.context().storageState({ path: file, indexedDB: true });
+        await saveSignedInState(page, file);
       } finally {
         await page.context().close();
       }
@@ -268,7 +279,7 @@ const test = withWhatsNewOption(base).extend({
       });
       try {
         await login(page, EMPTY_USER);
-        await page.context().storageState({ path: file, indexedDB: true });
+        await saveSignedInState(page, file);
       } finally {
         await page.context().close();
       }
@@ -320,8 +331,8 @@ const test = withWhatsNewOption(base).extend({
     );
 
     // The shared storage state almost always restores the session. Under
-    // parallel load the Auth emulator occasionally fails a token refresh, the
-    // SDK resolves to signed-out, and ProtectedRoute sends the page to /login
+    // parallel load a token refresh occasionally fails, the client resolves
+    // to signed-out, and ProtectedRoute sends the page to /login
     // — which then fails whatever the spec asserted first, for a reason that
     // has nothing to do with the spec. Signing in costs ~15s and only happens
     // on the rare run that needs it; the alternative is a suite that fails at
@@ -329,7 +340,7 @@ const test = withWhatsNewOption(base).extend({
     //
     // As this worker's own account, not the default. It used to call `login(page)`
     // bare, which signs in as TEST_USER — so on the rare run that needed the
-    // fallback, the browser was driving one account while e2e/firestore-admin.js
+    // fallback, the browser was driving one account while e2e/kitchen-db.js
     // read back from another, and every assertion that checks the database saw
     // an empty result for a write it had just watched succeed.
     if (new URL(page.url()).pathname.startsWith('/login')) {
