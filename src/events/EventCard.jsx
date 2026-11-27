@@ -68,7 +68,11 @@ const MenuPicker = ({ dishes, onPick, dayName }) => {
     const recipe = option.kind === 'recipe' ? dish?.recipes.find((r) => r.id === option.id) : null;
     onPick(
       option.kind === 'dish'
-        ? { dishId: option.id, label: dish?.name, recipeIds: (dish?.recipes || []).map((r) => r.id) }
+        ? {
+            dishId: option.id,
+            label: dish?.name,
+            recipeIds: (dish?.recipes || []).map((r) => r.id),
+          }
         : { recipeId: option.id, label: recipe ? recipeLabel(recipe) : option.label }
     );
     setQuery('');
@@ -153,7 +157,8 @@ const MenuPicker = ({ dishes, onPick, dayName }) => {
                 style={{
                   ...SMALL,
                   cursor: 'pointer',
-                  background: i === active ? 'var(--mkh-surface-hover, rgba(0,0,0,.06))' : undefined,
+                  background:
+                    i === active ? 'var(--mkh-surface-hover, rgba(0,0,0,.06))' : undefined,
                   fontWeight: o.kind === 'dish' ? 600 : undefined,
                 }}
                 onMouseEnter={() => setActive(i)}
