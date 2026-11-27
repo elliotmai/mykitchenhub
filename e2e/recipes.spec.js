@@ -1,14 +1,14 @@
-// The recipe loop, against a real build, real emulators and the real security
-// rules: browse the library, add a recipe, edit it, cook it, delete it.
+// The recipe loop, against a real build, a real Supabase stack and real
+// row-level security: browse the library, add a recipe, edit it, cook it,
+// delete it.
 //
-// Every write is read back from Firestore rather than trusted from the screen.
-// The UI renders its own writes optimistically, so a recipe that violates a
-// rule looks identical on screen until you read it back from outside the
-// browser — and the recipes rules are strict about `name`, `source` and the
-// fields that must be present.
+// Every write is read back from the database rather than trusted from the
+// screen. The UI renders its own writes optimistically, so a write the
+// database refused looks identical on screen until you read it back from
+// outside the browser.
 
 const { test, expect } = require('./fixtures');
-const { recipesHaveRecipe, recipeByName } = require('./firestore-admin');
+const { recipesHaveRecipe, recipeByName } = require('./kitchen-db');
 
 /** Fills and submits the Add Recipe modal. */
 const addRecipe = async (page, name, { servings = '2' } = {}) => {
@@ -26,14 +26,32 @@ const addRecipe = async (page, name, { servings = '2' } = {}) => {
   await modal.getByLabel('Add a tag', { exact: true }).press('Enter');
 
   await modal.getByRole('button', { name: 'Add Recipe' }).click();
-  await expect(modal).not.toBeVisible();
+
+  // A new recipe is then offered a dish and a cover photo (RecipeFinish);
+  // the defaults are fine here.
+  const finish = page.getByRole('dialog', { name: `${name} is saved` });
+  await expect(finish).toBeVisible();
+  await finish.getByRole('button', { name: 'Done' }).click();
+  await expect(page.locator('.modal.show')).toHaveCount(0);
+
+  // It then opens on its own page; the specs carry on from the list.
+  await expect(page.getByRole('heading', { level: 1, name })).toBeVisible();
+  await page.getByRole('button', { name: /back to recipes/i }).click();
+  await showAllRecipes(page);
 };
 
-/** Asserts whether a recipe reached Firestore, read straight from the emulator. */
-const expectStoredInFirestore = async (name, shouldExist) => {
+/** Shows every recipe on its own card, rather than grouped into dishes. */
+const showAllRecipes = async (page) => {
+  const all = page.getByRole('button', { name: 'All recipes' });
+  await all.click();
+  await expect(all).toHaveAttribute('aria-pressed', 'true');
+};
+
+/** Asserts whether a recipe reached the database, read from outside the browser. */
+const expectStored = async (name, shouldExist) => {
   await expect
     .poll(() => recipesHaveRecipe(name), {
-      message: `waiting for "${name}" to ${shouldExist ? 'appear in' : 'disappear from'} Firestore`,
+      message: `waiting for "${name}" to ${shouldExist ? 'appear in' : 'disappear from'} the database`,
       timeout: 10_000,
     })
     .toBe(shouldExist);
@@ -46,6 +64,8 @@ test.describe('recipes', () => {
   test.beforeEach(async ({ authedPage }) => {
     await authedPage.goto('/recipes', { waitUntil: 'domcontentloaded' });
     await expect(authedPage.getByRole('heading', { name: 'Recipes' })).toBeVisible();
+    // The cards these specs drive are the recipes', not the dishes'.
+    await showAllRecipes(authedPage);
   });
 
   test('lists the seeded recipes', async ({ authedPage: page }) => {
@@ -69,16 +89,15 @@ test.describe('recipes', () => {
     await expect(page).toHaveURL(/\?recipe=/);
   });
 
-  test('adds a recipe that reaches Firestore in the documented shape', async ({
+  test('adds a recipe that reaches the database in the documented shape', async ({
     authedPage: page,
   }) => {
-    // Unique per run: the recipe library is shared and specs run in parallel.
     const name = `E2E Test Recipe ${Date.now()}`;
 
     await addRecipe(page, name, { servings: '4' });
 
-    await expect(page.getByText(name)).toBeVisible();
-    await expectStoredInFirestore(name, true);
+    await expect(cardFor(page, name)).toBeVisible();
+    await expectStored(name, true);
 
     const stored = await recipeByName(name);
     expect(stored).toMatchObject({
@@ -98,7 +117,7 @@ test.describe('recipes', () => {
     const name = `E2E Cooked Recipe ${Date.now()}`;
 
     await addRecipe(page, name);
-    await expectStoredInFirestore(name, true);
+    await expectStored(name, true);
 
     await cardFor(page, name)
       .getByRole('button', { name: `I cooked ${name}` })
@@ -113,7 +132,7 @@ test.describe('recipes', () => {
     const name = `E2E Edited Recipe ${Date.now()}`;
 
     await addRecipe(page, name, { servings: '2' });
-    await expectStoredInFirestore(name, true);
+    await expectStored(name, true);
 
     await cardFor(page, name)
       .getByRole('button', { name: `Edit ${name}` })
@@ -138,7 +157,7 @@ test.describe('recipes', () => {
     const name = `E2E Doomed Recipe ${Date.now()}`;
 
     await addRecipe(page, name);
-    await expectStoredInFirestore(name, true);
+    await expectStored(name, true);
 
     await cardFor(page, name)
       .getByRole('button', { name: `Delete ${name}` })
@@ -155,11 +174,11 @@ test.describe('recipes', () => {
     await expect(confirm).toBeHidden();
 
     await expect(cardFor(page, name)).toHaveCount(0);
-    await expectStoredInFirestore(name, false);
+    await expectStored(name, false);
   });
 
-  // The rules only allow deleting `source: 'user-created'`, so the UI must not
-  // offer a control that would always fail.
+  // Only a recipe the cook added (`source: 'user-created'`) can be changed or
+  // deleted here, so the UI must not offer those controls on any other.
   test('offers no delete control on a recipe the cook did not add', async ({
     authedPage: page,
   }) => {

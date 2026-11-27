@@ -229,7 +229,11 @@ const searchable = (s) =>
  * Options: [{ kind: 'dish'|'recipe', id, label, dishName? }]. An empty query
  * offers everything.
  */
-export function searchMenuOptions(dishes = [], query = '', label = (r) => r?.name || r?.title || 'Untitled recipe') {
+export function searchMenuOptions(
+  dishes = [],
+  query = '',
+  label = (r) => r?.name || r?.title || 'Untitled recipe'
+) {
   const words = searchable(query).split(' ').filter(Boolean);
   const hit = (text) => {
     const s = searchable(text);
@@ -247,7 +251,8 @@ export function searchMenuOptions(dishes = [], query = '', label = (r) => r?.nam
       continue;
     }
     out.push({ kind: 'dish', id: dish.id, label: `${dish.name} (any recipe)` });
-    for (const r of matching) out.push({ kind: 'recipe', id: r.id, label: label(r), dishName: dish.name });
+    for (const r of matching)
+      out.push({ kind: 'recipe', id: r.id, label: label(r), dishName: dish.name });
   }
   return out;
 }

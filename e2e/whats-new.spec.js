@@ -27,9 +27,7 @@ test.describe("what's new popup", () => {
     await expect(dialog).not.toBeVisible();
   });
 
-  test('is recorded as seen once shown, even if never dismissed', async ({
-    authedPage: page,
-  }) => {
+  test('is recorded as seen once shown, even if never dismissed', async ({ authedPage: page }) => {
     // Inside Hive people go home without tapping close; the app is remounted
     // on the next open and must not show the same update again.
     const dialog = page.locator('.whats-new-modal');

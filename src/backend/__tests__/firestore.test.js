@@ -19,6 +19,7 @@ const flush = () => new Promise((r) => setTimeout(r, 0));
 
 beforeEach(() => {
   mockFake.rows.splice(0);
+  fs.forgetReads();
 });
 
 describe('paths', () => {
@@ -189,5 +190,36 @@ describe('queries', () => {
     await flush();
     expect(seen).toEqual([false, true]);
     stop();
+  });
+});
+
+describe('with no connection', () => {
+  const db = fs.getFirestore();
+  const offline = { message: 'TypeError: Failed to fetch' };
+
+  it('answers a read with what the last one found', async () => {
+    const col = fs.collection(db, 'users', 'u1', 'inventory');
+    await fs.addDoc(col, { name: 'Rice' });
+    expect((await fs.getDocs(col)).size).toBe(1);
+
+    mockFake.failNextWith(offline);
+    const snap = await fs.getDocs(col);
+    expect(snap.docs.map((d) => d.data().name)).toEqual(['Rice']);
+  });
+
+  it('still fails a read it has no answer for', async () => {
+    mockFake.failNextWith(offline);
+    await expect(fs.getDoc(fs.doc(db, 'users', 'u1'))).rejects.toMatchObject({
+      code: 'unavailable',
+    });
+  });
+
+  it('does not stand in for a refused read', async () => {
+    const ref = fs.doc(db, 'users', 'u1');
+    await fs.setDoc(ref, { name: 'Me' });
+    await fs.getDoc(ref);
+
+    mockFake.failNextWith({ code: '42501', message: 'row-level security' });
+    await expect(fs.getDoc(ref)).rejects.toMatchObject({ code: 'permission-denied' });
   });
 });

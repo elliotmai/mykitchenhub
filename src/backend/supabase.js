@@ -6,9 +6,16 @@
 
 import { createBrowserClient } from '@supabase/ssr';
 
-export const SUPABASE_URL = 'https://fcjiummxpacwriwopcho.supabase.co';
-export const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_fZo1FUg_j4O1EHH-W2Jr1A_4P8W3o2S';
-export const HIVE_ORIGIN = 'https://hive.flyingdoublemranch.com';
+//
+// The end-to-end build points all three at a local Supabase stack instead
+// (build:e2e in package.json, e2e/supabase/); a normal build leaves them unset.
+export const SUPABASE_URL =
+  process.env.REACT_APP_SUPABASE_URL || 'https://fcjiummxpacwriwopcho.supabase.co';
+export const SUPABASE_PUBLISHABLE_KEY =
+  process.env.REACT_APP_SUPABASE_PUBLISHABLE_KEY ||
+  'sb_publishable_fZo1FUg_j4O1EHH-W2Jr1A_4P8W3o2S';
+export const HIVE_ORIGIN =
+  process.env.REACT_APP_HIVE_ORIGIN || 'https://hive.flyingdoublemranch.com';
 
 const SHARED_DOMAIN = 'flyingdoublemranch.com';
 const host = typeof window === 'undefined' ? '' : window.location.hostname;

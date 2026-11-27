@@ -167,14 +167,35 @@ describe('who is bringing what, and what a dish line holds', () => {
 describe('searchMenuOptions', () => {
   const { searchMenuOptions } = require('../eventLogic');
   const dishes = [
-    { id: 'chili', name: 'Chili', recipes: [{ id: 'c1', name: 'Texas Chili' }, { id: 'c2', name: 'White Chicken Chili' }] },
-    { id: 'dip', name: 'Cream Cheese Chili Dip', recipes: [{ id: 'd1', name: 'Cream Cheese Chili Dip' }] },
-    { id: 'jal', name: 'Jalapeño Popper Dip', recipes: [{ id: 'j1', name: 'Jalapeño Popper Dip' }] },
+    {
+      id: 'chili',
+      name: 'Chili',
+      recipes: [
+        { id: 'c1', name: 'Texas Chili' },
+        { id: 'c2', name: 'White Chicken Chili' },
+      ],
+    },
+    {
+      id: 'dip',
+      name: 'Cream Cheese Chili Dip',
+      recipes: [{ id: 'd1', name: 'Cream Cheese Chili Dip' }],
+    },
+    {
+      id: 'jal',
+      name: 'Jalapeño Popper Dip',
+      recipes: [{ id: 'j1', name: 'Jalapeño Popper Dip' }],
+    },
     { id: 'none', name: 'Empty', recipes: [] },
   ];
 
   it('offers everything for an empty query', () => {
-    expect(searchMenuOptions(dishes, '').map((o) => o.id)).toEqual(['chili', 'c1', 'c2', 'd1', 'j1']);
+    expect(searchMenuOptions(dishes, '').map((o) => o.id)).toEqual([
+      'chili',
+      'c1',
+      'c2',
+      'd1',
+      'j1',
+    ]);
   });
 
   it('matches words anywhere in the name, in any order', () => {
@@ -191,7 +212,12 @@ describe('searchMenuOptions', () => {
   });
 
   it('keeps all of a dish when its name matches', () => {
-    expect(searchMenuOptions(dishes, 'chili').map((o) => o.id)).toEqual(['chili', 'c1', 'c2', 'd1']);
+    expect(searchMenuOptions(dishes, 'chili').map((o) => o.id)).toEqual([
+      'chili',
+      'c1',
+      'c2',
+      'd1',
+    ]);
   });
 
   it('finds nothing for a word nothing contains', () => {

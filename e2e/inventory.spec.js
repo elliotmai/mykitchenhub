@@ -2,7 +2,7 @@
 // and know what's about to go off. Exercised against real Firestore rules.
 
 const { test, expect, addInventoryItem } = require('./fixtures');
-const { inventoryHasItem, inventoryItem } = require('./firestore-admin');
+const { inventoryHasItem, inventoryItem } = require('./kitchen-db');
 
 /** Fills and submits the add-item modal, already on the inventory page. */
 const addItem = (page, name, quantity = '1') =>
