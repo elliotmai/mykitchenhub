@@ -50,3 +50,28 @@
   color: var(--mkh-primary-active);
   text-decoration: underline;
 }
+
+/* With the bottom tab bar on screen (phones, tablets, Hive), the footer was a
+   ~140px block above it. Here it's one quiet line: version and the feedback
+   link. */
+@media (max-width: 991.98px) {
+  .app-footer {
+    padding: var(--mkh-spacing-sm) var(--mkh-spacing-md);
+  }
+
+  .app-footer__text {
+    display: none;
+  }
+
+  .app-footer__content {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: center;
+    column-gap: var(--mkh-spacing-sm);
+  }
+
+  .app-footer__feedback {
+    margin-top: 0;
+  }
+}

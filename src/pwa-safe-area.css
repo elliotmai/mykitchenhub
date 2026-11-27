@@ -45,8 +45,8 @@
 
   /* --- Main Content: Account for shifted navbar --- */
   .app-layout__main {
-    /* Original padding (64px) + safe area */
-    padding-top: calc(64px + env(safe-area-inset-top, 0px)) !important;
+    /* The bar's height + safe area */
+    padding-top: calc(var(--mkh-navbar-h, 64px) + env(safe-area-inset-top, 0px)) !important;
   }
 
   /* --- Sidebar: Account for shifted navbar --- */

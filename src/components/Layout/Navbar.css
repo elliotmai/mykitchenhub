@@ -10,7 +10,7 @@
   background-color: var(--mkh-bg-card);
   border-bottom: 1px solid var(--mkh-border);
   box-shadow: var(--mkh-shadow-sm);
-  height: 64px;
+  height: var(--mkh-navbar-h);
   z-index: var(--mkh-z-fixed);
 }
 
@@ -258,4 +258,21 @@
 .app-navbar__dropdown .dropdown-divider {
   margin: var(--mkh-spacing-xs) 0;
   border-color: var(--mkh-border-light);
+}
+
+/* --------------------------------------------------------------------------
+   Shorter bar below the sidebar breakpoint (--mkh-navbar-h is 52px there,
+   AppLayout.css): the logo tile and avatar come down to match, so they keep
+   some air above and below. The buttons stay 40px wide tap targets.
+   -------------------------------------------------------------------------- */
+@media (max-width: 991.98px) {
+  .app-navbar__logo {
+    width: 34px;
+    height: 34px;
+  }
+
+  .app-navbar__avatar {
+    width: 32px;
+    height: 32px;
+  }
 }
