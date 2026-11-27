@@ -10,10 +10,10 @@
 //
 // Playwright sets TEST_PARALLEL_INDEX in every worker process, which is how
 // this file works out which account "we" are without any spec having to say so.
-// That is deliberate: e2e/firestore-admin.js resolves the same account the same
+// That is deliberate: e2e/kitchen-db.js resolves the same account the same
 // way, so all fourteen specs got isolation without a line of change.
 
-/** Shared by every account — the emulator does not care about strength. */
+/** Shared by every account — the local stack does not care about strength. */
 const PASSWORD = 'TestPassword123!';
 
 /**

@@ -8,7 +8,7 @@ run on every pull request and every push to `main` (`.github/workflows/ci.yml`).
 | Frontend unit/component | `npm run test:ci` | Hooks and components behave, in isolation, with Firebase mocked |
 | Cloud Functions | `npm run test:functions` | Backend logic and reference data are correct |
 | Firestore rules | `npm run test:rules` | The deployed database will actually allow/deny what we think |
-| End-to-end | `npm run test:e2e` | A real production build works against real emulators |
+| End-to-end | `npm run test:e2e` | A real production build works against a real local Supabase stack |
 
 `npm run validate` runs lint + format + unit tests + build — the fast local
 pre-push check.
@@ -156,13 +156,40 @@ fixture — and if the fixture then fails, the rules need updating too.**
 ## End-to-end tests
 
 ```bash
-npm run test:e2e        # builds, starts auth+firestore emulators, runs Playwright
+npm run e2e:db:start    # once: a local Supabase stack in Docker (see below)
+npm run test:e2e        # builds against it, seeds it, runs Playwright
 npm run test:e2e:only   # skips the build — only when build/ is already current
+npm run e2e:db:stop     # when you are done
 ```
 
-Playwright drives a real production build (`serve -s build`) against real
-emulators, on desktop and mobile viewports. This is the only suite that exercises
-the actual bundle, the service worker, and the real security rules together.
+Playwright drives a real production build (`serve -s build`) against a real
+Supabase stack, on desktop and mobile viewports. This is the only suite that
+exercises the actual bundle, the service worker, and the real row-level
+security together.
+
+### The local Supabase stack
+
+KitchenHub lives in Hive's Supabase project, so the suite runs against a
+throwaway copy of it: `npm run e2e:db:start` starts the Supabase CLI's local
+stack (Docker required) from `e2e/supabase/`, with the schema built from
+`e2e/supabase/migrations`. Those are Hive's migrations, copied from Hive's
+repository (Fridge-Board) so CI needs no access to it. When Hive gains a
+migration, copy them again and commit the result:
+
+```bash
+npm run e2e:db:sync -- ../Fridge-Board
+```
+
+`build:e2e` points the app at the stack (`REACT_APP_SUPABASE_URL` and
+`REACT_APP_SUPABASE_PUBLISHABLE_KEY`, read in `src/backend/supabase.js`; a
+normal build leaves them unset and talks to the real project). The browser
+signs in with the anon key like any cook. The test process uses the service
+role, through `e2e/supabase-admin.js`, to seed and to read back past
+row-level security. The keys are the CLI's fixed local demo keys.
+
+`e2e/global-setup.js` starts every run clean: it deletes any `e2e-…@example.com`
+account a previous run left on the stack, with its household and everything in
+it, and makes them again.
 
 `e2e/fixtures.js` provides an `authedPage` fixture that starts already signed
 in:
@@ -189,14 +216,13 @@ kitchen (three storage locations, one item per expiration state), plus a
 separate one for `auth.spec.js`. `e2e/accounts.js` derives which is which from
 `TEST_PARALLEL_INDEX`, the variable Playwright sets in every worker process.
 
-**You do not have to do anything to get this.** `e2e/firestore-admin.js`
+Each account has its own household, made the way a cook makes one
+(`core.create_household`), and everything in kitchen.docs belongs to a
+household, recipes included. So workers share nothing.
+
+**You do not have to do anything to get this.** `e2e/kitchen-db.js`
 resolves the same account the same way, so `inventoryItems()`, `mealPlanEntry()`
 and friends already read the kitchen your browser is signed in to.
-
-**The one thing it does not isolate is recipes.** `recipes` is a single global
-collection by schema, not a per-user subcollection, so a recipe one worker
-creates is visible to all of them. A spec that creates a recipe still has to use
-a unique name.
 
 There is no `setup` project any more. Each worker signs itself in once, in a
 worker-scoped `storageState` fixture, and the logins run concurrently — so the
@@ -243,12 +269,12 @@ leave it out — the desktop run and the unit suite already cover that.
 ### Writing a spec that means something
 
 Confirm a write against the database, not the screen. A write that passes client
-validation but violates a security rule still renders locally, so the local view
-proves nothing — read it back through `e2e/firestore-admin.js`, which queries
-the emulator directly from the test process:
+validation but is refused by row-level security still renders locally, so the
+local view proves nothing — read it back through `e2e/kitchen-db.js`, which
+queries the stack directly from the test process:
 
 ```js
-const { inventoryHasItem } = require('./firestore-admin');
+const { inventoryHasItem } = require('./kitchen-db');
 
 await expect(page.getByText(itemName)).toBeVisible();   // local state, weak
 expect(await inventoryHasItem(itemName)).toBe(true);    // round trip, real

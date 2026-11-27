@@ -113,27 +113,53 @@ function querySnapshot(rows) {
 // Rows
 // ---------------------------------------------------------------------------
 
+// The last answer each read got, for when the next one cannot reach the
+// database. Firestore kept a local cache, so a kitchen that was on screen a
+// moment ago stayed on screen with the signal gone; without this an offline
+// read would show "your inventory is empty" about a fridge with food in it.
+// Held for this page only, and only stands in for a read that failed to
+// connect: a refused read still fails.
+const lastRead = new Map();
+
+async function remembered(key, read) {
+  try {
+    const value = await read();
+    lastRead.set(key, value);
+    return value;
+  } catch (err) {
+    if (err.code === 'unavailable' && lastRead.has(key)) return lastRead.get(key);
+    throw err;
+  }
+}
+
+/** Forget every remembered read (tests). */
+export const forgetReads = () => lastRead.clear();
+
 async function readRow(path) {
   const hid = await myHousehold();
-  const { data, error } = await kitchen
-    .from('docs')
-    .select('path, data')
-    .eq('household_id', hid)
-    .eq('path', path)
-    .maybeSingle();
-  fail(error);
-  return data ? data.data : null;
+  return remembered(`${hid}|doc|${path}`, async () => {
+    const { data, error } = await kitchen
+      .from('docs')
+      .select('path, data')
+      .eq('household_id', hid)
+      .eq('path', path)
+      .maybeSingle();
+    fail(error);
+    return data ? data.data : null;
+  });
 }
 
 async function readCollection(parent) {
   const hid = await myHousehold();
-  const { data, error } = await kitchen
-    .from('docs')
-    .select('path, data')
-    .eq('household_id', hid)
-    .eq('parent', parent);
-  fail(error);
-  return data || [];
+  return remembered(`${hid}|col|${parent}`, async () => {
+    const { data, error } = await kitchen
+      .from('docs')
+      .select('path, data')
+      .eq('household_id', hid)
+      .eq('parent', parent);
+    fail(error);
+    return data || [];
+  });
 }
 
 async function writeRow(path, data) {

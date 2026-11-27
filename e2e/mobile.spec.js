@@ -50,10 +50,23 @@ const undersizedTargets = (page, min) =>
       if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0')
         return;
 
-      const rect = el.getBoundingClientRect();
+      let rect = el.getBoundingClientRect();
       // Zero-sized means it is not laid out — collapsed menus, offscreen
       // drawers. A thumb cannot hit those either way.
       if (rect.width === 0 || rect.height === 0) return;
+
+      // A tick box or switch with a <label> bound to it is tapped through the
+      // label too, so the pair is the target (src/styles/touch-targets.css
+      // keeps the box itself at 22px for that reason). One with no label,
+      // like a shopping row's, is measured on its own.
+      if ((el.type === 'checkbox' || el.type === 'radio') && el.labels?.length) {
+        const rects = [rect, ...[...el.labels].map((l) => l.getBoundingClientRect())];
+        const left = Math.min(...rects.map((r) => r.left));
+        const top = Math.min(...rects.map((r) => r.top));
+        const right = Math.max(...rects.map((r) => r.right));
+        const bottom = Math.max(...rects.map((r) => r.bottom));
+        rect = { width: right - left, height: bottom - top };
+      }
 
       // Rounded before comparing: a `min-height: 44px` control measures
       // 43.99px at some device pixel ratios, and chasing that is chasing
@@ -391,6 +404,9 @@ test.describe('mobile navigation', () => {
     // just because the URL grew a `?recipe=`.
     await page.goto('/recipes', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Recipes' })).toBeVisible();
+    // Recipes open from their own cards, under "All recipes" (the default
+    // groups them into dishes).
+    await page.getByRole('button', { name: 'All recipes' }).click();
 
     await page
       .locator('.recipe-card')

@@ -14,6 +14,13 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.11.27',
+    date: 'November 2026',
+    items: [
+      '\u{1F4F6} Lost signal in the kitchen? What was on screen stays there. Your inventory, recipes and lists keep showing what they had a moment ago instead of going blank.',
+    ],
+  },
+  {
     version: '2026.11.26.1',
     date: 'November 2026',
     items: [

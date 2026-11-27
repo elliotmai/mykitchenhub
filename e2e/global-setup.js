@@ -1,45 +1,28 @@
 // e2e/global-setup.js
-// Seeds the Firebase emulators with the accounts the suite signs in as, each
-// with a stocked kitchen so the specs can immediately exercise real data.
-//
-// Runs once before the Playwright suite, against emulators already started by
-// `firebase emulators:exec` (see the test:e2e script).
+// Seeds the local Supabase stack (e2e/supabase/, started by
+// `npm run e2e:db:start`) with the accounts the suite signs in as, each with a
+// stocked kitchen so the specs can immediately exercise real data.
 //
 // One account per worker plus one for the auth spec — see e2e/accounts.js for
 // why. Seeding them all here rather than lazily in a fixture keeps the cost off
 // the clock of whichever spec happened to run first, and means a spec that
 // reads the kitchen never races the code that filled it.
+//
+// Every run starts clean: any account left by an earlier run on the same stack
+// is deleted first, with its household and everything in it, then made again.
 
-const admin = require('firebase-admin');
 const { TEST_USER, EMPTY_USER, accountForWorker } = require('./accounts');
+const {
+  SUPABASE_URL,
+  Timestamp,
+  usersByEmail,
+  createAccount,
+  deleteAccount,
+  putDoc,
+} = require('./supabase-admin');
 
-const PROJECT_ID = process.env.E2E_PROJECT_ID || 'mykitchenhub-e2e';
-const AUTH_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST || '127.0.0.1:9099';
-const FIRESTORE_HOST = process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080';
-
-/** Creates an account through the Auth emulator's REST API. */
-const createAuthUser = async (account) => {
-  const url = `http://${AUTH_HOST}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=fake-api-key`;
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...account, returnSecureToken: true }),
-  });
-
-  const body = await response.json();
-
-  // A re-run against warm emulators hits EMAIL_EXISTS; look the user up instead.
-  if (!response.ok) {
-    if (body?.error?.message === 'EMAIL_EXISTS') {
-      const existing = await admin.auth().getUserByEmail(account.email);
-      return existing.uid;
-    }
-    throw new Error(`Auth emulator signUp failed: ${JSON.stringify(body)}`);
-  }
-
-  return body.localId;
-};
+/** Every e2e account is an @example.com address starting with e2e-. */
+const isE2EAccount = (email) => /^e2e-.*@example\.com$/i.test(String(email || ''));
 
 const daysFromNow = (n) => {
   const d = new Date();
@@ -47,7 +30,7 @@ const daysFromNow = (n) => {
   return d;
 };
 
-/** Storage locations — field names must match firestore.rules (`label`). */
+/** Storage locations — the app reads `label`, not `name`. */
 const LOCATIONS = [
   {
     id: 'loc-fridge',
@@ -94,16 +77,17 @@ const ITEMS = [
 ];
 
 /**
- * Gives one account a profile, three storage locations and three items.
+ * Gives one account a household, a profile, three storage locations and three
+ * items.
  *
  * Every account gets the identical kitchen, so a spec's expectations hold
  * whichever worker picks it up.
  */
-const seedKitchen = async (db, account, { withItems = true } = {}) => {
-  const uid = await createAuthUser(account);
-  const userRef = db.collection('users').doc(uid);
+const seedKitchen = async (account, { withItems = true } = {}) => {
+  const { uid, hid } = await createAccount(account);
+  const me = `users/${uid}`;
 
-  await userRef.set({
+  await putDoc(hid, me, {
     email: account.email,
     displayName: account.displayName,
     createdAt: new Date().toISOString(),
@@ -118,59 +102,61 @@ const seedKitchen = async (db, account, { withItems = true } = {}) => {
 
   await Promise.all(
     LOCATIONS.map(({ id, ...data }) =>
-      userRef
-        .collection('storageLocations')
-        .doc(id)
-        .set({
-          ...data,
-          isDefault: true,
-          itemCount: 0,
-          createdAt: new Date().toISOString(),
-        })
+      putDoc(hid, `${me}/storageLocations/${id}`, {
+        ...data,
+        isDefault: true,
+        itemCount: 0,
+        createdAt: new Date().toISOString(),
+      })
     )
   );
 
   // The empty-state account stops here: a profile and the default shelves are
   // exactly what signing up gives you, and nothing has been put on them yet.
-  if (!withItems) return uid;
+  if (!withItems) return { uid, hid };
 
   await Promise.all(
     ITEMS.map(({ id, name, expiresIn, locationId, locationType }) =>
-      userRef
-        .collection('inventory')
-        .doc(id)
-        .set({
-          name,
-          normalized: name.toLowerCase(),
-          quantity: 1,
-          unit: 'ea',
-          locationId,
-          locationType,
-          addedAt: admin.firestore.Timestamp.fromDate(daysFromNow(-1)),
-          expiresAt: admin.firestore.Timestamp.fromDate(daysFromNow(expiresIn)),
-          shelfLifeDays: 7,
-          // Seeded items are ours, not the cook's — same as makeItem in
-          // src/test-utils/factories.js. Without it the app has to infer, and
-          // the first edit of a seeded item rewrites its expiry.
-          shelfLifeSource: 'default',
-          notes: '',
-          source: 'seed',
-          purchaseHistory: [],
-          totalTimesPurchased: 1,
-        })
+      putDoc(hid, `${me}/inventory/${id}`, {
+        name,
+        normalized: name.toLowerCase(),
+        quantity: 1,
+        unit: 'ea',
+        locationId,
+        locationType,
+        addedAt: Timestamp.fromDate(daysFromNow(-1)),
+        expiresAt: Timestamp.fromDate(daysFromNow(expiresIn)),
+        shelfLifeDays: 7,
+        // Seeded items are ours, not the cook's — same as makeItem in
+        // src/test-utils/factories.js. Without it the app has to infer, and
+        // the first edit of a seeded item rewrites its expiry.
+        shelfLifeSource: 'default',
+        notes: '',
+        source: 'seed',
+        purchaseHistory: [],
+        totalTimesPurchased: 1,
+      })
     )
   );
 
-  return uid;
+  // Recipes belong to the household (recipes/<id> in kitchen.docs), so each
+  // kitchen gets its own copy of the two seeded ones.
+  await Promise.all(
+    RECIPES.map(({ id, ...data }) =>
+      putDoc(hid, `recipes/${id}`, {
+        ...data,
+        imageUrl: null,
+        timesCooked: 0,
+        createdAt: Timestamp.fromDate(daysFromNow(-10)),
+      })
+    )
+  );
+
+  return { uid, hid };
 };
 
-// Recipes are a single global collection, not a per-user one. Field names must
-// match firestore.rules: `name` (not `title`) and a documented `source`.
-//
-// Seeded once for everyone rather than per account, because that is what the
-// schema says they are. It is the one thing worker isolation does not cover:
-// a spec that creates a recipe is visible to every other worker, so recipe
-// specs still have to use unique names. TESTING.md says so out loud.
+// The two recipes every stocked kitchen starts with. Field names are the ones
+// the app reads: `name` (not `title`) and a documented `source`.
 const RECIPES = [
   {
     id: 'e2e-recipe-salmon',
@@ -201,16 +187,26 @@ const RECIPES = [
   },
 ];
 
-module.exports = async (config) => {
-  process.env.FIREBASE_AUTH_EMULATOR_HOST = AUTH_HOST;
-  process.env.FIRESTORE_EMULATOR_HOST = FIRESTORE_HOST;
-  process.env.GCLOUD_PROJECT = PROJECT_ID;
-
-  if (!admin.apps.length) {
-    admin.initializeApp({ projectId: PROJECT_ID });
+/** Fails fast, and says what to do, when the local stack is not running. */
+const checkStack = async () => {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/health`);
+    if (res.ok) return;
+  } catch {
+    /* falls through */
   }
+  throw new Error(
+    `[e2e] No Supabase at ${SUPABASE_URL}. Start the local stack first: npm run e2e:db:start`
+  );
+};
 
-  const db = admin.firestore();
+module.exports = async (config) => {
+  await checkStack();
+
+  // Clean up after any earlier run on this stack: its accounts, their
+  // households, and everything in those (ON DELETE CASCADE).
+  const leftovers = [...(await usersByEmail()).values()].filter((u) => isE2EAccount(u.email));
+  for (const user of leftovers) await deleteAccount(user.id);
 
   // `config.workers` is the resolved worker count, so this seeds exactly as
   // many accounts as there are workers to use them — no guessing, and no
@@ -221,34 +217,19 @@ module.exports = async (config) => {
     ...Array.from({ length: workerCount }, (_, i) => accountForWorker(i)),
   ];
 
-  const uids = [];
   for (const account of accounts) {
-    // Sequentially: the Auth emulator serialises signUp anyway, and a failure
-    // here should name the account it happened on rather than one of five.
-    uids.push(await seedKitchen(db, account));
+    // Sequentially: a failure here should name the account it happened on
+    // rather than one of five.
+    await seedKitchen(account);
   }
 
   // One more with nothing in it, for e2e/empty-states.spec.js.
-  await seedKitchen(db, EMPTY_USER, { withItems: false });
-
-  await Promise.all(
-    RECIPES.map(({ id, ...data }) =>
-      db
-        .collection('recipes')
-        .doc(id)
-        .set({
-          ...data,
-          imageUrl: null,
-          timesCooked: 0,
-          createdAt: admin.firestore.Timestamp.fromDate(daysFromNow(-10)),
-        })
-    )
-  );
+  await seedKitchen(EMPTY_USER, { withItems: false });
 
   console.log(
-    `[e2e] seeded ${accounts.length} accounts (${workerCount} workers + auth spec) + 1 empty, ` +
-      `each with ${LOCATIONS.length} locations and ${ITEMS.length} items, ` +
-      `plus ${RECIPES.length} shared recipes`
+    `[e2e] removed ${leftovers.length} old accounts; seeded ${accounts.length} accounts ` +
+      `(${workerCount} workers + auth spec) + 1 empty, each with ${LOCATIONS.length} locations, ` +
+      `and the stocked ones with ${ITEMS.length} items and ${RECIPES.length} recipes`
   );
 };
 

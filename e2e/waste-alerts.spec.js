@@ -1,18 +1,19 @@
-// The waste alerts page against real emulators and real security rules.
+// The waste alerts page against a real Supabase stack and real row-level security.
 //
 // The freeze action is the one that matters most here: it is a write the UI
-// renders optimistically, so the assertions read the item back out of
-// Firestore rather than trusting the screen.
+// renders optimistically, so the assertions read the item back out of the
+// database rather than trusting the screen.
 
 const { test, expect } = require('./fixtures');
 const {
   inventoryItem,
-  testUserId,
+  inventoryItems,
+  userProfile,
+  seedInventoryItem,
   seedRecipe,
   deleteRecipe,
   mealPlanEntry,
-} = require('./firestore-admin');
-const admin = require('firebase-admin');
+} = require('./kitchen-db');
 
 /** `YYYY-MM-DD` in local time — the format meal plan entries key days on. */
 const toDayKey = (date) => {
@@ -20,37 +21,26 @@ const toDayKey = (date) => {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 };
 
-/** Adds an inventory item straight to the emulator, ready to be rescued. */
+/** Adds an inventory item straight to the database, ready to be rescued. */
 const seedItem = async (
   name,
   { daysUntilExpiry = 1, quantity = 4, locationType = 'fridge' } = {}
 ) => {
-  const uid = await testUserId();
   const expires = new Date();
   expires.setDate(expires.getDate() + daysUntilExpiry);
 
-  await admin
-    .firestore()
-    .collection(`users/${uid}/inventory`)
-    .add({
-      name,
-      normalized: name.toLowerCase(),
-      quantity,
-      unit: 'lbs',
-      locationId: locationType === 'fridge' ? 'loc-fridge' : 'loc-pantry',
-      locationType,
-      addedAt: admin.firestore.Timestamp.fromDate(new Date()),
-      expiresAt: admin.firestore.Timestamp.fromDate(expires),
-      shelfLifeDays: 7,
-      shelfLifeSource: 'default',
-      notes: '',
-      source: 'seed',
-      purchaseHistory: [],
-      totalTimesPurchased: 1,
-    });
+  await seedInventoryItem({
+    name,
+    quantity,
+    unit: 'lbs',
+    expiresAt: expires,
+    locationId: locationType === 'fridge' ? 'loc-fridge' : 'loc-pantry',
+    locationType,
+    shelfLifeSource: 'default',
+  });
 };
 
-/** Polls Firestore until the stored item satisfies `predicate`. */
+/** Polls the database until the stored item satisfies `predicate`. */
 const expectStored = async (name, predicate, message) => {
   await expect
     .poll(
@@ -162,20 +152,17 @@ test.describe('freezer actions', () => {
     await expect(card).toHaveCount(1);
     await card.getByRole('button', { name: 'Freeze Half' }).click();
 
-    const uid = await testUserId();
     await expect
       .poll(
         async () => {
-          const snap = await admin.firestore().collection(`users/${uid}/inventory`).get();
-          const copies = snap.docs.map((d) => d.data()).filter((d) => d.name === itemName);
+          const copies = (await inventoryItems()).filter((d) => d.name === itemName);
           return copies.length === 2 && copies.every((c) => c.quantity === 2);
         },
         { message: `waiting for "${itemName}" to be split in two`, timeout: 15_000 }
       )
       .toBe(true);
 
-    const snap = await admin.firestore().collection(`users/${uid}/inventory`).get();
-    const copies = snap.docs.map((d) => d.data()).filter((d) => d.name === itemName);
+    const copies = (await inventoryItems()).filter((d) => d.name === itemName);
     expect(copies.map((c) => c.locationType).sort()).toEqual(['freezer', 'fridge']);
   });
 });
@@ -268,14 +255,13 @@ test.describe('waste alert settings', () => {
 
     await expect(panel.getByText('Alert preferences saved.')).toBeVisible();
 
-    const uid = await testUserId();
     await expect
       .poll(
         async () => {
-          const profile = (await admin.firestore().doc(`users/${uid}`).get()).data();
+          const profile = await userProfile();
           return profile?.preferences?.smsAlerts;
         },
-        { message: 'waiting for the SMS preferences to reach Firestore', timeout: 15_000 }
+        { message: 'waiting for the SMS preferences to reach the database', timeout: 15_000 }
       )
       .toMatchObject({ enabled: true, phoneNumber: '5551234567' });
   });
