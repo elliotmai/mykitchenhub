@@ -8,6 +8,10 @@
 //
 // So: after a few quiet minutes, go back. Any real interaction resets the
 // countdown, and it does not fire while the cook is actually typing.
+//
+// Cook mode holds it off entirely (holdIdleReturn): a cook with floury hands
+// can leave a step card up for twenty minutes while something bakes, and the
+// recipe vanishing then is exactly what the board was meant to prevent.
 
 import { useEffect, useRef } from 'react';
 
@@ -16,6 +20,27 @@ export const DEFAULT_IDLE_MS = 120_000;
 
 /** Events that count as somebody being there. */
 const ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'touchstart', 'wheel'];
+
+let holds = 0;
+
+/**
+ * Keeps the kiosk where it is until the returned function is called. Holds
+ * stack, so two things holding it both have to let go.
+ *
+ * @returns {() => void} release
+ */
+export const holdIdleReturn = () => {
+  holds += 1;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    holds -= 1;
+  };
+};
+
+/** Is something holding the kiosk in place right now? */
+export const isIdleReturnHeld = () => holds > 0;
 
 /**
  * Calls `onIdle` after `idleMs` without interaction.
@@ -37,7 +62,11 @@ export const useIdleReturn = (onIdle, { idleMs = DEFAULT_IDLE_MS, enabled = true
     let timer;
     const reset = () => {
       clearTimeout(timer);
-      timer = setTimeout(() => onIdleRef.current?.(), idleMs);
+      timer = setTimeout(() => {
+        // Held (cook mode is up): look again later rather than leave.
+        if (holds > 0) reset();
+        else onIdleRef.current?.();
+      }, idleMs);
     };
 
     ACTIVITY_EVENTS.forEach((event) => window.addEventListener(event, reset, { passive: true }));

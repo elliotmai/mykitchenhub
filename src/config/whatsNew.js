@@ -14,6 +14,13 @@
 
 export const WHATS_NEW = [
   {
+    version: '2026.11.27.1',
+    date: 'November 2026',
+    items: [
+      '\u{1F9D1}\u200D\u{1F373} Cook mode got smarter. Each step shows exactly which ingredients it uses and how much, steps you can do while something bakes or boils share one card, the next step peeks in at the bottom, and every card fits the screen with no scrolling. On the fridge tablet, cook mode now stays up for as long as you cook instead of going back to Fridge Board.',
+    ],
+  },
+  {
     version: '2026.11.27',
     date: 'November 2026',
     items: [

@@ -2,23 +2,35 @@
 // Cook mode: a recipe as full-screen cards, one at a time.
 //
 // The first card gathers the ingredients (tap each one once it is out), then
-// every step gets a card of its own with big text and, when the step names a
-// duration, the same shared kitchen timer the recipe page offers. Back / Next,
-// the arrow keys, a swipe, or the progress dots move between cards; Escape or
-// the close button leaves. The last card can log the cook ("I cooked this"),
-// which is what the recipe page's own button does.
+// the steps follow, each card showing what it needs and how much of it beside
+// the words. A step the cook can walk away from (the oven preheating, pasta
+// boiling for 10 minutes) shares its card with the prep that can happen
+// during the wait, so the onions get chopped while the oven heats
+// (cookPlan.js). Every card ends with a peek at what comes next, and shrinks
+// its text to fit the screen rather than scroll: on a tablet propped on the
+// counter, nobody is scrolling with wet hands.
+//
+// Back / Next, the arrow keys, a swipe, or the progress dots move between
+// cards; Escape or the close button leaves. The last card can log the cook
+// ("I cooked this"), which is what the recipe page's own button does.
+//
+// While it is open, nothing takes the screen away: not the fridge tablet's
+// idle return, and not Hive's 15-minute return to Fridge Board
+// (useCookingHold).
 //
 // It works on any recipe, planned or not: everything it needs is the recipe.
 //
 // It sits just under the timer tray and the alarm (src/timers/timers.css), so
 // a running timer stays in view and a finished one still rings over it.
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Button } from 'react-bootstrap';
-import { ArrowLeft, ArrowRight, Check, ChefHat, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, ChefHat, Hourglass, X } from 'lucide-react';
 
 import { instructionSteps } from '../../hooks/useRecipes';
+import useCookingHold from '../../hooks/useCookingHold';
 import StepTimer from '../../timers/StepTimer';
+import { ingredientLine, ingredientParts, planCards, stepIngredientIndexes } from './cookPlan';
 import './CookMode.css';
 
 /** "Brown the beef: Cook it for 8 minutes" → a title and the rest, when the prefix is a short heading. */
@@ -30,11 +42,53 @@ export const splitStep = (text) => {
   return { title: null, body: String(text).trim() };
 };
 
-const ingredientText = (ingredient) =>
-  typeof ingredient === 'string'
-    ? ingredient
-    : ingredient?.text ||
-      [ingredient?.quantity, ingredient?.unit, ingredient?.name].filter(Boolean).join(' ');
+/** The smallest the text shrinks to before the card is allowed to scroll. */
+const MIN_FIT = 0.6;
+
+/**
+ * Shrinks a card's text (the --cook-fit scale its CSS multiplies every size
+ * by) until the card holds it without scrolling. Runs again when the card
+ * changes or the screen turns.
+ */
+const useFitToCard = (ref, key) => {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const again = () => setTick((t) => t + 1);
+    window.addEventListener('resize', again);
+    window.addEventListener('orientationchange', again);
+    return () => {
+      window.removeEventListener('resize', again);
+      window.removeEventListener('orientationchange', again);
+    };
+  }, []);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let fit = 1;
+    el.style.setProperty('--cook-fit', String(fit));
+    el.classList.remove('cook-mode-card--overflow');
+    while (el.scrollHeight > el.clientHeight + 1 && fit > MIN_FIT) {
+      fit = Math.max(MIN_FIT, Math.round((fit - 0.05) * 100) / 100);
+      el.style.setProperty('--cook-fit', String(fit));
+    }
+    // Still too much even small: let it scroll rather than cut words off.
+    if (el.scrollHeight > el.clientHeight + 1) el.classList.add('cook-mode-card--overflow');
+  }, [ref, key, tick]);
+};
+
+/** The ingredients one step needs, amounts first. */
+const StepIngredients = ({ items, compact = false }) => {
+  if (!items.length) return null;
+  return (
+    <ul className={`cook-mode-needs${compact ? ' cook-mode-needs--compact' : ''}`}>
+      {items.map(({ amount, name }, n) => (
+        <li key={`${name}-${n}`}>
+          {amount && <strong>{amount}</strong>} {name}
+        </li>
+      ))}
+    </ul>
+  );
+};
 
 /** Keep the screen on while cooking, where the browser allows it. */
 const useWakeLock = () => {
@@ -67,10 +121,17 @@ const useWakeLock = () => {
  */
 const CookMode = ({ recipe, onClose, onCooked }) => {
   const steps = instructionSteps(recipe.instructions);
-  const ingredients = (Array.isArray(recipe.ingredients) ? recipe.ingredients : [])
-    .map(ingredientText)
-    .filter(Boolean);
-  const last = steps.length;
+  const rawIngredients = (Array.isArray(recipe.ingredients) ? recipe.ingredients : []).filter((i) =>
+    ingredientLine(i)
+  );
+  const ingredients = rawIngredients.map(ingredientLine);
+  const needs = (stepIndex) =>
+    stepIngredientIndexes(steps[stepIndex], rawIngredients).map((n) =>
+      ingredientParts(rawIngredients[n])
+    );
+  const plan = planCards(steps);
+  // Card 0 gathers the ingredients; card n is plan[n - 1].
+  const last = plan.length;
 
   const [page, setPage] = useState(0);
   const [seen, setSeen] = useState([0]);
@@ -79,8 +140,11 @@ const CookMode = ({ recipe, onClose, onCooked }) => {
   const [logging, setLogging] = useState(false);
   const startX = useRef(null);
   const closeRef = useRef(null);
+  const cardRef = useRef(null);
 
   useWakeLock();
+  useCookingHold();
+  useFitToCard(cardRef, page);
 
   const go = useCallback(
     (to) => {
@@ -127,6 +191,27 @@ const CookMode = ({ recipe, onClose, onCooked }) => {
     }
   };
 
+  const stepLabel = (group) =>
+    group.length > 1
+      ? `Steps ${group[0] + 1}–${group[group.length - 1] + 1}`
+      : `Step ${group[0] + 1}`;
+
+  const timer = (n) => (
+    <StepTimer recipeId={recipe.id} recipeName={recipe.name} index={n} text={steps[n]} />
+  );
+
+  // What the next card holds, in a line or two.
+  const upNext = (() => {
+    const next = plan[page]; // the card after this one is plan[page]
+    if (!next) return null;
+    const { title, body } = splitStep(steps[next.steps[0]]);
+    return {
+      label: next.parallel ? `${stepLabel(next.steps)}, at the same time` : stepLabel(next.steps),
+      title,
+      body,
+    };
+  })();
+
   let card;
   if (page === 0) {
     const facts = [
@@ -136,7 +221,7 @@ const CookMode = ({ recipe, onClose, onCooked }) => {
       recipe.servingsText || (recipe.servings ? `Serves ${recipe.servings}` : null),
     ].filter(Boolean);
     card = (
-      <>
+      <div className="cook-mode-body cook-mode-body--gather">
         <div className="cook-mode-main">
           <span className="cook-mode-stepno">{facts.join(' · ') || 'Ingredients'}</span>
           <h2 className="cook-mode-title">{recipe.name}</h2>
@@ -170,23 +255,71 @@ const CookMode = ({ recipe, onClose, onCooked }) => {
             ))}
           </ul>
         </aside>
-      </>
-    );
-  } else {
-    const step = steps[page - 1];
-    const { title, body } = splitStep(step);
-    card = (
-      <div className="cook-mode-main">
-        <span className="cook-mode-stepno">
-          Step {page} of {last}
-        </span>
-        {title && <h2 className="cook-mode-title">{title}</h2>}
-        <p className="cook-mode-text cook-mode-step">{body}</p>
-        <div className="cook-mode-timer">
-          <StepTimer recipeId={recipe.id} recipeName={recipe.name} index={page - 1} text={step} />
-        </div>
       </div>
     );
+  } else {
+    const { steps: group, parallel } = plan[page - 1];
+    const [first, ...meanwhile] = group;
+    const { title, body } = splitStep(steps[first]);
+    const firstNeeds = needs(first);
+
+    if (!parallel) {
+      card = (
+        <div className="cook-mode-body">
+          <div className="cook-mode-main">
+            <span className="cook-mode-stepno">
+              Step {first + 1} of {steps.length}
+            </span>
+            {title && <h2 className="cook-mode-title">{title}</h2>}
+            <p className="cook-mode-text cook-mode-step">{body}</p>
+            <div className="cook-mode-timer">{timer(first)}</div>
+          </div>
+          {firstNeeds.length > 0 && (
+            <aside className="cook-mode-side" aria-label="For this step">
+              <h3>For this step</h3>
+              <StepIngredients items={firstNeeds} />
+            </aside>
+          )}
+        </div>
+      );
+    } else {
+      card = (
+        <div className="cook-mode-body cook-mode-body--parallel">
+          <section className="cook-mode-wait" aria-label={`Step ${first + 1}`}>
+            <span className="cook-mode-stepno">
+              <Hourglass size={16} aria-hidden="true" /> Step {first + 1} of {steps.length} · Start
+              this, then keep going
+            </span>
+            {title && <h2 className="cook-mode-title">{title}</h2>}
+            <p className="cook-mode-text cook-mode-step">{body}</p>
+            <StepIngredients items={firstNeeds} compact />
+            <div className="cook-mode-timer">{timer(first)}</div>
+          </section>
+          <section className="cook-mode-meanwhile" aria-label="While you wait">
+            <h3>While you wait</h3>
+            <ol>
+              {meanwhile.map((n) => {
+                const part = splitStep(steps[n]);
+                return (
+                  <li key={n}>
+                    <span className="cook-mode-badge" aria-hidden="true">
+                      {n + 1}
+                    </span>
+                    <div>
+                      <span className="visually-hidden">Step {n + 1}: </span>
+                      {part.title && <strong className="cook-mode-subtitle">{part.title}</strong>}
+                      <p className="cook-mode-text">{part.body}</p>
+                      <StepIngredients items={needs(n)} compact />
+                      <div className="cook-mode-timer cook-mode-timer--small">{timer(n)}</div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          </section>
+        </div>
+      );
+    }
   }
 
   return (
@@ -225,7 +358,7 @@ const CookMode = ({ recipe, onClose, onCooked }) => {
           <button
             key={i}
             type="button"
-            aria-label={i ? `Step ${i}` : 'Ingredients'}
+            aria-label={i ? stepLabel(plan[i - 1].steps) : 'Ingredients'}
             aria-current={i === page ? 'step' : undefined}
             className={seen.includes(i) ? 'seen' : ''}
             onClick={() => go(i)}
@@ -233,7 +366,18 @@ const CookMode = ({ recipe, onClose, onCooked }) => {
         ))}
       </div>
 
-      <div className="cook-mode-card">{card}</div>
+      <div className="cook-mode-card" ref={cardRef}>
+        {card}
+        {upNext && (
+          <div className="cook-mode-next" aria-label="Up next">
+            <span className="cook-mode-next-label">Up next · {upNext.label}</span>
+            <span className="cook-mode-next-text">
+              {upNext.title && <strong>{upNext.title}. </strong>}
+              {upNext.body}
+            </span>
+          </div>
+        )}
+      </div>
 
       <div className="cook-mode-nav">
         <Button variant="light" disabled={page === 0} onClick={() => go(page - 1)}>

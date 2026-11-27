@@ -2,7 +2,7 @@
 
 import { renderHook, act } from '@testing-library/react';
 
-import useIdleReturn, { DEFAULT_IDLE_MS } from '../useIdleReturn';
+import useIdleReturn, { DEFAULT_IDLE_MS, holdIdleReturn } from '../useIdleReturn';
 
 describe('useIdleReturn', () => {
   beforeEach(() => jest.useFakeTimers());
@@ -27,6 +27,20 @@ describe('useIdleReturn', () => {
     expect(onIdle).not.toHaveBeenCalled();
 
     act(() => jest.advanceTimersByTime(200));
+    expect(onIdle).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits while something holds it (cook mode), and goes once it lets go', () => {
+    const onIdle = jest.fn();
+    const release = holdIdleReturn();
+    renderHook(() => useIdleReturn(onIdle, { idleMs: 1000 }));
+
+    act(() => jest.advanceTimersByTime(5000));
+    expect(onIdle).not.toHaveBeenCalled();
+
+    release();
+    release(); // letting go twice is still one hold
+    act(() => jest.advanceTimersByTime(1000));
     expect(onIdle).toHaveBeenCalledTimes(1);
   });
 
