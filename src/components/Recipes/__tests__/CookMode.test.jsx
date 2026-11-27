@@ -1,7 +1,7 @@
 // Cook mode — any recipe, planned or not, as step-by-step cards.
 
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 
 import CookMode, { splitStep } from '../CookMode';
 import RecipeDetail from '../../../pages/RecipeDetail';
@@ -78,4 +78,69 @@ it('the recipe page has a Cook button that opens cook mode', () => {
   expect(screen.getByRole('dialog', { name: 'Cooking Beef Tacos' })).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Stop cooking' }));
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
+it('shows what each step needs, and what comes next', () => {
+  render(<CookMode recipe={recipe()} onClose={jest.fn()} />);
+  expect(within(screen.getByLabelText('Up next')).getByText(/Brown the beef/)).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Step 1' }));
+  const needs = screen.getByRole('complementary', { name: 'For this step' });
+  expect(within(needs).getByText('10 oz')).toBeInTheDocument();
+  expect(within(needs).getByText(/ground beef/)).toBeInTheDocument();
+  expect(within(screen.getByLabelText('Up next')).getByText(/Step 2/)).toBeInTheDocument();
+
+  // The last step has nothing after it.
+  fireEvent.click(screen.getByRole('button', { name: 'Step 2' }));
+  expect(screen.queryByLabelText('Up next')).not.toBeInTheDocument();
+});
+
+it('puts prep on the same card as the wait it fits into', () => {
+  const r = makeRecipe({
+    name: 'Roast Potatoes',
+    ingredients: [
+      { name: 'potatoes', quantity: 2, unit: 'lb' },
+      { name: 'parsley', quantity: 0.25, unit: 'cup' },
+    ],
+    instructions: [
+      'Preheat the oven to 425°F.',
+      'Cut the potatoes into wedges.',
+      'Chop the parsley.',
+      'Roast the potatoes for 30 minutes.',
+    ],
+  });
+  render(<CookMode recipe={r} onClose={jest.fn()} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Steps 1–3' }));
+
+  expect(screen.getByText(/Step 1 of 4/)).toBeInTheDocument();
+  const during = screen.getByRole('region', { name: 'While you wait' });
+  expect(within(during).getByText('Cut the potatoes into wedges.')).toBeInTheDocument();
+  expect(within(during).getByText('Chop the parsley.')).toBeInTheDocument();
+  expect(within(during).getByText('¼ cup')).toBeInTheDocument();
+  expect(within(screen.getByLabelText('Up next')).getByText(/Step 4/)).toBeInTheDocument();
+});
+
+describe('keeping the screen on the recipe', () => {
+  const realParent = Object.getOwnPropertyDescriptor(window, 'parent');
+  afterEach(() => {
+    if (realParent) Object.defineProperty(window, 'parent', realParent);
+  });
+
+  it('tells Hive it is cooking while open, and that it is done on close', () => {
+    const postMessage = jest.fn();
+    Object.defineProperty(window, 'parent', { configurable: true, value: { postMessage } });
+
+    const { unmount } = render(<CookMode recipe={recipe()} onClose={jest.fn()} />);
+    expect(postMessage).toHaveBeenCalledWith({ type: 'hive:busy', v: 1, busy: true }, '*');
+    unmount();
+    expect(postMessage).toHaveBeenLastCalledWith({ type: 'hive:busy', v: 1, busy: false }, '*');
+  });
+
+  it("holds the fridge tablet's own idle return", () => {
+    const { isIdleReturnHeld } = require('../../../hooks/useIdleReturn');
+    const { unmount } = render(<CookMode recipe={recipe()} onClose={jest.fn()} />);
+    expect(isIdleReturnHeld()).toBe(true);
+    unmount();
+    expect(isIdleReturnHeld()).toBe(false);
+  });
 });
